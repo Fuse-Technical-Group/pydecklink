@@ -14,7 +14,51 @@ frame-accurate capture/playout engine — as a Python module. It supports
 both CPU buffers (numpy) and NVIDIA GPU buffers (CuPy/PyTorch) for
 RDMA-enabled zero-copy streaming.
 
-## 2. Binding Technology
+## 2. Development Environment
+
+*Status: not started*
+
+Development uses a VS Code devcontainer. The container is
+self-contained: it clones the AJA SDK (libajantv2) source at a pinned
+release tag and builds/installs the library at image build time. No
+host-side SDK installation is required.
+
+### Why a devcontainer
+
+libajantv2 installs headers and a shared library to system paths.
+Containing the build avoids polluting the host with SDK artifacts that
+only this project needs. The devcontainer also pins the SDK version,
+compiler, and Python version, making builds reproducible across
+machines.
+
+### Container design
+
+- Base image: Ubuntu 24.04 LTS. AJA tests against Ubuntu; LTS
+  provides stable package versions for the SDK's build dependencies.
+- The Dockerfile clones `aja-video/libajantv2` at a pinned release
+  tag (v17.5.0 initially), builds the shared library with CMake, and
+  installs it to `/usr/local`. Demos, tools, tests, and the driver
+  are disabled — only the library and headers are needed.
+- Build dependencies: CMake ≥3.15, g++, make (or ninja). No Qt, no
+  CUDA, no kernel headers.
+- Dev tools installed in the image: uv, Python 3.12+.
+- The host's AJA device node (`/dev/ajantv20`) is passed through to
+  the container via `runArgs` in `devcontainer.json`. The kernel
+  driver runs on the host; the container uses the user-space library
+  to talk to it.
+- GPU passthrough (NVIDIA Container Toolkit) is deferred to Phase 2
+  when RDMA support is needed.
+
+### Constraints
+
+- The kernel module version and SDK version must be compatible. AJA
+  documents compatible pairs in their release notes. The Dockerfile's
+  pinned tag must match the host's loaded driver version.
+- `/dev/ajantv2*` device nodes require appropriate permissions. The
+  container runs as a non-root user; the devcontainer config sets
+  `--device` to pass the node through.
+
+## 3. Binding Technology
 
 *Status: not started*
 
@@ -42,7 +86,7 @@ pybind11).
   CMake `FetchContent`. Python ≥3.12 enables nanobind's Stable ABI
   support for cross-version binary compatibility.
 
-## 3. Device Model
+## 4. Device Model
 
 *Status: not started*
 
@@ -70,7 +114,7 @@ only NVIDIA callbacks exist today. If AMD ROCm support lands in the AJA
 driver, `nb::ndarray<nb::device::rocm>` tensors would work without
 wrapper changes.
 
-## 4. Python API (Phase 1)
+## 5. Python API (Phase 1)
 
 *Status: not started*
 
@@ -79,12 +123,12 @@ C++ method that returns `bool` raises `RuntimeError` on failure.
 Naming follows Python convention: `AutoCirculateStart` →
 `autocirculate_start`.
 
-### 4.1 Card
+### 5.1 Card
 
 Wraps `CNTV2Card`. Opens the device on construction or via `open()`.
 Supports context manager protocol for deterministic cleanup.
 
-### 4.2 Format Detection and Configuration
+### 5.2 Format Detection and Configuration
 
 The module exposes format detection and card configuration methods
 that map 1:1 to their C++ counterparts:
@@ -101,7 +145,7 @@ that map 1:1 to their C++ counterparts:
   connector between transmit and receive.
 - `set_reference(source)` — sets clock reference.
 
-### 4.3 Signal Routing
+### 5.3 Signal Routing
 
 The crosspoint routing API is exposed directly:
 
@@ -124,7 +168,7 @@ Two module-level convenience functions build common routes:
 These return data (a dict), not side effects. The caller applies the
 route via `card.apply_signal_route()`.
 
-### 4.4 AutoCirculate
+### 5.4 AutoCirculate
 
 - `autocirculate_init_for_input(channel, frame_count=7,
   audio_system=AudioSystem.NONE, option_flags=0)` — allocates
@@ -138,7 +182,7 @@ route via `card.apply_signal_route()`.
 - `autocirculate_transfer(channel, transfer)` — executes a DMA
   transfer using a `Transfer` object.
 
-### 4.5 Transfer
+### 5.5 Transfer
 
 Wraps `AUTOCIRCULATE_TRANSFER`. The caller creates a `Transfer`,
 sets the video buffer via `set_video_buffer()`, and reuses it across
@@ -151,26 +195,26 @@ from the array.
 After a capture transfer, `captured_audio_byte_count` and
 `captured_anc_byte_count` properties report transfer metadata.
 
-### 4.6 Buffer Locking
+### 5.6 Buffer Locking
 
 `dma_buffer_lock(buffer)` and `dma_buffer_unlock(buffer)` pre-lock
 buffer pages for DMA. The device tag on the array determines whether
 RDMA is used. Optional but recommended for sustained streaming —
 avoids per-frame page pinning overhead.
 
-### 4.7 Frame Sync
+### 5.7 Frame Sync
 
 `wait_for_input_vertical_interrupt(channel, repeat_count=1)` blocks
 until the next vertical blanking interval.
 
-### 4.8 Status
+### 5.8 Status
 
 Read-only snapshot from `AUTOCIRCULATE_STATUS`. Fields:
 `is_running`, `is_stopped`, `has_available_input_frame`,
 `can_accept_more_output_frames`, `dropped_frame_count`,
 `buffer_level`, `with_audio`, `with_custom_anc`.
 
-### 4.9 Enums
+### 5.9 Enums
 
 Bound from NTV2 C++ enums via `nb::enum_<>`:
 
@@ -187,7 +231,7 @@ Bound from NTV2 C++ enums via `nb::enum_<>`:
 | `Mode` | `NTV2Mode` | CAPTURE, OUTPUT |
 | `ReferenceSource` | `NTV2ReferenceSource` | FREERUN, INPUT1, EXTERNAL, etc. |
 
-## 5. Target Workflow
+## 6. Target Workflow
 
 *Status: not started*
 
@@ -200,7 +244,7 @@ channel is configured to match. Both channels use the same pixel
 format. Frames transfer directly between the AJA card and GPU memory
 via RDMA, bypassing system memory entirely.
 
-## 6. Explicit Non-Goals (Phase 1)
+## 7. Explicit Non-Goals (Phase 1)
 
 - **AMD GPU RDMA.** No AJA driver support exists. The architecture
   doesn't block it if support arrives.
