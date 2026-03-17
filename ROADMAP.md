@@ -2,6 +2,15 @@
 
 Derived from [SPEC.md](SPEC.md). Sections are in build-dependency order.
 
+## Development Environment
+
+- **devcontainer-setup**: `.devcontainer/devcontainer.json` and
+  `Dockerfile`. Ubuntu 24.04 base. Clones `aja-video/libajantv2` at
+  pinned release tag (v17.5.0), builds shared library with CMake,
+  installs to `/usr/local`. Disables demos, tools, tests, driver.
+  Installs uv and Python 3.12+. Passes `/dev/ajantv20` from host
+  via `--device`. No GPU passthrough yet.
+
 ## Build Scaffolding
 
 - **uv-setup**: uv for venv creation, dependency resolution, locking
