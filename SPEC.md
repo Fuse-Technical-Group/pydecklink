@@ -16,47 +16,26 @@ RDMA-enabled zero-copy streaming.
 
 ## 2. Development Environment
 
-*Status: in progress*
+*Status: complete*
 
-Development uses a VS Code devcontainer. The container is
-self-contained: it clones the AJA SDK (libajantv2) source at a pinned
-release tag and builds/installs the library at image build time. No
+Development uses a VS Code devcontainer that builds libajantv2 from
+source at a pinned release tag and installs it to `/usr/local`. No
 host-side SDK installation is required.
 
 ### Why a devcontainer
 
 libajantv2 installs headers and a shared library to system paths.
-Containing the build avoids polluting the host with SDK artifacts that
-only this project needs. The devcontainer also pins the SDK version,
-compiler, and Python version, making builds reproducible across
-machines.
-
-### Container design
-
-- Base image: Ubuntu 24.04 LTS. AJA tests against Ubuntu; LTS
-  provides stable package versions for the SDK's build dependencies.
-- The Dockerfile clones `aja-video/libajantv2` at a pinned release
-  tag (v17.5.0 initially), builds the shared library with CMake, and
-  installs it to `/usr/local`. Demos, tools, tests, and the driver
-  are disabled — only the library and headers are needed.
-- Build dependencies: CMake ≥3.15, g++, make (or ninja). No Qt, no
-  CUDA, no kernel headers.
-- Dev tools installed in the image: uv, Python 3.12+.
-- The host's AJA device node (`/dev/ajantv20`) is passed through to
-  the container via `runArgs` in `devcontainer.json`. The kernel
-  driver runs on the host; the container uses the user-space library
-  to talk to it.
-- GPU passthrough (NVIDIA Container Toolkit) is deferred to Phase 2
-  when RDMA support is needed.
+Containing the build avoids polluting the host and pins the SDK
+version, compiler, and Python version for reproducibility.
 
 ### Constraints
 
-- The kernel module version and SDK version must be compatible. AJA
-  documents compatible pairs in their release notes. The Dockerfile's
-  pinned tag must match the host's loaded driver version.
-- `/dev/ajantv2*` device nodes require appropriate permissions. The
-  container runs as a non-root user; the devcontainer config sets
-  `--device` to pass the node through.
+- The Dockerfile's pinned SDK tag must match the host's loaded AJA
+  kernel driver version. AJA documents compatible pairs in their
+  release notes.
+- The container runs as a non-root user. The host's AJA device node
+  (`/dev/ajantv20`) is passed through via `--device`.
+- GPU passthrough (NVIDIA Container Toolkit) is deferred to Phase 2.
 
 ## 3. Binding Technology
 
