@@ -2,18 +2,6 @@
 
 Derived from [SPEC.md](SPEC.md). Sections are in build-dependency order.
 
-## Build Scaffolding
-
-- **uv-setup**: uv for venv creation, dependency resolution, locking
-  (`uv.lock`), and dev tool management. `uv run` as the standard
-  entry point for all dev commands.
-- **pyproject-setup**: `pyproject.toml` with scikit-build-core, nanobind
-  dependency, Python ≥3.12. CMakeLists.txt that finds libajantv2 and
-  nanobind, produces a `pyntv2._bindings` extension module.
-- **ci-linux**: GitHub Actions workflow — build + import test on Linux
-  (no hardware needed for build verification). Uses `uv` for env setup.
-- **stub-generation**: `nanobind_add_stub()` for `.pyi` type stubs.
-
 ## Enum Bindings
 
 - **core-enums**: Bind `NTV2Channel`, `NTV2AudioSystem`,
