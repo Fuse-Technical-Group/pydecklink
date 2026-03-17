@@ -16,7 +16,7 @@ RDMA-enabled zero-copy streaming.
 
 ## 2. Development Environment
 
-*Status: not started*
+*Status: in progress*
 
 Development uses a VS Code devcontainer. The container is
 self-contained: it clones the AJA SDK (libajantv2) source at a pinned
