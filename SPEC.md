@@ -39,7 +39,7 @@ version, compiler, and Python version for reproducibility.
 
 ## 3. Binding Technology
 
-*Status: not started*
+*Status: in progress*
 
 The module uses [nanobind](https://github.com/wjakob/nanobind) (not
 pybind11).
