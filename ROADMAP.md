@@ -2,14 +2,6 @@
 
 Derived from [SPEC.md](SPEC.md). Sections are in build-dependency order.
 
-## Enum Bindings
-
-- **core-enums**: Bind `NTV2Channel`, `NTV2AudioSystem`,
-  `NTV2VideoFormat`, `NTV2FrameBufferFormat`, `NTV2InputSource`,
-  `NTV2OutputDestination`, `NTV2InputCrosspointID`,
-  `NTV2OutputCrosspointID`, `NTV2Mode`, `NTV2ReferenceSource`.
-  Expose with Pythonic names (`Channel`, `PixelFormat`, etc.).
-
 ## Card Wrapper
 
 - **card-open-close**: Bind `CNTV2Card` open/close lifecycle. Context
