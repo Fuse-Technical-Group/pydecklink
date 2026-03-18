@@ -10,6 +10,7 @@ RUN apt-get update \
        git \
        ca-certificates \
        curl \
+       openssh-client \
        libudev-dev \
        pkg-config \
        python3.12 \
@@ -34,10 +35,13 @@ RUN git clone --depth 1 --branch "${AJANTV2_TAG}" \
 
 RUN ldconfig
 
+RUN UV_INSTALL_DIR=/usr/local/bin curl -LsSf https://astral.sh/uv/install.sh | sh
+
 RUN userdel -r ubuntu 2>/dev/null; \
     groupadd --gid 1000 dev || true \
     && useradd --uid 1000 --gid 1000 --create-home --shell /bin/bash dev
 
 USER dev
+ENV PATH="${PATH}:/home/dev/.local/bin"
 
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+RUN curl -fsSL https://claude.ai/install.sh | bash
