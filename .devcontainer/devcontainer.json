@@ -4,6 +4,14 @@
     "context": ".."
   },
   "runArgs": ["--device=/dev/ajantv20"],
+  "mounts": [
+    "source=${localEnv:HOME}/.claude,target=/home/dev/.claude,type=bind,consistency=cached",
+    "source=${localEnv:HOME}/.claude.json,target=/home/dev/.claude.json,type=bind,consistency=cached",
+    "source=${localEnv:SSH_AUTH_SOCK},target=/run/ssh-agent.sock,type=bind"
+  ],
+  "remoteEnv": {
+    "SSH_AUTH_SOCK": "/run/ssh-agent.sock"
+  },
   "remoteUser": "dev",
   "customizations": {
     "vscode": {
