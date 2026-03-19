@@ -223,7 +223,39 @@ channel is configured to match. Both channels use the same pixel
 format. Frames transfer directly between the AJA card and GPU memory
 via RDMA, bypassing system memory entirely.
 
-## 7. Explicit Non-Goals (Phase 1)
+## 7. Secondary Use Case: Test Pattern Generation
+
+*Status: not started*
+
+The primary use case is GPU RDMA streaming (Section 6). A secondary
+use case is CPU-buffer playout of static test patterns for display
+measurement, integrating with
+[OLE-Toolset](https://github.com/OpenLEDEval/OLE-Toolset) via
+[bmd-signal-gen](https://github.com/OpenLEDEval/bmd-signal-gen).
+
+bmd-signal-gen currently targets Blackmagic DeckLink hardware. Its
+pattern generation (solids, checkerboards, HDR metadata) is
+device-agnostic — it produces numpy buffers. The device output layer
+is BMD-specific.
+
+### Integration path
+
+A narrow `FrameOutput` protocol (configure, present, stop) would let
+signal-gen drive either a DeckLink or AJA backend. pyntv2 provides
+the AJA implementation. The protocol belongs in signal-gen (the
+consumer), not here. pyntv2's existing API (`set_video_format`,
+`autocirculate_*`, `Transfer.set_video_buffer`) is sufficient to
+implement it without changes.
+
+### Why this is secondary
+
+GPU RDMA streaming operates at frame rate with locked buffers and
+sustained AutoCirculate. Test pattern output sends one frame and
+holds — no continuous transfer loop, no GPU memory, no latency
+constraints. The API surface overlaps but the performance envelope
+is different.
+
+## 8. Explicit Non-Goals (Phase 1)
 
 - **AMD GPU RDMA.** No AJA driver support exists. The architecture
   doesn't block it if support arrives.
