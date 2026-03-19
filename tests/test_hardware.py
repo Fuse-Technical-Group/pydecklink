@@ -23,11 +23,6 @@ from pyntv2 import (
 pytestmark = pytest.mark.hardware
 
 
-@pytest.fixture()
-def card():
-    with Card(device_index=0) as c:
-        yield c
-
 
 class TestLifecycle:
     def test_open_close(self):
