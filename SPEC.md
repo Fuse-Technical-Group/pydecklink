@@ -39,7 +39,7 @@ version, compiler, and Python version for reproducibility.
 
 ## 3. Binding Technology
 
-*Status: in progress*
+*Status: complete*
 
 The module uses [nanobind](https://github.com/wjakob/nanobind) (not
 pybind11).
@@ -67,7 +67,7 @@ pybind11).
 
 ## 4. Device Model
 
-*Status: not started*
+*Status: complete*
 
 pyntv2 accepts any array-like object that implements the buffer protocol
 or DLPack. nanobind's `nb::ndarray<>` inspects the device at dispatch
@@ -95,7 +95,7 @@ wrapper changes.
 
 ## 5. Python API (Phase 1)
 
-*Status: in progress*
+*Status: complete*
 
 The API is a thin 1:1 mapping of `CNTV2Card` methods to Python. Each
 C++ method that returns `bool` raises `RuntimeError` on failure.
