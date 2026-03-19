@@ -1,6 +1,10 @@
 """Integration tests — require AJA hardware with CH3↔CH4 SDI loopback cable.
 
 Run with: pytest -m hardware tests/test_integration.py
+
+Requires CAP_SYS_RAWIO for capture DMA. The devcontainer's runArgs
+include --cap-add=SYS_RAWIO; if running outside the devcontainer,
+ensure the capability is granted or tests will skip.
 """
 
 from __future__ import annotations
@@ -28,7 +32,7 @@ pytestmark = pytest.mark.hardware
 
 VIDEO_FORMAT = VideoFormat.FORMAT_1080i_5994
 PIXEL_FORMAT = PixelFormat.FBF_10BIT_YCBCR  # native SDI, no CSC needed
-MAX_FRAME_BYTES = 1920 * 1080 * 4  # conservative upper-bound
+MAX_FRAME_BYTES = 3840 * 2160 * 4  # conservative upper-bound for any format
 PASSTHROUGH_FRAMES = 300  # ~10 s at 59.94 fps interlaced
 
 PLAYOUT_CH = Channel.CH3
@@ -41,6 +45,48 @@ CAPTURE_SRC = InputSource.SDI4
 _PRIME_FRAMES = 10
 # VBI waits after priming to let the captured frame land.
 _SETTLE_VBIS = 5
+
+
+# ── Capture DMA capability probe ────────────────────────────────────
+
+
+def _probe_capture_dma() -> bool:
+    """Return True if capture DMA works (requires CAP_SYS_RAWIO)."""
+    try:
+        with Card(device_index=0) as card:
+            card.enable_channel(Channel.CH1)
+            card.set_mode(Channel.CH1, Mode.CAPTURE)
+            card.set_video_format(VIDEO_FORMAT, channel=Channel.CH1)
+            card.set_frame_buffer_format(Channel.CH1, PIXEL_FORMAT)
+            card.autocirculate_stop(Channel.CH1, abort=True)
+            card.autocirculate_init_for_input(Channel.CH1, frame_count=2)
+            card.autocirculate_start(Channel.CH1)
+            # Wait for at least one frame to land (even without signal,
+            # the FrameStore captures blank frames).
+            for _ in range(10):
+                card.wait_for_input_vertical_interrupt(Channel.CH1)
+                status = card.autocirculate_get_status(Channel.CH1)
+                if status.has_available_input_frame:
+                    break
+            buf = np.zeros(MAX_FRAME_BYTES, dtype=np.uint8)
+            xfer = Transfer()
+            xfer.set_video_buffer(buf)
+            card.autocirculate_transfer(Channel.CH1, xfer)
+            card.autocirculate_stop(Channel.CH1, abort=True)
+            return True
+    except RuntimeError:
+        return False
+
+
+_CAPTURE_DMA_WORKS = _probe_capture_dma()
+
+if not _CAPTURE_DMA_WORKS:
+    pytestmark = [
+        pytest.mark.hardware,
+        pytest.mark.skip(
+            reason="capture DMA denied (EPERM) — container needs --cap-add=SYS_RAWIO"
+        ),
+    ]
 
 
 # ── Helpers ──────────────────────────────────────────────────────────
