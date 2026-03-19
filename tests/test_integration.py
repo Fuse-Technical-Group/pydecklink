@@ -2,9 +2,26 @@
 
 Run with: pytest -m hardware tests/test_integration.py
 
-Requires CAP_SYS_RAWIO for capture DMA. The devcontainer's runArgs
-include --cap-add=SYS_RAWIO; if running outside the devcontainer,
-ensure the capability is granted or tests will skip.
+Requires sufficient Linux capabilities for capture DMA (card→host).
+The devcontainer's runArgs include --cap-add=SYS_RAWIO and
+--cap-add=SYS_ADMIN; if running outside the devcontainer, ensure the
+capabilities are granted or tests will skip.
+
+Background on the DMA probe
+---------------------------
+The NTV2 driver distinguishes output DMA (host→card) from input DMA
+(card→host).  Output DMA works with CAP_SYS_RAWIO alone.  Input DMA
+(capture) may require additional capabilities (CAP_SYS_ADMIN or
+--privileged), depending on the host kernel and driver version.
+
+The probe uses the same channels and routing as the real tests
+(CH3 playout → SDI3 cable → SDI4 → CH4 capture) so that:
+  1. Signal routing is configured — without it, input VBI interrupts
+     never fire and AutoCirculate stays in STARTING state forever.
+  2. The playout side provides a live signal on the loopback cable,
+     giving the capture side a valid video reference.
+  3. The actual autocirculate_transfer (card→host DMA) is attempted,
+     which is the operation that requires elevated capabilities.
 """
 
 from __future__ import annotations
@@ -51,28 +68,70 @@ _SETTLE_VBIS = 5
 
 
 def _probe_capture_dma() -> bool:
-    """Return True if capture DMA works (requires CAP_SYS_RAWIO)."""
+    """Return True if capture DMA works on the loopback pair.
+
+    Uses the full CH3→SDI3→SDI4→CH4 loopback path so that signal
+    routing and video reference are valid.  Without routing, input VBI
+    interrupts never fire and AutoCirculate cannot advance past the
+    STARTING state.
+    """
     try:
         with Card(device_index=0) as card:
-            card.enable_channel(Channel.CH1)
-            card.set_mode(Channel.CH1, Mode.CAPTURE)
-            card.set_video_format(VIDEO_FORMAT, channel=Channel.CH1)
-            card.set_frame_buffer_format(Channel.CH1, PIXEL_FORMAT)
-            card.autocirculate_stop(Channel.CH1, abort=True)
-            card.autocirculate_init_for_input(Channel.CH1, frame_count=2)
-            card.autocirculate_start(Channel.CH1)
-            # Wait for at least one frame to land (even without signal,
-            # the FrameStore captures blank frames).
-            for _ in range(10):
-                card.wait_for_input_vertical_interrupt(Channel.CH1)
-                status = card.autocirculate_get_status(Channel.CH1)
+            # -- playout side (CH3 → SDI3) --
+            card.set_sdi_transmit_enable(PLAYOUT_CH, True)
+            card.enable_channel(PLAYOUT_CH)
+            card.set_mode(PLAYOUT_CH, Mode.DISPLAY)
+            card.set_video_format(VIDEO_FORMAT, channel=PLAYOUT_CH)
+            card.set_frame_buffer_format(PLAYOUT_CH, PIXEL_FORMAT)
+
+            # -- capture side (SDI4 → CH4) --
+            card.set_sdi_transmit_enable(CAPTURE_CH, False)
+            card.enable_channel(CAPTURE_CH)
+            card.set_mode(CAPTURE_CH, Mode.CAPTURE)
+            card.set_video_format(VIDEO_FORMAT, channel=CAPTURE_CH)
+            card.set_frame_buffer_format(CAPTURE_CH, PIXEL_FORMAT)
+
+            # -- routing --
+            card.set_reference(ReferenceSource.FREERUN)
+            card.clear_routing()
+            out_routes = route_playout(PLAYOUT_CH, PLAYOUT_DEST, PIXEL_FORMAT)
+            cap_routes = route_capture(CAPTURE_SRC, CAPTURE_CH, PIXEL_FORMAT)
+            card.apply_signal_route(out_routes, replace=False)
+            card.apply_signal_route(cap_routes, replace=False)
+
+            # -- start playout and push a blank frame --
+            card.autocirculate_stop(PLAYOUT_CH, abort=True)
+            card.autocirculate_stop(CAPTURE_CH, abort=True)
+            card.autocirculate_init_for_output(PLAYOUT_CH, frame_count=2)
+            card.autocirculate_start(PLAYOUT_CH)
+
+            blank = np.zeros(MAX_FRAME_BYTES, dtype=np.uint8)
+            out_xfer = Transfer()
+            out_xfer.set_video_buffer(blank)
+            card.wait_for_input_vertical_interrupt(PLAYOUT_CH)
+            card.autocirculate_transfer(PLAYOUT_CH, out_xfer)
+
+            # -- start capture and wait for a frame --
+            card.autocirculate_init_for_input(CAPTURE_CH, frame_count=2)
+            card.autocirculate_start(CAPTURE_CH)
+
+            for _ in range(30):
+                card.wait_for_input_vertical_interrupt(CAPTURE_CH)
+                status = card.autocirculate_get_status(CAPTURE_CH)
                 if status.has_available_input_frame:
                     break
-            buf = np.zeros(MAX_FRAME_BYTES, dtype=np.uint8)
-            xfer = Transfer()
-            xfer.set_video_buffer(buf)
-            card.autocirculate_transfer(Channel.CH1, xfer)
-            card.autocirculate_stop(Channel.CH1, abort=True)
+            else:
+                return False  # AutoCirculate never produced a frame
+
+            # -- attempt the actual capture DMA transfer --
+            cap_buf = np.zeros(MAX_FRAME_BYTES, dtype=np.uint8)
+            cap_xfer = Transfer()
+            cap_xfer.set_video_buffer(cap_buf)
+            card.autocirculate_transfer(CAPTURE_CH, cap_xfer)
+
+            card.autocirculate_stop(PLAYOUT_CH, abort=True)
+            card.autocirculate_stop(CAPTURE_CH, abort=True)
+            card.clear_routing()
             return True
     except RuntimeError:
         return False
@@ -84,7 +143,10 @@ if not _CAPTURE_DMA_WORKS:
     pytestmark = [
         pytest.mark.hardware,
         pytest.mark.skip(
-            reason="capture DMA denied (EPERM) — container needs --cap-add=SYS_RAWIO"
+            reason=(
+                "capture DMA probe failed — container likely needs "
+                "--cap-add=SYS_RAWIO --cap-add=SYS_ADMIN (or --privileged)"
+            )
         ),
     ]
 
