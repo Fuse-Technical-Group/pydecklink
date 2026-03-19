@@ -223,7 +223,49 @@ channel is configured to match. Both channels use the same pixel
 format. Frames transfer directly between the AJA card and GPU memory
 via RDMA, bypassing system memory entirely.
 
-## 7. Secondary Use Case: Test Pattern Generation
+## 7. Integration Testing
+
+*Status: not started*
+
+Integration tests require AJA hardware. CH3 and CH4 are connected
+via SDI loopback cable. Tests run locally with `pytest -m hardware`
+and on dedicated CI runners with AJA cards installed.
+
+### 7.1 Loopback (data integrity)
+
+Generate a known test pattern in memory, playout on CH3, capture on
+CH4, and compare buffers. Verifies DMA write → wire → DMA read
+preserves data byte-for-byte.
+
+Test patterns: all zeros, incrementing ramp, random noise,
+checkerboard (0xAA/0x55). Each catches a different class of
+corruption (stuck bits, byte swaps, stride misalignment, adjacent-bit
+crosstalk).
+
+Two variants exercise the same path with different buffer types:
+
+- **CPU loopback**: numpy buffers, `rdma=false`.
+- **GPU loopback**: CuPy buffers, `rdma=true`. Requires NVIDIA GPU +
+  AJA card on the same PCIe bridge.
+
+### 7.2 Passthrough (frame-rate transfer)
+
+Capture on CH4, DMA to host/GPU memory, DMA back out on CH3.
+Exercises the sustained AutoCirculate pump: init → start → transfer
+loop → stop. The loopback cable feeds CH3's output back to CH4's
+input, creating a closed loop.
+
+Verification: run for N frames, assert zero dropped frames and
+stable buffer levels. Data integrity is already covered by 7.1;
+this test validates timing and flow control.
+
+Two variants:
+
+- **CPU passthrough**: numpy buffer, single-buffer round-trip.
+- **GPU passthrough**: CuPy buffer, RDMA both directions. Validates
+  that frames never touch system memory.
+
+## 8. Secondary Use Case: Test Pattern Generation
 
 *Status: not started*
 
@@ -255,7 +297,7 @@ holds — no continuous transfer loop, no GPU memory, no latency
 constraints. The API surface overlaps but the performance envelope
 is different.
 
-## 8. Explicit Non-Goals (Phase 1)
+## 9. Explicit Non-Goals (Phase 1)
 
 - **AMD GPU RDMA.** No AJA driver support exists. The architecture
   doesn't block it if support arrives.
