@@ -95,7 +95,7 @@ wrapper changes.
 
 ## 5. Python API (Phase 1)
 
-*Status: not started*
+*Status: in progress*
 
 The API is a thin 1:1 mapping of `CNTV2Card` methods to Python. Each
 C++ method that returns `bool` raises `RuntimeError` on failure.
