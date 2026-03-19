@@ -3,7 +3,7 @@
     "dockerfile": "Dockerfile",
     "context": ".."
   },
-  "runArgs": ["--device=/dev/ajantv20"],
+  "runArgs": ["--device=/dev/ajantv20", "--cap-add=SYS_RAWIO"],
   "mounts": [
     "source=${localEnv:HOME}/.claude,target=/home/dev/.claude,type=bind,consistency=cached",
     "source=${localEnv:HOME}/.claude.json,target=/home/dev/.claude.json,type=bind,consistency=cached",
