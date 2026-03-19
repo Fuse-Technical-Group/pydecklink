@@ -17,7 +17,7 @@ Derived from [SPEC.md](SPEC.md). Sections are in build-dependency order.
 ## Signal Routing
 
 - **routing-core**: Bind `Connect`, `Disconnect`, `ClearRouting`,
-  `ApplySignalRoute`. Expose `InputXpt` and `OutputXpt` enums.
+  `ApplySignalRoute`.
 - **routing-helpers**: Implement `route_capture()` and
   `route_playout()` convenience functions. Insert CSC widget when
   input color space differs from framebuffer pixel format.
