@@ -225,7 +225,7 @@ via RDMA, bypassing system memory entirely.
 
 ## 7. Integration Testing
 
-*Status: not started*
+*Status: in progress*
 
 Integration tests require AJA hardware. CH3 and CH4 are connected
 via SDI loopback cable. Tests run locally with `pytest -m hardware`

@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+* **tests:** integration tests for CPU/GPU loopback and passthrough (CH3↔CH4 SDI)
+
 ## [0.1.1](https://github.com/Fuse-Technical-Group/pyntv2/compare/v0.1.0...v0.1.1) (2026-03-19)
 
 
