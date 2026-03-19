@@ -12,6 +12,10 @@ requires-python = ">=3.12"
 [dependency-groups]
 dev = ["pytest>=8"]
 
+[tool.pytest.ini_options]
+markers = ["hardware: requires AJA hardware (deselected by default)"]
+addopts = "-m 'not hardware'"
+
 [tool.scikit-build]
 minimum-version = "0.10"
 build-dir = "build/{wheel_tag}"
