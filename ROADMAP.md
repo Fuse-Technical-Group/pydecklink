@@ -2,46 +2,6 @@
 
 Derived from [SPEC.md](SPEC.md). Sections are in build-dependency order.
 
-## Card Wrapper
-
-- **card-open-close**: Bind `CNTV2Card` open/close lifecycle. Context
-  manager support (`__enter__`/`__exit__`).
-
-## Format Detection and Configuration
-
-- **format-detect**: Bind `GetInputVideoFormat`. Return `VideoFormat`
-  enum.
-- **format-config**: Bind `SetVideoFormat`, `SetFrameBufferFormat`,
-  `EnableChannel`, `SetMode`, `SetSDITransmitEnable`, `SetReference`.
-
-## Signal Routing
-
-- **routing-core**: Bind `Connect`, `Disconnect`, `ClearRouting`,
-  `ApplySignalRoute`.
-- **routing-helpers**: Implement `route_capture()` and
-  `route_playout()` convenience functions. Insert CSC widget when
-  input color space differs from framebuffer pixel format.
-
-## AutoCirculate
-
-- **autocirculate-init**: Bind `AutoCirculateInitForInput`,
-  `AutoCirculateInitForOutput`. Bool-to-exception translation.
-- **autocirculate-start-stop**: Bind `AutoCirculateStart`,
-  `AutoCirculateStop`.
-- **autocirculate-status**: Bind `AutoCirculateGetStatus`. Return
-  `Status` dataclass.
-- **transfer-class**: Bind `AUTOCIRCULATE_TRANSFER` as `Transfer`
-  class. `set_video_buffer()` accepts `nb::ndarray<>`.
-- **autocirculate-transfer**: Bind `AutoCirculateTransfer`. Accepts
-  `Channel` and `Transfer`.
-- **wait-for-vbi**: Bind `WaitForInputVerticalInterrupt`.
-
-## Buffer Management
-
-- **dma-buffer-lock**: Bind `DMABufferLock`/`DMABufferUnlock`. Detect
-  CPU vs CUDA device from `nb::ndarray<>` device tag. Set `rdma` flag
-  accordingly.
-
 ## Integration Testing
 
 - **loopback-test**: End-to-end test with AJA hardware in loopback
