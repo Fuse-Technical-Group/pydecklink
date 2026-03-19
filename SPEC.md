@@ -37,6 +37,28 @@ version, compiler, and Python version for reproducibility.
   (`/dev/ajantv20`) is passed through via `--device`.
 - GPU passthrough (NVIDIA Container Toolkit) is deferred to Phase 2.
 
+### Container capabilities for DMA
+
+The NTV2 kernel driver requires Linux capabilities beyond the default
+container set. The `devcontainer.json` grants these via Podman
+`--cap-add` flags.
+
+| Capability | Required for | Notes |
+|---|---|---|
+| `CAP_SYS_RAWIO` | All DMA operations | Without it, `DMABufferLock` and playout `autocirculate_transfer` fail with EPERM. |
+| `CAP_SYS_ADMIN` | Capture DMA (card→host) | Output DMA (host→card) works without it, but input DMA requires the additional privilege. |
+
+Rootless Podman cannot provide `CAP_SYS_RAWIO` — it only applies in
+the initial user namespace. The container must run rootful.
+
+Register-level operations (open, configure channels, set routing,
+read input format) and VBI interrupt waits work with no special
+capabilities — they use standard ioctl on the device node.
+
+If `CAP_SYS_ADMIN` proves insufficient for capture DMA on a given
+host, `--privileged` is the fallback. This removes all container
+isolation and should be avoided in production.
+
 ## 3. Binding Technology
 
 *Status: complete*
