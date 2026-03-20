@@ -13,9 +13,6 @@ RUN apt-get update \
        openssh-client \
        libudev-dev \
        pkg-config \
-       python3.12 \
-       python3.12-dev \
-       python3.12-venv \
     && rm -rf /var/lib/apt/lists/*
 
 RUN git clone --depth 1 --branch "${AJANTV2_TAG}" \
@@ -32,7 +29,8 @@ RUN git clone --depth 1 --branch "${AJANTV2_TAG}" \
     && cmake --install /tmp/libajantv2/build \
     && rm -rf /tmp/libajantv2/build
 
-RUN curl -LsSf https://astral.sh/uv/install.sh | UV_INSTALL_DIR=/usr/local/bin sh
+RUN curl -LsSf https://astral.sh/uv/install.sh | UV_INSTALL_DIR=/usr/local/bin sh \
+    && uv python install 3.13
 
 RUN mkdir -p -m 755 /etc/apt/keyrings \
     && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
