@@ -24,9 +24,16 @@ host-side SDK installation is required.
 
 ### Why a devcontainer
 
-libajantv2 installs headers and a shared library to system paths.
+libajantv2 installs headers and a static library to system paths.
 Containing the build avoids polluting the host and pins the SDK
 version, compiler, and Python version for reproducibility.
+
+The SDK defaults to a static build (`AJANTV2_BUILD_SHARED=OFF`).
+The static archive links into consumers (the Python extension, host
+diagnostic tools) at build time. No runtime `.so` dependency. This
+is correct for both use cases: a Python C extension is itself a
+`.so` but statically links its dependencies; standalone binaries
+avoid `LD_LIBRARY_PATH` and work with `setcap` file capabilities.
 
 ### Constraints
 
