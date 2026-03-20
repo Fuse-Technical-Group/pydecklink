@@ -1,0 +1,6 @@
+build/
+*.so
+*.so.*
+test_capture_minimal
+test_capture_minimal_static
+test_capture_minimal_dynamic

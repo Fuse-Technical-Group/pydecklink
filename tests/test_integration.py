@@ -3,16 +3,17 @@
 Run with: pytest -m hardware tests/test_integration.py
 
 Requires sufficient Linux capabilities for capture DMA (card→host).
-The devcontainer's runArgs include --cap-add=SYS_RAWIO and
---cap-add=SYS_ADMIN; if running outside the devcontainer, ensure the
+The devcontainer's runArgs include --cap-add=SYS_RAWIO, --cap-add=SYS_ADMIN,
+and --cap-add=IPC_LOCK; if running outside the devcontainer, ensure the
 capabilities are granted or tests will skip.
 
 Background on the DMA probe
 ---------------------------
 The NTV2 driver distinguishes output DMA (host→card) from input DMA
 (card→host).  Output DMA works with CAP_SYS_RAWIO alone.  Input DMA
-(capture) may require additional capabilities (CAP_SYS_ADMIN or
---privileged), depending on the host kernel and driver version.
+(capture) requires CAP_SYS_RAWIO, CAP_SYS_ADMIN, CAP_IPC_LOCK, and
+seccomp=unconfined.  CAP_IPC_LOCK is needed because the driver pins
+user-space pages via get_user_pages for the DMA transfer.
 
 The probe uses the same channels and routing as the real tests
 (CH3 playout → SDI3 cable → SDI4 → CH4 capture) so that:
@@ -102,7 +103,7 @@ def _probe_capture_dma() -> bool:
             # -- start playout and push a blank frame --
             card.autocirculate_stop(PLAYOUT_CH, abort=True)
             card.autocirculate_stop(CAPTURE_CH, abort=True)
-            card.autocirculate_init_for_output(PLAYOUT_CH, frame_count=2)
+            card.autocirculate_init_for_output(PLAYOUT_CH)
             card.autocirculate_start(PLAYOUT_CH)
 
             blank = np.zeros(MAX_FRAME_BYTES, dtype=np.uint8)
@@ -112,7 +113,7 @@ def _probe_capture_dma() -> bool:
             card.autocirculate_transfer(PLAYOUT_CH, out_xfer)
 
             # -- start capture and wait for a frame --
-            card.autocirculate_init_for_input(CAPTURE_CH, frame_count=2)
+            card.autocirculate_init_for_input(CAPTURE_CH)
             card.autocirculate_start(CAPTURE_CH)
 
             for _ in range(30):
@@ -145,7 +146,8 @@ if not _CAPTURE_DMA_WORKS:
         pytest.mark.skip(
             reason=(
                 "capture DMA probe failed — container likely needs "
-                "--cap-add=SYS_RAWIO --cap-add=SYS_ADMIN (or --privileged)"
+                "--cap-add=SYS_RAWIO --cap-add=SYS_ADMIN --cap-add=IPC_LOCK "
+                "--security-opt=seccomp=unconfined (or --privileged)"
             )
         ),
     ]
