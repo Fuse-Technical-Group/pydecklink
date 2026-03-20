@@ -107,6 +107,7 @@ def _probe_capture_dma() -> bool:
             card.autocirculate_start(PLAYOUT_CH)
 
             blank = np.zeros(MAX_FRAME_BYTES, dtype=np.uint8)
+            card.dma_buffer_lock(blank)
             out_xfer = Transfer()
             out_xfer.set_video_buffer(blank)
             card.wait_for_input_vertical_interrupt(PLAYOUT_CH)
@@ -126,9 +127,13 @@ def _probe_capture_dma() -> bool:
 
             # -- attempt the actual capture DMA transfer --
             cap_buf = np.zeros(MAX_FRAME_BYTES, dtype=np.uint8)
-            cap_xfer = Transfer()
-            cap_xfer.set_video_buffer(cap_buf)
-            card.autocirculate_transfer(CAPTURE_CH, cap_xfer)
+            card.dma_buffer_lock(cap_buf)
+            try:
+                cap_xfer = Transfer()
+                cap_xfer.set_video_buffer(cap_buf)
+                card.autocirculate_transfer(CAPTURE_CH, cap_xfer)
+            finally:
+                card.dma_buffer_unlock(cap_buf)
 
             card.autocirculate_stop(PLAYOUT_CH, abort=True)
             card.autocirculate_stop(CAPTURE_CH, abort=True)
