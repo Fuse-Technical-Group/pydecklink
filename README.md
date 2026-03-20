@@ -31,9 +31,13 @@ uv pip install -e ".[dev]"
 ### Devcontainer
 
 A VS Code devcontainer builds libajantv2 from source at a pinned
-release tag. No host-side SDK install needed — open the project in
-VS Code and reopen in container. The container requires `--privileged`
-for DMA access.
+release tag and provides a ready-to-code environment for the Python
+and C++ layers.
+
+> **Note:** DMA transfers do not yet work inside the container. The
+> devcontainer is useful for building and editing, but capture/playout
+> must run on the host. Container-based DMA is a work in progress —
+> see SPEC.md §2 for the capability requirements under investigation.
 
 ## Quick start
 
