@@ -18,7 +18,7 @@ playout via CPU buffers (numpy).
 
 - Linux (kernel module `ajantv2` loaded, **no** `iommu=pt`)
 - AJA NTV2 hardware (Corvid, Kona, etc.)
-- Python ≥ 3.12
+- [uv](https://docs.astral.sh/uv/) (manages Python and dependencies)
 
 libajantv2 is statically linked into the wheel at build time — no
 SDK install needed on the host. Building from source requires the
