@@ -19,8 +19,11 @@ playout via CPU buffers (numpy).
 - Linux (kernel module `ajantv2` loaded, **no** `iommu=pt`)
 - AJA NTV2 hardware (Corvid, Kona, etc.)
 - Python ≥ 3.12
-- libajantv2 headers and static library installed to system paths
-- CMake ≥ 3.18
+
+libajantv2 is statically linked into the wheel at build time — no
+SDK install needed on the host. Building from source requires the
+libajantv2 headers/static library and CMake ≥ 3.18 (the devcontainer
+provides these).
 
 ## Install
 
