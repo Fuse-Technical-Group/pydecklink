@@ -8,9 +8,15 @@ playout via CPU buffers (numpy).
 > (CuPy/PyTorch) does not work on 64-bit systems. The bindings accept
 > `nb::ndarray` from any device, but only CPU buffers are functional.
 
+> **Note:** `iommu=pt` (passthrough) must be **disabled**. The kernel's
+> SWIOTLB bounce-buffer path does not correctly map allocations down to
+> the 32-bit address space when IOMMU passthrough is active, causing DMA
+> failures. Remove `iommu=pt` from kernel command line parameters or set
+> `iommu=soft` to use software translation.
+
 ## Requirements
 
-- Linux (kernel module `ajantv2` loaded)
+- Linux (kernel module `ajantv2` loaded, **no** `iommu=pt`)
 - AJA NTV2 hardware (Corvid, Kona, etc.)
 - Python ≥ 3.12
 - libajantv2 headers and static library installed to system paths
