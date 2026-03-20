@@ -2,8 +2,11 @@
 
 Python bindings for [AJA's libajantv2 SDK](https://github.com/aja-video/libajantv2),
 exposing the AutoCirculate API for frame-accurate SDI/HDMI capture and
-playout. Supports CPU buffers (numpy) and GPU buffers (CuPy/PyTorch)
-with RDMA for zero-copy streaming.
+playout via CPU buffers (numpy).
+
+> **Note:** The AJA NTV2 DMA engine is 32-bit addressable. GPU RDMA
+> (CuPy/PyTorch) does not work on 64-bit systems. The bindings accept
+> `nb::ndarray` from any device, but only CPU buffers are functional.
 
 ## Requirements
 
@@ -12,9 +15,6 @@ with RDMA for zero-copy streaming.
 - Python ≥ 3.12
 - libajantv2 headers and static library installed to system paths
 - CMake ≥ 3.18
-
-GPU RDMA additionally requires an NVIDIA GPU on the same PCIe bridge
-as the AJA card.
 
 ## Install
 
