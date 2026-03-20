@@ -3,16 +3,16 @@
     "dockerfile": "Dockerfile",
     "context": ".."
   },
-  "runArgs": ["--device=/dev/ajantv20", "--cap-add=SYS_RAWIO", "--cap-add=SYS_ADMIN"],
+  "runArgs": ["--device=/dev/ajantv20", "--privileged", "--ulimit=memlock=-1:-1", "--shm-size=1g"],
   "mounts": [
-    "source=${localEnv:HOME}/.claude,target=/home/dev/.claude,type=bind,consistency=cached",
-    "source=${localEnv:HOME}/.claude.json,target=/home/dev/.claude.json,type=bind,consistency=cached",
+    "source=${localEnv:HOME}/.claude,target=/root/.claude,type=bind,consistency=cached",
+    "source=${localEnv:HOME}/.claude.json,target=/root/.claude.json,type=bind,consistency=cached",
     "source=${localEnv:SSH_AUTH_SOCK},target=/run/ssh-agent.sock,type=bind"
   ],
   "remoteEnv": {
     "SSH_AUTH_SOCK": "/run/ssh-agent.sock"
   },
-  "remoteUser": "dev",
+  "remoteUser": "root",
   "customizations": {
     "vscode": {
       "extensions": [
