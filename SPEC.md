@@ -24,9 +24,16 @@ host-side SDK installation is required.
 
 ### Why a devcontainer
 
-libajantv2 installs headers and a shared library to system paths.
+libajantv2 installs headers and a static library to system paths.
 Containing the build avoids polluting the host and pins the SDK
 version, compiler, and Python version for reproducibility.
+
+The SDK defaults to a static build (`AJANTV2_BUILD_SHARED=OFF`).
+The static archive links into consumers (the Python extension, host
+diagnostic tools) at build time. No runtime `.so` dependency. This
+is correct for both use cases: a Python C extension is itself a
+`.so` but statically links its dependencies; standalone binaries
+avoid `LD_LIBRARY_PATH` and work with `setcap` file capabilities.
 
 ### Constraints
 
@@ -36,6 +43,28 @@ version, compiler, and Python version for reproducibility.
 - The container runs as a non-root user. The host's AJA device node
   (`/dev/ajantv20`) is passed through via `--device`.
 - GPU passthrough (NVIDIA Container Toolkit) is deferred to Phase 2.
+
+### Container capabilities for DMA
+
+The NTV2 kernel driver requires Linux capabilities beyond the default
+container set. The `devcontainer.json` grants these via Podman
+`--cap-add` flags.
+
+| Capability | Required for | Notes |
+|---|---|---|
+| `CAP_SYS_RAWIO` | All DMA operations | Without it, `DMABufferLock` and playout `autocirculate_transfer` fail with EPERM. |
+| `CAP_SYS_ADMIN` | Capture DMA (card→host) | Output DMA (host→card) works without it, but input DMA requires the additional privilege. |
+
+Rootless Podman cannot provide `CAP_SYS_RAWIO` — it only applies in
+the initial user namespace. The container must run rootful.
+
+Register-level operations (open, configure channels, set routing,
+read input format) and VBI interrupt waits work with no special
+capabilities — they use standard ioctl on the device node.
+
+If `CAP_SYS_ADMIN` proves insufficient for capture DMA on a given
+host, `--privileged` is the fallback. This removes all container
+isolation and should be avoided in production.
 
 ## 3. Binding Technology
 
@@ -225,7 +254,7 @@ via RDMA, bypassing system memory entirely.
 
 ## 7. Integration Testing
 
-*Status: not started*
+*Status: in progress*
 
 Integration tests require AJA hardware. CH3 and CH4 are connected
 via SDI loopback cable. Tests run locally with `pytest -m hardware`

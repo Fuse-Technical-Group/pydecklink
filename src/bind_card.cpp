@@ -24,6 +24,14 @@ void init_card(nb::module_& m) {
             if (self.IsOpen()) self.Close();
         })
 
+        // ── Device Ownership ────────────────────────────────────────
+        .def("acquire_stream_for_application", [](CNTV2Card& self, ULWord app_type, int32_t process_id) {
+            check(self.AcquireStreamForApplication(app_type, process_id), "Card.acquire_stream_for_application");
+        }, nb::arg("app_type"), nb::arg("process_id"))
+        .def("release_stream_for_application", [](CNTV2Card& self, ULWord app_type, int32_t process_id) {
+            check(self.ReleaseStreamForApplication(app_type, process_id), "Card.release_stream_for_application");
+        }, nb::arg("app_type"), nb::arg("process_id"))
+
         // ── Format Detection & Configuration ─────────────────────────
         .def("get_input_video_format", [](CNTV2Card& self, NTV2InputSource source, bool is_progressive) {
             return self.GetInputVideoFormat(source, is_progressive);
@@ -63,9 +71,13 @@ void init_card(nb::module_& m) {
 
         // ── AutoCirculate ────────────────────────────────────────────
         .def("autocirculate_init_for_input", [](CNTV2Card& self, NTV2Channel channel, UWord frame_count, NTV2AudioSystem audio_system, ULWord option_flags) {
+            if (frame_count < 3)
+                throw std::invalid_argument("frame_count must be >= 3 (HasAvailableInputFrame requires buffer_level > 1)");
             check(self.AutoCirculateInitForInput(channel, frame_count, audio_system, option_flags), "Card.autocirculate_init_for_input");
         }, nb::arg("channel"), nb::arg("frame_count") = 7, nb::arg("audio_system") = NTV2_AUDIOSYSTEM_INVALID, nb::arg("option_flags") = 0)
         .def("autocirculate_init_for_output", [](CNTV2Card& self, NTV2Channel channel, UWord frame_count, NTV2AudioSystem audio_system, ULWord option_flags) {
+            if (frame_count < 3)
+                throw std::invalid_argument("frame_count must be >= 3 (CanAcceptMoreOutputFrames requires (frame_count - buffer_level) > 1)");
             check(self.AutoCirculateInitForOutput(channel, frame_count, audio_system, option_flags), "Card.autocirculate_init_for_output");
         }, nb::arg("channel"), nb::arg("frame_count") = 7, nb::arg("audio_system") = NTV2_AUDIOSYSTEM_INVALID, nb::arg("option_flags") = 0)
         .def("autocirculate_start", [](CNTV2Card& self, NTV2Channel channel) {
@@ -80,8 +92,37 @@ void init_card(nb::module_& m) {
             return status;
         }, nb::arg("channel"))
         .def("autocirculate_transfer", [](CNTV2Card& self, NTV2Channel channel, AUTOCIRCULATE_TRANSFER& transfer) {
-            check(self.AutoCirculateTransfer(channel, transfer), "Card.autocirculate_transfer");
+            errno = 0;
+            bool ok = self.AutoCirculateTransfer(channel, transfer);
+            int saved_errno = errno;
+            if (!ok) {
+                AUTOCIRCULATE_STATUS st;
+                self.AutoCirculateGetStatus(channel, st);
+                std::string msg = "Card.autocirculate_transfer failed (ch=";
+                msg += std::to_string(channel);
+                msg += " state=";
+                msg += std::to_string(st.acState);
+                msg += " bufLevel=";
+                msg += std::to_string(st.GetBufferLevel());
+                msg += " vidBufSize=";
+                msg += std::to_string(transfer.GetVideoBuffer().GetByteCount());
+                msg += " vidBufPtr=";
+                msg += std::to_string(reinterpret_cast<uintptr_t>(transfer.GetVideoBuffer().GetHostPointer()));
+                msg += " errno=";
+                msg += std::to_string(saved_errno);
+                msg += ")";
+                throw std::runtime_error(msg);
+            }
         }, nb::arg("channel"), nb::arg("transfer"))
+
+        .def("get_every_frame_services", [](CNTV2Card& self) {
+            NTV2EveryFrameTaskMode mode;
+            check(self.GetEveryFrameServices(mode), "Card.get_every_frame_services");
+            return static_cast<int>(mode);
+        })
+        .def("set_every_frame_services", [](CNTV2Card& self, int mode) {
+            check(self.SetEveryFrameServices(static_cast<NTV2EveryFrameTaskMode>(mode)), "Card.set_every_frame_services");
+        }, nb::arg("mode"))
 
         // ── VBI ──────────────────────────────────────────────────────
         .def("wait_for_input_vertical_interrupt", [](CNTV2Card& self, NTV2Channel channel, UWord repeat_count) {
@@ -92,7 +133,7 @@ void init_card(nb::module_& m) {
         .def("dma_buffer_lock", [](CNTV2Card& self, nb::ndarray<> buffer) {
             bool rdma = buffer.device_type() == nb::device::cuda::value;
             NTV2Buffer buf(buffer.data(), buffer.nbytes());
-            check(self.DMABufferLock(buf, false, rdma), "Card.dma_buffer_lock");
+            check(self.DMABufferLock(buf, true, rdma), "Card.dma_buffer_lock");
         }, nb::arg("buffer"))
         .def("dma_buffer_unlock", [](CNTV2Card& self, nb::ndarray<> buffer) {
             NTV2Buffer buf(buffer.data(), buffer.nbytes());
