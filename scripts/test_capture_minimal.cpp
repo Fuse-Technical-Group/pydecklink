@@ -30,11 +30,17 @@ int main()
     NTV2Channel    ch  = NTV2_CHANNEL1;
     NTV2InputSource src = NTV2_INPUTSOURCE_SDI1;
 
+    int exitCode = 1;
+    ULWord* buf = nullptr;
+    bool bufLocked = false;
+    NTV2Buffer lockBuf;
+    bool xferOk = false;
+
     // Detect input format
     NTV2VideoFormat vf = card.GetInputVideoFormat(src);
     printf("Detected input format: %d (%s)\n", vf, NTV2VideoFormatToString(vf).c_str());
     if (vf == NTV2_FORMAT_UNKNOWN)
-    {   fprintf(stderr, "No signal on SDI1\n"); return 1; }
+    {   fprintf(stderr, "No signal on SDI1\n"); goto cleanup; }
 
     // Configure channel
     card.SetSDITransmitEnable(ch, false);
@@ -49,110 +55,114 @@ int main()
     card.Connect(NTV2_XptFrameBuffer1Input, NTV2_XptSDIIn1);
     printf("Routing configured\n");
 
-    // Get frame size — use a generous allocation
-    // 1080p 10-bit YCbCr v210: 1920*1080*8/3 ≈ 5.5MB, round up
-    ULWord frameBytes = 1920 * 1080 * 4;  // 8MB, oversized but safe
-    printf("Using buffer size: %u bytes\n", frameBytes);
-
-    // Allocate a host buffer (page-aligned, like the AJA demo uses)
-    ULWord* buf = nullptr;
-    int ret = posix_memalign(reinterpret_cast<void**>(&buf), 4096, frameBytes);
-    if (ret || !buf)
-    {   fprintf(stderr, "posix_memalign failed: %d\n", ret); return 1; }
-    memset(buf, 0, frameBytes);
-    printf("Host buffer: %p  size=%u  (page-aligned)\n", (void*)buf, frameBytes);
-
-    // Pre-lock the DMA buffer (like the demo does with NTV2_BUFFER_LOCK)
-    NTV2Buffer lockBuf(buf, frameBytes);
-    bool lockOk = card.DMABufferLock(lockBuf, true);
-    printf("DMABufferLock: %s\n", lockOk ? "OK" : "FAILED");
-
-    // Stop any prior autocirculate
-    card.AutoCirculateStop(ch, true /*abort*/);
-
-    // Init autocirculate for input
-    if (!card.AutoCirculateInitForInput(ch, 7, NTV2_AUDIOSYSTEM_INVALID, 0))
-    {   fprintf(stderr, "AutoCirculateInitForInput FAILED\n"); return 1; }
-    if (!card.AutoCirculateStart(ch))
-    {   fprintf(stderr, "AutoCirculateStart FAILED\n"); return 1; }
-    printf("AutoCirculate started\n");
-
-    // Wait for a captured frame
-    bool gotFrame = false;
-    for (int i = 0; i < 60; i++)
     {
-        card.WaitForInputVerticalInterrupt(ch);
-        AUTOCIRCULATE_STATUS st;
-        card.AutoCirculateGetStatus(ch, st);
-        if (st.HasAvailableInputFrame())
-        {
-            printf("Frame available after %d VBIs  bufLevel=%d\n",
-                   i + 1, st.GetBufferLevel());
-            gotFrame = true;
-            break;
-        }
-    }
-    if (!gotFrame)
-    {   fprintf(stderr, "No frame available after 60 VBIs\n"); return 1; }
+        // Get frame size — use a generous allocation
+        // 1080p 10-bit YCbCr v210: 1920*1080*8/3 ≈ 5.5MB, round up
+        ULWord frameBytes = 1920 * 1080 * 4;  // 8MB, oversized but safe
+        printf("Using buffer size: %u bytes\n", frameBytes);
 
-    // Attempt the C2H DMA transfer
-    AUTOCIRCULATE_TRANSFER xfer;
-    xfer.SetVideoBuffer(buf, frameBytes);
+        // Allocate a host buffer (page-aligned, like the AJA demo uses)
+        int ret = posix_memalign(reinterpret_cast<void**>(&buf), 4096, frameBytes);
+        if (ret || !buf)
+        {   fprintf(stderr, "posix_memalign failed: %d\n", ret); goto cleanup; }
+        memset(buf, 0, frameBytes);
+        printf("Host buffer: %p  size=%u  (page-aligned)\n", (void*)buf, frameBytes);
 
-    printf("Attempting AutoCirculateTransfer (C2H DMA)...\n");
-    printf("  xfer vidBuf ptr=%p  size=%u\n",
-           xfer.GetVideoBuffer().GetHostPointer(),
-           xfer.GetVideoBuffer().GetByteCount());
+        // Pre-lock the DMA buffer (like the demo does with NTV2_BUFFER_LOCK)
+        lockBuf = NTV2Buffer(buf, frameBytes);
+        bool lockOk = card.DMABufferLock(lockBuf, true);
+        printf("DMABufferLock: %s\n", lockOk ? "OK" : "FAILED");
+        bufLocked = lockOk;
 
-    errno = 0;
-    bool xferOk = card.AutoCirculateTransfer(ch, xfer);
-    int savedErrno = errno;
+        // Stop any prior autocirculate
+        card.AutoCirculateStop(ch, true /*abort*/);
 
-    if (xferOk)
-    {
-        // Count non-zero bytes
-        int nonzero = 0;
-        auto p = reinterpret_cast<unsigned char*>(buf);
-        for (ULWord i = 0; i < frameBytes; i++)
-            if (p[i]) nonzero++;
-        printf("TRANSFER OK!  nonzero=%d / %u\n", nonzero, frameBytes);
-    }
-    else
-    {
-        AUTOCIRCULATE_STATUS st;
-        card.AutoCirculateGetStatus(ch, st);
-        printf("TRANSFER FAILED  state=%d  bufLevel=%d  errno=%d (%s)\n",
-               st.acState, st.GetBufferLevel(), savedErrno, strerror(savedErrno));
-    }
+        // Init autocirculate for input
+        if (!card.AutoCirculateInitForInput(ch, 7, NTV2_AUDIOSYSTEM_INVALID, 0))
+        {   fprintf(stderr, "AutoCirculateInitForInput FAILED\n"); goto cleanup; }
+        if (!card.AutoCirculateStart(ch))
+        {   fprintf(stderr, "AutoCirculateStart FAILED\n"); goto cleanup; }
+        printf("AutoCirculate started\n");
 
-    // Try a second transfer to see if the engine recovers
-    if (xferOk)
-    {
-        printf("\nTransferring 9 more frames...\n");
-        int okCount = 0, failCount = 0;
-        for (int f = 0; f < 9; f++)
+        // Wait for a captured frame
+        bool gotFrame = false;
+        for (int i = 0; i < 60; i++)
         {
             card.WaitForInputVerticalInterrupt(ch);
             AUTOCIRCULATE_STATUS st;
             card.AutoCirculateGetStatus(ch, st);
-            if (!st.HasAvailableInputFrame()) { continue; }
-
-            memset(buf, 0, frameBytes);
-            xfer.SetVideoBuffer(buf, frameBytes);
-            if (card.AutoCirculateTransfer(ch, xfer))
-                okCount++;
-            else
-                failCount++;
+            if (st.HasAvailableInputFrame())
+            {
+                printf("Frame available after %d VBIs  bufLevel=%d\n",
+                       i + 1, st.GetBufferLevel());
+                gotFrame = true;
+                break;
+            }
         }
-        printf("Results: %d ok, %d failed\n", okCount, failCount);
+        if (!gotFrame)
+        {   fprintf(stderr, "No frame available after 60 VBIs\n"); goto cleanup; }
+
+        // Attempt the C2H DMA transfer
+        AUTOCIRCULATE_TRANSFER xfer;
+        xfer.SetVideoBuffer(buf, frameBytes);
+
+        printf("Attempting AutoCirculateTransfer (C2H DMA)...\n");
+        printf("  xfer vidBuf ptr=%p  size=%u\n",
+               xfer.GetVideoBuffer().GetHostPointer(),
+               xfer.GetVideoBuffer().GetByteCount());
+
+        errno = 0;
+        xferOk = card.AutoCirculateTransfer(ch, xfer);
+        int savedErrno = errno;
+
+        if (xferOk)
+        {
+            // Count non-zero bytes
+            int nonzero = 0;
+            auto p = reinterpret_cast<unsigned char*>(buf);
+            for (ULWord i = 0; i < frameBytes; i++)
+                if (p[i]) nonzero++;
+            printf("TRANSFER OK!  nonzero=%d / %u\n", nonzero, frameBytes);
+        }
+        else
+        {
+            AUTOCIRCULATE_STATUS st;
+            card.AutoCirculateGetStatus(ch, st);
+            printf("TRANSFER FAILED  state=%d  bufLevel=%d  errno=%d (%s)\n",
+                   st.acState, st.GetBufferLevel(), savedErrno, strerror(savedErrno));
+        }
+
+        // Try more transfers to see if the engine recovers
+        if (xferOk)
+        {
+            printf("\nTransferring 9 more frames...\n");
+            int okCount = 0, failCount = 0;
+            for (int f = 0; f < 9; f++)
+            {
+                card.WaitForInputVerticalInterrupt(ch);
+                AUTOCIRCULATE_STATUS st;
+                card.AutoCirculateGetStatus(ch, st);
+                if (!st.HasAvailableInputFrame()) { continue; }
+
+                memset(buf, 0, frameBytes);
+                xfer.SetVideoBuffer(buf, frameBytes);
+                if (card.AutoCirculateTransfer(ch, xfer))
+                    okCount++;
+                else
+                    failCount++;
+            }
+            printf("Results: %d ok, %d failed\n", okCount, failCount);
+        }
+
+        exitCode = xferOk ? 0 : 1;
     }
 
-    // Cleanup
+cleanup:
     card.AutoCirculateStop(ch, true);
-    card.DMABufferUnlock(lockBuf);
-    free(buf);
+    if (bufLocked) card.DMABufferUnlock(lockBuf);
+    free(buf);  // free(nullptr) is safe
     card.SetEveryFrameServices(savedMode);
     card.ReleaseStreamForApplication(appSig, pid);
     card.Close();
-    return xferOk ? 0 : 1;
+    return exitCode;
 }

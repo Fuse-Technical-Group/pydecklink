@@ -53,6 +53,13 @@ RUN userdel -r ubuntu 2>/dev/null; \
 # shells; root is unlimited by default.
 RUN echo "dev  -  memlock  unlimited" >> /etc/security/limits.conf
 
+# Pre-seed GitHub SSH host key so git-over-SSH works immediately
+# with the forwarded SSH agent (mounted via devcontainer.json).
+RUN mkdir -p /root/.ssh /home/dev/.ssh \
+    && ssh-keyscan github.com >> /root/.ssh/known_hosts 2>/dev/null \
+    && cp /root/.ssh/known_hosts /home/dev/.ssh/known_hosts \
+    && chown -R 1000:1000 /home/dev/.ssh
+
 # Install Claude Code for root (remoteUser) and dev (fallback).
 RUN curl -fsSL https://claude.ai/install.sh | bash
 USER dev
