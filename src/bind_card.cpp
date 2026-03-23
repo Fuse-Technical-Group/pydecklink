@@ -21,7 +21,13 @@ void init_card(nb::module_& m) {
         .def_prop_ro("is_open", &CNTV2Card::IsOpen)
         .def("__enter__", [](nb::object self) -> nb::object { return self; })
         .def("__exit__", [](CNTV2Card& self, nb::args) {
-            if (self.IsOpen()) self.Close();
+            if (!self.IsOpen()) return;
+            // Stop AutoCirculate on every channel to prevent the DMA
+            // engine from wedging when the device handle closes with
+            // transfers still in flight.
+            for (int ch = NTV2_CHANNEL1; ch < NTV2_MAX_NUM_CHANNELS; ++ch)
+                self.AutoCirculateStop(static_cast<NTV2Channel>(ch), true);
+            self.Close();
         })
 
         // ── Device Ownership ────────────────────────────────────────
@@ -131,6 +137,12 @@ void init_card(nb::module_& m) {
 
         // ── DMA Buffer Lock ──────────────────────────────────────────
         .def("dma_buffer_lock", [](CNTV2Card& self, nb::ndarray<> buffer) {
+            auto ptr = reinterpret_cast<uintptr_t>(buffer.data());
+            if (ptr % 4096 != 0)
+                throw std::invalid_argument(
+                    "DMA buffer must be page-aligned (4096 bytes). "
+                    "Use mmap.mmap(-1, size) + numpy.frombuffer() "
+                    "instead of numpy.zeros().");
             bool rdma = buffer.device_type() == nb::device::cuda::value;
             NTV2Buffer buf(buffer.data(), buffer.nbytes());
             check(self.DMABufferLock(buf, true, rdma), "Card.dma_buffer_lock");

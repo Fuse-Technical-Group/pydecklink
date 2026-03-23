@@ -27,6 +27,9 @@ The probe uses the same channels and routing as the real tests
 
 from __future__ import annotations
 
+import mmap
+import os
+
 import numpy as np
 import pytest
 
@@ -44,6 +47,16 @@ from pyntv2 import (
     route_playout,
 )
 
+
+def _page_aligned_buffer(size: int) -> tuple[mmap.mmap, np.ndarray]:
+    """Allocate a page-aligned numpy buffer backed by anonymous mmap.
+
+    Returns (backing_mmap, numpy_view).  Keep the mmap alive for the
+    lifetime of the numpy array.
+    """
+    backing = mmap.mmap(-1, size)
+    return backing, np.frombuffer(backing, dtype=np.uint8)
+
 pytestmark = pytest.mark.hardware
 
 # ── Constants ────────────────────────────────────────────────────────
@@ -57,6 +70,9 @@ PLAYOUT_CH = Channel.CH3
 CAPTURE_CH = Channel.CH4
 PLAYOUT_DEST = OutputDest.SDI3
 CAPTURE_SRC = InputSource.SDI4
+
+_NTV2_OEM_TASKS = 2
+_APP_SIG = 0x54455354  # NTV2_FOURCC('T','E','S','T')
 
 # Number of frames to push through the ring buffer before capturing,
 # ensuring the loopback cable has carried at least one full frame.
@@ -76,8 +92,14 @@ def _probe_capture_dma() -> bool:
     interrupts never fire and AutoCirculate cannot advance past the
     STARTING state.
     """
+    locked_bufs: list[np.ndarray] = []
+    backings: list[mmap.mmap] = []
     try:
         with Card(device_index=0) as card:
+            # Acquire ownership and set OEM task mode
+            card.acquire_stream_for_application(_APP_SIG, os.getpid())
+            card.set_every_frame_services(_NTV2_OEM_TASKS)
+
             # -- playout side (CH3 → SDI3) --
             card.set_sdi_transmit_enable(PLAYOUT_CH, True)
             card.enable_channel(PLAYOUT_CH)
@@ -100,45 +122,52 @@ def _probe_capture_dma() -> bool:
             card.apply_signal_route(out_routes, replace=False)
             card.apply_signal_route(cap_routes, replace=False)
 
-            # -- start playout and push a blank frame --
-            card.autocirculate_stop(PLAYOUT_CH, abort=True)
-            card.autocirculate_stop(CAPTURE_CH, abort=True)
-            card.autocirculate_init_for_output(PLAYOUT_CH)
-            card.autocirculate_start(PLAYOUT_CH)
-
-            blank = np.zeros(MAX_FRAME_BYTES, dtype=np.uint8)
-            card.dma_buffer_lock(blank)
-            out_xfer = Transfer()
-            out_xfer.set_video_buffer(blank)
-            card.wait_for_input_vertical_interrupt(PLAYOUT_CH)
-            card.autocirculate_transfer(PLAYOUT_CH, out_xfer)
-
-            # -- start capture and wait for a frame --
-            card.autocirculate_init_for_input(CAPTURE_CH)
-            card.autocirculate_start(CAPTURE_CH)
-
-            for _ in range(30):
-                card.wait_for_input_vertical_interrupt(CAPTURE_CH)
-                status = card.autocirculate_get_status(CAPTURE_CH)
-                if status.has_available_input_frame:
-                    break
-            else:
-                return False  # AutoCirculate never produced a frame
-
-            # -- attempt the actual capture DMA transfer --
-            cap_buf = np.zeros(MAX_FRAME_BYTES, dtype=np.uint8)
-            card.dma_buffer_lock(cap_buf)
             try:
+                # -- start playout and push a blank frame --
+                card.autocirculate_stop(PLAYOUT_CH, abort=True)
+                card.autocirculate_stop(CAPTURE_CH, abort=True)
+                card.autocirculate_init_for_output(PLAYOUT_CH)
+                card.autocirculate_start(PLAYOUT_CH)
+
+                blank_mm, blank = _page_aligned_buffer(MAX_FRAME_BYTES)
+                backings.append(blank_mm)
+                card.dma_buffer_lock(blank)
+                locked_bufs.append(blank)
+                out_xfer = Transfer()
+                out_xfer.set_video_buffer(blank)
+                card.wait_for_input_vertical_interrupt(PLAYOUT_CH)
+                card.autocirculate_transfer(PLAYOUT_CH, out_xfer)
+
+                # -- start capture and wait for a frame --
+                card.autocirculate_init_for_input(CAPTURE_CH)
+                card.autocirculate_start(CAPTURE_CH)
+
+                got_frame = False
+                for _ in range(30):
+                    card.wait_for_input_vertical_interrupt(CAPTURE_CH)
+                    status = card.autocirculate_get_status(CAPTURE_CH)
+                    if status.has_available_input_frame:
+                        got_frame = True
+                        break
+
+                if not got_frame:
+                    return False
+
+                # -- attempt the actual capture DMA transfer --
+                cap_mm, cap_buf = _page_aligned_buffer(MAX_FRAME_BYTES)
+                backings.append(cap_mm)
+                card.dma_buffer_lock(cap_buf)
+                locked_bufs.append(cap_buf)
                 cap_xfer = Transfer()
                 cap_xfer.set_video_buffer(cap_buf)
                 card.autocirculate_transfer(CAPTURE_CH, cap_xfer)
+                return True
             finally:
-                card.dma_buffer_unlock(cap_buf)
-
-            card.autocirculate_stop(PLAYOUT_CH, abort=True)
-            card.autocirculate_stop(CAPTURE_CH, abort=True)
-            card.clear_routing()
-            return True
+                card.autocirculate_stop(PLAYOUT_CH, abort=True)
+                card.autocirculate_stop(CAPTURE_CH, abort=True)
+                for buf in locked_bufs:
+                    card.dma_buffer_unlock(buf)
+                card.clear_routing()
     except RuntimeError:
         return False
 
@@ -201,22 +230,22 @@ def _set_reference(card: Card) -> None:
 # ── CPU Loopback ─────────────────────────────────────────────────────
 
 
-def _make_cpu_pattern(name: str, size: int) -> np.ndarray:
-    """Generate a named test pattern as a numpy uint8 array."""
+def _fill_pattern(buf: np.ndarray, name: str) -> None:
+    """Fill *buf* in-place with the named test pattern."""
     if name == "zeros":
-        return np.zeros(size, dtype=np.uint8)
-    if name == "ramp":
-        return np.arange(size, dtype=np.uint8)  # wraps at 256
-    if name == "random":
-        return np.random.default_rng(seed=42).integers(
-            0, 256, size=size, dtype=np.uint8
-        )
-    if name == "0xAA":
-        return np.full(size, 0xAA, dtype=np.uint8)
-    if name == "0x55":
-        return np.full(size, 0x55, dtype=np.uint8)
-    msg = f"unknown pattern: {name}"
-    raise ValueError(msg)
+        buf[:] = 0
+    elif name == "ramp":
+        buf[:] = np.arange(len(buf), dtype=np.uint8)
+    elif name == "random":
+        rng = np.random.default_rng(seed=42)
+        buf[:] = rng.integers(0, 256, size=len(buf), dtype=np.uint8)
+    elif name == "0xAA":
+        buf[:] = 0xAA
+    elif name == "0x55":
+        buf[:] = 0x55
+    else:
+        msg = f"unknown pattern: {name}"
+        raise ValueError(msg)
 
 
 class TestCpuLoopback:
@@ -229,8 +258,11 @@ class TestCpuLoopback:
         _set_reference(card)
         _apply_loopback_routes(card)
 
-        out_buf = _make_cpu_pattern(pattern, MAX_FRAME_BYTES)
-        cap_buf = np.zeros(MAX_FRAME_BYTES, dtype=np.uint8)
+        out_mm, out_buf = _page_aligned_buffer(MAX_FRAME_BYTES)
+        cap_mm, cap_buf = _page_aligned_buffer(MAX_FRAME_BYTES)
+        _fill_pattern(out_buf, pattern)
+        # Keep a copy for comparison — capture overwrites cap_buf.
+        expected = out_buf.copy()
 
         card.dma_buffer_lock(out_buf)
         card.dma_buffer_lock(cap_buf)
@@ -265,7 +297,7 @@ class TestCpuLoopback:
             assert cap_status.has_available_input_frame, "no frame available to capture"
             card.autocirculate_transfer(CAPTURE_CH, cap_xfer)
 
-            np.testing.assert_array_equal(cap_buf, out_buf)
+            np.testing.assert_array_equal(cap_buf, expected)
         finally:
             _stop_pair(card)
             card.dma_buffer_unlock(out_buf)
@@ -285,7 +317,7 @@ class TestCpuPassthrough:
         _set_reference(card)
         _apply_loopback_routes(card)
 
-        buf = np.zeros(MAX_FRAME_BYTES, dtype=np.uint8)
+        buf_mm, buf = _page_aligned_buffer(MAX_FRAME_BYTES)
         card.dma_buffer_lock(buf)
 
         cap_xfer = Transfer()
@@ -358,7 +390,8 @@ class TestGpuLoopback:
         _apply_loopback_routes(card)
 
         # Build pattern on CPU then transfer to GPU.
-        cpu_pattern = _make_cpu_pattern(pattern, MAX_FRAME_BYTES)
+        cpu_mm, cpu_pattern = _page_aligned_buffer(MAX_FRAME_BYTES)
+        _fill_pattern(cpu_pattern, pattern)
         out_buf = cp.asarray(cpu_pattern)
         cap_buf = cp.zeros(MAX_FRAME_BYTES, dtype=cp.uint8)
 

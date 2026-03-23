@@ -82,8 +82,10 @@ def main() -> None:
         card.apply_signal_route(cap_routes, replace=False)
         card.apply_signal_route(out_routes, replace=False)
 
-        # ── Allocate buffer ───────────────────────────────────────
-        buf = np.zeros(MAX_FRAME_BYTES, dtype=np.uint8)
+        # ── Allocate buffer (page-aligned for DMA) ────────────────
+        import mmap
+        _backing = mmap.mmap(-1, MAX_FRAME_BYTES)
+        buf = np.frombuffer(_backing, dtype=np.uint8)
         card.dma_buffer_lock(buf)
 
         cap_xfer = Transfer()

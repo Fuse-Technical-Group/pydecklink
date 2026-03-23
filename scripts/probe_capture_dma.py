@@ -8,6 +8,8 @@ against the same code path that the static C++ binary exercises.
 
 from __future__ import annotations
 
+import os
+
 import numpy as np
 
 from pyntv2 import (
@@ -26,7 +28,15 @@ SRC = InputSource.SDI1
 PIXEL_FORMAT = PixelFormat.FBF_10BIT_YCBCR
 FRAME_BYTES = 1920 * 1080 * 4  # 8 MB, matches the C++ test
 
+_NTV2_OEM_TASKS = 2
+_APP_SIG = 0x54455354  # NTV2_FOURCC('T','E','S','T')
+
 with Card(device_index=0) as card:
+    # Acquire ownership and set OEM task mode (matches C++ test)
+    card.acquire_stream_for_application(_APP_SIG, os.getpid())
+    saved_mode = card.get_every_frame_services()
+    card.set_every_frame_services(_NTV2_OEM_TASKS)
+
     # Detect input format
     vf = card.get_input_video_format(SRC)
     print(f"Detected input format: {vf}")
@@ -44,8 +54,12 @@ with Card(device_index=0) as card:
     routes = route_capture(SRC, CH, PIXEL_FORMAT)
     card.apply_signal_route(routes, replace=False)
 
-    # Pre-lock the DMA buffer (matches C++ DMABufferLock call)
-    buf = np.zeros(FRAME_BYTES, dtype=np.uint8)
+    # Pre-lock the DMA buffer (page-aligned, matches C++ posix_memalign)
+    import mmap
+    _backing = mmap.mmap(-1, FRAME_BYTES)  # anonymous, page-aligned
+    buf = np.frombuffer(_backing, dtype=np.uint8)
+    print(f"Buffer ptr=0x{buf.ctypes.data:X}  size={FRAME_BYTES}  "
+          f"page_aligned={buf.ctypes.data % 4096 == 0}")
     card.dma_buffer_lock(buf)
 
     # AutoCirculate
@@ -85,3 +99,5 @@ with Card(device_index=0) as card:
     card.autocirculate_stop(CH, abort=True)
     card.dma_buffer_unlock(buf)
     card.clear_routing()
+    card.set_every_frame_services(saved_mode)
+    card.release_stream_for_application(_APP_SIG, os.getpid())
