@@ -8,6 +8,10 @@ version = "0.1.1"
 description = "Python bindings for AJA's libajantv2 SDK"
 license = "MIT"
 requires-python = ">=3.12"
+dependencies = ["numpy>=1.26"]
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
 
 [dependency-groups]
 dev = ["pytest>=8"]

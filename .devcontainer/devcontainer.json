@@ -10,7 +10,8 @@
     "source=${localEnv:SSH_AUTH_SOCK},target=/run/ssh-agent.sock,type=bind"
   ],
   "remoteEnv": {
-    "SSH_AUTH_SOCK": "/run/ssh-agent.sock"
+    "SSH_AUTH_SOCK": "/run/ssh-agent.sock",
+    "UV_PROJECT_ENVIRONMENT": ".venv-dev"
   },
   "remoteUser": "root",
   "customizations": {
