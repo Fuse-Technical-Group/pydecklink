@@ -2,18 +2,10 @@
 
 Run with: pytest -m hardware tests/test_integration.py
 
-Requires sufficient Linux capabilities for capture DMA (card→host).
-The devcontainer's runArgs include --cap-add=SYS_RAWIO, --cap-add=SYS_ADMIN,
-and --cap-add=IPC_LOCK; if running outside the devcontainer, ensure the
-capabilities are granted or tests will skip.
-
-Background on the DMA probe
----------------------------
-The NTV2 driver distinguishes output DMA (host→card) from input DMA
-(card→host).  Output DMA works with CAP_SYS_RAWIO alone.  Input DMA
-(capture) requires CAP_SYS_RAWIO, CAP_SYS_ADMIN, CAP_IPC_LOCK, and
-seccomp=unconfined.  CAP_IPC_LOCK is needed because the driver pins
-user-space pages via get_user_pages for the DMA transfer.
+The NTV2 kernel driver has no capability checks; it requires only
+read/write access to /dev/ajantv20 (mode 666) and sufficient
+RLIMIT_MEMLOCK for DMA page pinning.  The devcontainer uses
+--userns=keep-id so the host user's permissions pass through.
 
 The probe uses the same channels and routing as the real tests
 (CH3 playout → SDI3 cable → SDI4 → CH4 capture) so that:
@@ -181,9 +173,8 @@ if not _CAPTURE_DMA_WORKS:
         pytest.mark.hardware,
         pytest.mark.skip(
             reason=(
-                "capture DMA probe failed — container likely needs "
-                "--cap-add=SYS_RAWIO --cap-add=SYS_ADMIN --cap-add=IPC_LOCK "
-                "--security-opt=seccomp=unconfined (or --privileged)"
+                "capture DMA probe failed — ensure /dev/ajantv20 is "
+                "accessible (mode 666) and RLIMIT_MEMLOCK is sufficient"
             )
         ),
     ]

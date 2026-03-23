@@ -40,31 +40,30 @@ avoid `LD_LIBRARY_PATH` and work with `setcap` file capabilities.
 - The Dockerfile's pinned SDK tag must match the host's loaded AJA
   kernel driver version. AJA documents compatible pairs in their
   release notes.
-- The container runs as a non-root user. The host's AJA device node
-  (`/dev/ajantv20`) is passed through via `--device`.
+- The container runs as a non-root user via `--userns=keep-id`. The
+  host's AJA device node (`/dev/ajantv20`) is passed through via
+  `--device`.
 - GPU passthrough (NVIDIA Container Toolkit) is deferred to Phase 2.
 
-### Container capabilities for DMA
+### Container device access
 
-The NTV2 kernel driver requires Linux capabilities beyond the default
-container set. The `devcontainer.json` grants these via Podman
-`--cap-add` flags.
+The NTV2 kernel driver has no Linux capability checks. All
+operations — register I/O, DMA buffer locking, AutoCirculate
+transfers (both directions) — use standard ioctl on the device
+node. The only requirements are:
 
-| Capability | Required for | Notes |
-|---|---|---|
-| `CAP_SYS_RAWIO` | All DMA operations | Without it, `DMABufferLock` and playout `autocirculate_transfer` fail with EPERM. |
-| `CAP_SYS_ADMIN` | Capture DMA (card→host) | Output DMA (host→card) works without it, but input DMA requires the additional privilege. |
+- Read/write access to `/dev/ajantv20` (the driver creates it
+  mode 666).
+- Sufficient `RLIMIT_MEMLOCK` for DMA page pinning (the driver
+  calls `get_user_pages` without accounting against the limit,
+  but user-space `mlock` may still need headroom).
 
-Rootless Podman cannot provide `CAP_SYS_RAWIO` — it only applies in
-the initial user namespace. The container must run rootful.
-
-Register-level operations (open, configure channels, set routing,
-read input format) and VBI interrupt waits work with no special
-capabilities — they use standard ioctl on the device node.
-
-If `CAP_SYS_ADMIN` proves insufficient for capture DMA on a given
-host, `--privileged` is the fallback. This removes all container
-isolation and should be avoided in production.
+The devcontainer runs rootless Podman with `--userns=keep-id`,
+which maps the host user's UID 1:1 into the container. The host
+user's permissions on the device node pass through unchanged.
+`--security-opt=label=disable` prevents SELinux from relabeling
+the device node inside the container. No `--privileged`, no
+`--cap-add` flags are needed.
 
 ## 3. Binding Technology
 

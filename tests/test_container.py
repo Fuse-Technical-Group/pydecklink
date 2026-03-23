@@ -19,52 +19,6 @@ from __future__ import annotations
 
 import os
 import resource
-import struct
-
-
-def _read_cap_set(name: str) -> int:
-    """Read a capability set from /proc/self/status as an int."""
-    with open("/proc/self/status") as f:
-        for line in f:
-            if line.startswith(name + ":\t"):
-                return int(line.split("\t")[1].strip(), 16)
-    msg = f"capability set {name!r} not found in /proc/self/status"
-    raise RuntimeError(msg)
-
-
-def _has_cap(capset_hex: int, cap_number: int) -> bool:
-    return bool(capset_hex & (1 << cap_number))
-
-
-# Linux capability bit numbers (from linux/capability.h)
-CAP_IPC_LOCK = 14
-CAP_SYS_RAWIO = 17
-CAP_SYS_ADMIN = 21
-
-
-class TestCapabilities:
-    """Validate --cap-add flags.
-
-    Configured in: devcontainer.json runArgs (--cap-add=...).
-    """
-
-    def test_cap_sys_rawio(self) -> None:
-        eff = _read_cap_set("CapEff")
-        assert _has_cap(eff, CAP_SYS_RAWIO), (
-            f"CAP_SYS_RAWIO (bit {CAP_SYS_RAWIO}) not in CapEff=0x{eff:x}"
-        )
-
-    def test_cap_sys_admin(self) -> None:
-        eff = _read_cap_set("CapEff")
-        assert _has_cap(eff, CAP_SYS_ADMIN), (
-            f"CAP_SYS_ADMIN (bit {CAP_SYS_ADMIN}) not in CapEff=0x{eff:x}"
-        )
-
-    def test_cap_ipc_lock(self) -> None:
-        eff = _read_cap_set("CapEff")
-        assert _has_cap(eff, CAP_IPC_LOCK), (
-            f"CAP_IPC_LOCK (bit {CAP_IPC_LOCK}) not in CapEff=0x{eff:x}"
-        )
 
 
 class TestUlimits:
@@ -105,27 +59,6 @@ class TestSharedMemory:
         )
 
 
-class TestSeccomp:
-    """Validate seccomp is disabled.
-
-    Configured in: devcontainer.json runArgs
-    (--security-opt=seccomp=unconfined).
-    """
-
-    def test_seccomp_unconfined(self) -> None:
-        # /proc/self/status Seccomp field: 0=disabled, 1=strict, 2=filter
-        with open("/proc/self/status") as f:
-            for line in f:
-                if line.startswith("Seccomp:"):
-                    mode = int(line.split(":")[1].strip())
-                    assert mode == 0, (
-                        f"Seccomp mode is {mode} (0=disabled, 2=filter). "
-                        f"--security-opt=seccomp=unconfined is not taking effect."
-                    )
-                    return
-        # If Seccomp line missing, kernel doesn't support it — fine.
-
-
 class TestDevice:
     """Validate AJA device is mapped into container.
 
@@ -136,4 +69,10 @@ class TestDevice:
         assert os.path.exists("/dev/ajantv20"), (
             "/dev/ajantv20 not found. --device=/dev/ajantv20 is not taking effect "
             "or no AJA card is installed."
+        )
+
+    def test_aja_device_readable(self) -> None:
+        assert os.access("/dev/ajantv20", os.R_OK | os.W_OK), (
+            "/dev/ajantv20 exists but is not readable/writable. "
+            "Check --userns=keep-id and device node permissions (expect mode 666)."
         )
