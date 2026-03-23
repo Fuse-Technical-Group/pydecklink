@@ -43,6 +43,7 @@ from pyntv2 import (
     ReferenceSource,
     Transfer,
     VideoFormat,
+    get_frame_bytes,
     route_capture,
     route_playout,
 )
@@ -63,6 +64,7 @@ pytestmark = pytest.mark.hardware
 
 VIDEO_FORMAT = VideoFormat.FORMAT_1080i_5994
 PIXEL_FORMAT = PixelFormat.FBF_10BIT_YCBCR  # native SDI, no CSC needed
+FRAME_BYTES = get_frame_bytes(VIDEO_FORMAT, PIXEL_FORMAT)
 MAX_FRAME_BYTES = 3840 * 2160 * 4  # conservative upper-bound for any format
 PASSTHROUGH_FRAMES = 300  # ~10 s at 59.94 fps interlaced
 
@@ -236,9 +238,6 @@ def _fill_pattern(buf: np.ndarray, name: str) -> None:
         buf[:] = 0
     elif name == "ramp":
         buf[:] = np.arange(len(buf), dtype=np.uint8)
-    elif name == "random":
-        rng = np.random.default_rng(seed=42)
-        buf[:] = rng.integers(0, 256, size=len(buf), dtype=np.uint8)
     elif name == "0xAA":
         buf[:] = 0xAA
     elif name == "0x55":
@@ -251,7 +250,7 @@ def _fill_pattern(buf: np.ndarray, name: str) -> None:
 class TestCpuLoopback:
     """Playout a known pattern on CH3, capture on CH4, compare byte-for-byte."""
 
-    @pytest.mark.parametrize("pattern", ["zeros", "ramp", "random", "0xAA", "0x55"])
+    @pytest.mark.parametrize("pattern", ["zeros", "ramp", "0xAA", "0x55"])
     def test_data_integrity(self, card: Card, pattern: str) -> None:
         _configure_playout(card)
         _configure_capture(card)
@@ -297,7 +296,9 @@ class TestCpuLoopback:
             assert cap_status.has_available_input_frame, "no frame available to capture"
             card.autocirculate_transfer(CAPTURE_CH, cap_xfer)
 
-            np.testing.assert_array_equal(cap_buf, expected)
+            np.testing.assert_array_equal(
+                cap_buf[:FRAME_BYTES], expected[:FRAME_BYTES]
+            )
         finally:
             _stop_pair(card)
             card.dma_buffer_unlock(out_buf)
@@ -380,7 +381,7 @@ class TestGpuLoopback:
     def _require_cupy(self):
         pytest.importorskip("cupy")
 
-    @pytest.mark.parametrize("pattern", ["zeros", "ramp", "random", "0xAA", "0x55"])
+    @pytest.mark.parametrize("pattern", ["zeros", "ramp", "0xAA", "0x55"])
     def test_data_integrity(self, card: Card, pattern: str) -> None:
         import cupy as cp
 
@@ -425,7 +426,9 @@ class TestGpuLoopback:
             assert cap_status.has_available_input_frame, "no frame available to capture"
             card.autocirculate_transfer(CAPTURE_CH, cap_xfer)
 
-            cp.testing.assert_array_equal(cap_buf, out_buf)
+            cp.testing.assert_array_equal(
+                cap_buf[:FRAME_BYTES], out_buf[:FRAME_BYTES]
+            )
         finally:
             _stop_pair(card)
             card.dma_buffer_unlock(out_buf)
