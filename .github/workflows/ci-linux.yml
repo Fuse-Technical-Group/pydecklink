@@ -24,7 +24,6 @@ jobs:
           cmake -S /tmp/libajantv2 -B /tmp/libajantv2/build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_INSTALL_PREFIX=/usr/local \
-            -DAJANTV2_BUILD_SHARED=ON \
             -DAJANTV2_DISABLE_DEMOS=ON \
             -DAJANTV2_DISABLE_DRIVER=ON \
             -DAJANTV2_DISABLE_TESTS=ON \
@@ -32,7 +31,6 @@ jobs:
             -DAJANTV2_DISABLE_PLUGIN_LOAD=ON
           cmake --build /tmp/libajantv2/build
           sudo cmake --install /tmp/libajantv2/build
-          sudo ldconfig
 
       - uses: astral-sh/setup-uv@v5
 
