@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.4](https://github.com/Fuse-Technical-Group/pyntv2/compare/v0.1.3...v0.1.4) (2026-03-24)
+
+
+### Fixed
+
+* **devcontainer:** add sudo and fix .claude volume ownership ([79dd390](https://github.com/Fuse-Technical-Group/pyntv2/commit/79dd3904e4726f06f1955cf1f200bebf9ba4116d))
+
 ## [0.1.3](https://github.com/Fuse-Technical-Group/pyntv2/compare/v0.1.2...v0.1.3) (2026-03-24)
 
 
