@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.1.5](https://github.com/Fuse-Technical-Group/pyntv2/compare/v0.1.4...v0.1.5) (2026-03-24)
+
+
+### Added
+
+* 4K/60 DMA throughput benchmark ([72486bd](https://github.com/Fuse-Technical-Group/pyntv2/commit/72486bdc00103f88ec9ab0083c80f3f842d7fef7))
+* add device_id and display_name properties to Card ([3cf6817](https://github.com/Fuse-Technical-Group/pyntv2/commit/3cf6817f01e7c641f2db2e9a1824e9fd16feb4e1))
+* **bindings:** add device_id and display_name properties to Card ([ca4b19c](https://github.com/Fuse-Technical-Group/pyntv2/commit/ca4b19cc5bb9aee5dca0c96031604be04bf83469))
+
+
+### Fixed
+
+* **build:** enable abi3 wheel tag for Python 3.12+ compatibility ([5698fbe](https://github.com/Fuse-Technical-Group/pyntv2/commit/5698fbea2373e9542c1b56aed037b2f5591a676d))
+
 ## [0.1.4](https://github.com/Fuse-Technical-Group/pyntv2/compare/v0.1.3...v0.1.4) (2026-03-24)
 
 
