@@ -7,7 +7,7 @@ playout via CPU buffers (numpy).
 > **Note:** The AJA NTV2 DMA engine is 32-bit addressable. GPU RDMA
 > (CuPy/PyTorch) does not work on 64-bit systems. The bindings accept
 > `nb::ndarray` from any device, but only CPU buffers are functional.
-
+>
 > **Note:** `iommu=pt` (passthrough) must be **disabled**. The kernel's
 > SWIOTLB bounce-buffer path does not correctly map allocations down to
 > the 32-bit address space when IOMMU passthrough is active, causing DMA
