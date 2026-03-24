@@ -3,6 +3,8 @@
 Run with: pytest -m hardware
 """
 
+import mmap
+
 import numpy as np
 import pytest
 
@@ -115,6 +117,10 @@ class TestAutoCirculate:
 
 class TestDmaBufferLock:
     def test_lock_unlock_numpy(self, card):
-        buf = np.zeros(1920 * 1080 * 4, dtype=np.uint8)
+        size = 1920 * 1080 * 4
+        backing = mmap.mmap(-1, size)
+        buf = np.frombuffer(backing, dtype=np.uint8)
         card.dma_buffer_lock(buf)
         card.dma_buffer_unlock(buf)
+        del buf
+        backing.close()
