@@ -221,6 +221,11 @@ class TestDmaThroughput4K60:
             for _ in range(_SETTLE_VBIS):
                 card.wait_for_input_vertical_interrupt(CAPTURE_CH)
 
+            # snapshot drop counters after warmup — drops during
+            # prime/settle are expected and not under test
+            cap_baseline = card.autocirculate_get_status(CAPTURE_CH).dropped_frame_count
+            out_baseline = card.autocirculate_get_status(PLAYOUT_CH).dropped_frame_count
+
             # timed transfer loop
             cap_times_ms: list[float] = []
             out_times_ms: list[float] = []
@@ -285,16 +290,14 @@ class TestDmaThroughput4K60:
                 f"headroom={FRAME_PERIOD_MS - rt_stats['p99']:.3f} ms"
             )
 
-            # assert zero dropped frames
+            # assert zero dropped frames during the timed window
             cap_status = card.autocirculate_get_status(CAPTURE_CH)
             out_status = card.autocirculate_get_status(PLAYOUT_CH)
+            cap_drops = cap_status.dropped_frame_count - cap_baseline
+            out_drops = out_status.dropped_frame_count - out_baseline
 
-            assert cap_status.dropped_frame_count == 0, (
-                f"capture dropped {cap_status.dropped_frame_count} frames"
-            )
-            assert out_status.dropped_frame_count == 0, (
-                f"playout dropped {out_status.dropped_frame_count} frames"
-            )
+            assert cap_drops == 0, f"capture dropped {cap_drops} frames"
+            assert out_drops == 0, f"playout dropped {out_drops} frames"
         finally:
             card.autocirculate_stop(PLAYOUT_CH, abort=True)
             card.autocirculate_stop(CAPTURE_CH, abort=True)

@@ -331,6 +331,11 @@ class TestCpuPassthrough:
                     card.autocirculate_transfer(PLAYOUT_CH, out_xfer)
                 card.wait_for_input_vertical_interrupt(PLAYOUT_CH)
 
+            # snapshot drop counters after warmup — drops during
+            # prime/settle are expected and not under test
+            cap_baseline = card.autocirculate_get_status(CAPTURE_CH).dropped_frame_count
+            out_baseline = card.autocirculate_get_status(PLAYOUT_CH).dropped_frame_count
+
             # Sustained transfer loop.
             transferred = 0
             while transferred < PASSTHROUGH_FRAMES:
@@ -349,12 +354,10 @@ class TestCpuPassthrough:
 
             cap_status = card.autocirculate_get_status(CAPTURE_CH)
             out_status = card.autocirculate_get_status(PLAYOUT_CH)
-            assert cap_status.dropped_frame_count == 0, (
-                f"capture dropped {cap_status.dropped_frame_count} frames"
-            )
-            assert out_status.dropped_frame_count == 0, (
-                f"playout dropped {out_status.dropped_frame_count} frames"
-            )
+            cap_drops = cap_status.dropped_frame_count - cap_baseline
+            out_drops = out_status.dropped_frame_count - out_baseline
+            assert cap_drops == 0, f"capture dropped {cap_drops} frames"
+            assert out_drops == 0, f"playout dropped {out_drops} frames"
         finally:
             _stop_pair(card)
             card.dma_buffer_unlock(buf)
