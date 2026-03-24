@@ -14,6 +14,7 @@ __all__ = [
     "OutputXpt",
     "PixelFormat",
     "ReferenceSource",
+    "TaskMode",
     "VideoFormat",
     # Classes
     "Card",

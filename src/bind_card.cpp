@@ -129,10 +129,10 @@ void init_card(nb::module_& m) {
         .def("get_every_frame_services", [](CNTV2Card& self) {
             NTV2EveryFrameTaskMode mode;
             check(self.GetEveryFrameServices(mode), "Card.get_every_frame_services");
-            return static_cast<int>(mode);
+            return mode;
         })
-        .def("set_every_frame_services", [](CNTV2Card& self, int mode) {
-            check(self.SetEveryFrameServices(static_cast<NTV2EveryFrameTaskMode>(mode)), "Card.set_every_frame_services");
+        .def("set_every_frame_services", [](CNTV2Card& self, NTV2EveryFrameTaskMode mode) {
+            check(self.SetEveryFrameServices(mode), "Card.set_every_frame_services");
         }, nb::arg("mode"))
 
         // ── VBI ──────────────────────────────────────────────────────

@@ -1,5 +1,6 @@
 #include "bind_common.h"
 #include <ntv2enums.h>
+#include <ntv2publicinterface.h>
 
 void init_enums(nb::module_& m) {
     // ── Channel ──────────────────────────────────────────────────────
@@ -612,4 +613,11 @@ void init_enums(nb::module_& m) {
         .value("HDMI_INPUT3", NTV2_REFERENCE_HDMI_INPUT3)
         .value("HDMI_INPUT4", NTV2_REFERENCE_HDMI_INPUT4)
         .value("INVALID", NTV2_REFERENCE_INVALID);
+
+    // ── TaskMode ────────────────────────────────────────────────────
+    nb::enum_<NTV2EveryFrameTaskMode>(m, "TaskMode")
+        .value("DISABLE", NTV2_DISABLE_TASKS)
+        .value("STANDARD", NTV2_STANDARD_TASKS)
+        .value("OEM", NTV2_OEM_TASKS)
+        .value("INVALID", NTV2_TASK_MODE_INVALID);
 }
