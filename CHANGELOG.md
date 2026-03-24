@@ -40,12 +40,6 @@
 * **tests:** correct capture DMA probe and format detection test ([9ab9840](https://github.com/Fuse-Technical-Group/pyntv2/commit/9ab9840d8df4366465a759e6b7c805909afb4f66))
 * **tests:** skip integration tests when capture DMA is denied ([e998e6d](https://github.com/Fuse-Technical-Group/pyntv2/commit/e998e6d7d7302385af4e25c71b26c7a83e120647))
 
-## [Unreleased]
-
-### Added
-
-* **tests:** integration tests for CPU/GPU loopback and passthrough (CH3↔CH4 SDI)
-
 ## [0.1.1](https://github.com/Fuse-Technical-Group/pyntv2/compare/v0.1.0...v0.1.1) (2026-03-19)
 
 
