@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.1.2](https://github.com/Fuse-Technical-Group/pyntv2/compare/v0.1.1...v0.1.2) (2026-03-24)
+
+
+### Added
+
+* **bind:** add device ownership and improve autocirculate diagnostics ([5969edb](https://github.com/Fuse-Technical-Group/pyntv2/commit/5969edbd15efb74f2be1357dd9a25439d47e8f4a))
+* **bindings:** add format metadata helpers (width, height, fps) ([6f38874](https://github.com/Fuse-Technical-Group/pyntv2/commit/6f388745c35f923e031b29bdec5fec06f2f663c1))
+* **bindings:** expose transferred_frame on Transfer ([1090802](https://github.com/Fuse-Technical-Group/pyntv2/commit/1090802f00c2d13d77ffb9cc50ed6830ad993bb0))
+* **bindings:** release GIL on blocking calls and bind output VBI ([d6d0442](https://github.com/Fuse-Technical-Group/pyntv2/commit/d6d044213f977819d29ba8c36ddaa99a49cda234))
+* integration blockers — GIL release, output VBI, format metadata, transfer status ([38b8841](https://github.com/Fuse-Technical-Group/pyntv2/commit/38b8841c39781194324b336eef2b9b9132e4fbff))
+* **scripts:** add PCI card reset script for DMA timeout recovery ([cd12a07](https://github.com/Fuse-Technical-Group/pyntv2/commit/cd12a07d9f37e98112194214443a12c8f033d2de))
+
+
+### Fixed
+
+* **devcontainer:** add CAP_SYS_ADMIN for capture DMA ([4c33a08](https://github.com/Fuse-Technical-Group/pyntv2/commit/4c33a084336f90624399f3200e15a6ef5ca22160))
+* **devcontainer:** add CAP_SYS_RAWIO for capture DMA ([1110f45](https://github.com/Fuse-Technical-Group/pyntv2/commit/1110f4574921a909db7acb7cd3b675c56b474988))
+* **devcontainer:** drop --privileged in favor of --userns=keep-id ([96edafe](https://github.com/Fuse-Technical-Group/pyntv2/commit/96edafe43e13eb95ede7e78e070cb783068ec9c7))
+* **devcontainer:** use privileged mode and set memlock in Dockerfile ([5a41762](https://github.com/Fuse-Technical-Group/pyntv2/commit/5a41762774df3a86f295c85e12d48a8ca9b52d49))
+* **dma:** require page-aligned buffers and improve resource cleanup ([ca6c7c7](https://github.com/Fuse-Technical-Group/pyntv2/commit/ca6c7c7dea3c41331d283ab1a3358d85b7c3d9c7))
+* **test:** add DMA buffer locking to integration loopback test ([b63a4ab](https://github.com/Fuse-Technical-Group/pyntv2/commit/b63a4ab5493d0169bf580f2062fe219503a6f00b))
+* **test:** compare only active frame region in loopback integrity tests ([4d83447](https://github.com/Fuse-Technical-Group/pyntv2/commit/4d83447b67ce5182cdca647d2b8118b26df82ba0))
+* **tests:** correct capture DMA probe and format detection test ([9ab9840](https://github.com/Fuse-Technical-Group/pyntv2/commit/9ab9840d8df4366465a759e6b7c805909afb4f66))
+* **tests:** skip integration tests when capture DMA is denied ([e998e6d](https://github.com/Fuse-Technical-Group/pyntv2/commit/e998e6d7d7302385af4e25c71b26c7a83e120647))
+
 ## [Unreleased]
 
 ### Added
