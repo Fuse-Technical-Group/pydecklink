@@ -12,6 +12,7 @@ from pyntv2 import (
     OutputXpt,
     PixelFormat,
     ReferenceSource,
+    TaskMode,
     VideoFormat,
 )
 
@@ -196,6 +197,24 @@ class TestMode:
     def test_int_conversion(self):
         assert Mode(0) == Mode.DISPLAY
         assert Mode(1) == Mode.CAPTURE
+
+
+class TestTaskMode:
+    def test_known_values(self):
+        assert TaskMode.DISABLE.value == 0
+        assert TaskMode.STANDARD.value == 1
+        assert TaskMode.OEM.value == 2
+
+    def test_invalid_sentinel(self):
+        assert TaskMode.INVALID.value == 0xFF
+
+    def test_member_count(self):
+        members = [m for m in TaskMode]
+        assert len(members) == 4  # DISABLE, STANDARD, OEM, INVALID
+
+    def test_int_conversion(self):
+        assert TaskMode(0) == TaskMode.DISABLE
+        assert TaskMode(2) == TaskMode.OEM
 
 
 class TestReferenceSource:

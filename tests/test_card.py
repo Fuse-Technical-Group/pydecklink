@@ -93,3 +93,35 @@ class TestCardTypeErrors:
     def test_connect_wrong_types(self, card):
         with pytest.raises(TypeError):
             card.connect(42, 43)
+
+
+class TestFrameCountValidation:
+    """Verify frame_count < 3 raises InvalidArgumentError."""
+
+    @pytest.fixture()
+    def card(self):
+        return Card()
+
+    def test_init_for_input_frame_count_zero(self, card):
+        with pytest.raises(ValueError, match="frame_count must be >= 3"):
+            card.autocirculate_init_for_input(Channel.CH1, frame_count=0)
+
+    def test_init_for_input_frame_count_one(self, card):
+        with pytest.raises(ValueError, match="frame_count must be >= 3"):
+            card.autocirculate_init_for_input(Channel.CH1, frame_count=1)
+
+    def test_init_for_input_frame_count_two(self, card):
+        with pytest.raises(ValueError, match="frame_count must be >= 3"):
+            card.autocirculate_init_for_input(Channel.CH1, frame_count=2)
+
+    def test_init_for_output_frame_count_zero(self, card):
+        with pytest.raises(ValueError, match="frame_count must be >= 3"):
+            card.autocirculate_init_for_output(Channel.CH1, frame_count=0)
+
+    def test_init_for_output_frame_count_one(self, card):
+        with pytest.raises(ValueError, match="frame_count must be >= 3"):
+            card.autocirculate_init_for_output(Channel.CH1, frame_count=1)
+
+    def test_init_for_output_frame_count_two(self, card):
+        with pytest.raises(ValueError, match="frame_count must be >= 3"):
+            card.autocirculate_init_for_output(Channel.CH1, frame_count=2)
