@@ -392,7 +392,106 @@ and sustained AutoCirculate. Test pattern output sends one frame and
 holds — no continuous transfer loop, no latency constraints. The API
 surface overlaps but the performance envelope is different.
 
-## 9. Explicit Non-Goals (Phase 1)
+## 9. Reliability Engineering
+
+*Status: not started*
+
+The codebase has no static analysis, no Python linting, and CI does
+not run the existing unit tests. Buffer validation in the C++ layer
+is incomplete — non-contiguous or read-only arrays can cause silent
+data corruption or segfaults. One method pair accepts and returns raw
+`int` where a typed enum exists. Error messages from the generic
+`check()` helper lack argument context, making failures hard to
+diagnose without a debugger.
+
+This section specifies hardening work that reduces the surface area
+for development errors without adding features.
+
+### 9.1 Static Analysis in CI
+
+The CI pipeline shall run ruff (lint + format check) and mypy
+(strict mode) on all Python source and test files. The nanobind-
+generated `.pyi` stubs provide the type surface for mypy. ruff
+catches unused imports, unreachable code, shadowed names, and style
+drift.
+
+### 9.2 Unit Tests in CI
+
+The CI pipeline shall run all no-hardware unit tests
+(`test_enums`, `test_routing`, `test_card`, `test_transfer`,
+`test_format`) after the build step. These tests require no AJA
+device and run on any GitHub-hosted runner. The current CI only
+verifies that `import pyntv2` succeeds.
+
+### 9.3 Buffer Validation
+
+`Transfer.set_video_buffer()` and `Card.dma_read_frame()` /
+`Card.dma_write_frame()` shall validate buffers before extracting
+raw pointers:
+
+- **Contiguity**: the buffer must be C-contiguous. A sliced or
+  transposed numpy array has non-contiguous memory; passing its
+  `.data` pointer with `.nbytes` to the DMA engine reads/writes
+  wrong addresses. Raise `ValueError` if not contiguous.
+- **Writability** (capture only): `dma_read_frame()` and
+  `set_video_buffer()` used for capture write into the buffer. A
+  read-only buffer (e.g. `array.flags.writeable = False`) would
+  cause undefined behavior. Raise `ValueError` if the buffer is
+  read-only and the operation writes into it.
+
+### 9.4 Typed Enum for EveryFrameServices
+
+`get_every_frame_services()` and `set_every_frame_services()` shall
+use a bound `TaskMode` enum (`NTV2EveryFrameTaskMode`) instead of
+raw `int`. This prevents passing arbitrary integers to the SDK and
+makes the valid values discoverable in Python.
+
+### 9.5 Routing Input Validation
+
+`route_capture()` and `route_playout()` shall raise `ValueError`
+with a descriptive message when passed an unsupported enum member
+(e.g. `InputSource.ANALOG1`, `InputSource.INVALID`,
+`Channel.INVALID`). The current behavior is an unadorned `KeyError`
+from the lookup dict.
+
+### 9.6 Richer Error Messages in check()
+
+The `check()` utility in `bind_common.h` shall accept a
+`std::string` (not just `const char*`) so callers can include
+argument values in the error message. Methods that take enum
+arguments shall format those values into the error string.
+
+Why: the existing `autocirculate_transfer` error handler proves the
+value of rich diagnostics — channel, state, buffer level, DMA
+pointer, and errno. The simpler methods produce only
+`"Card.set_mode failed"` with no indication of which channel or
+mode was requested.
+
+### 9.7 Expanded Unit Test Coverage
+
+New no-hardware unit tests shall cover:
+
+- `get_frame_bytes()` for valid and invalid format combinations.
+- Routing functions with every valid `Channel` (CH1–CH8) to
+  catch lookup table drift when enum members are added.
+- Routing functions with invalid/unsupported inputs to verify
+  `ValueError` is raised (after §9.5 lands).
+- `autocirculate_init_for_input` / `_for_output` with
+  `frame_count < 3` to verify `InvalidArgumentError`.
+- `Transfer.set_video_buffer` with non-contiguous and read-only
+  buffers to verify `ValueError` (after §9.3 lands).
+- All 8 SDI output destinations in `route_playout` (currently
+  only SDI1 and SDI3 are tested).
+
+### 9.8 Public API Surface Control
+
+`__init__.py` shall define `__all__` listing every public name.
+The wildcard re-export (`from _bindings import *`) currently leaks
+any internal symbol nanobind generates. `__all__` makes the public
+API explicit and prevents accidental breakage when nanobind
+internals change.
+
+## 10. Explicit Non-Goals (Phase 1)
 
 - **GPU RDMA.** The 32-bit DMA engine cannot address GPU BAR memory
   (see §4). GPU frames require explicit CPU↔GPU copies.
