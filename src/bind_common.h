@@ -11,6 +11,10 @@ inline void check(bool result, const char* method) {
     if (!result) throw std::runtime_error(std::string(method) + " failed");
 }
 
+inline void check(bool result, const std::string& method) {
+    if (!result) throw std::runtime_error(method + " failed");
+}
+
 /// Validate that an ndarray is C-contiguous. Raises ValueError if not.
 inline void check_contiguous(const nb::ndarray<>& buffer) {
     if (buffer.ndim() == 0) return;
