@@ -14,7 +14,7 @@ dependencies = ["numpy>=1.26"]
 test = ["pytest>=8"]
 
 [dependency-groups]
-dev = ["pytest>=8"]
+dev = ["pytest>=8", "mypy>=1.13"]
 
 [tool.pytest.ini_options]
 markers = [
@@ -22,6 +22,33 @@ markers = [
     "benchmark: DMA throughput benchmarks (use with hardware marker)",
 ]
 addopts = "-m 'not hardware'"
+
+[tool.ruff]
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "F",     # pyflakes
+    "E",     # pycodestyle errors
+    "W",     # pycodestyle warnings
+    "I",     # isort
+    "UP",    # pyupgrade
+    "B",     # flake8-bugbear
+    "SIM",   # flake8-simplify
+    "RUF",   # ruff-specific
+]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+files = ["src/pyntv2"]
+
+[[tool.mypy.overrides]]
+module = "pyntv2._bindings"
+ignore_missing_imports = true
 
 [tool.scikit-build]
 minimum-version = "0.10"

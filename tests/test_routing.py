@@ -17,7 +17,9 @@ from pyntv2 import (
 class TestRouteCapture:
     def test_sdi_ycbcr_no_csc(self):
         """SDI input + YCbCr pixel format: direct connection, no CSC."""
-        routes = route_capture(InputSource.SDI1, Channel.CH1, PixelFormat.FBF_10BIT_YCBCR)
+        routes = route_capture(
+            InputSource.SDI1, Channel.CH1, PixelFormat.FBF_10BIT_YCBCR
+        )
         assert routes == {InputXpt.FrameBuffer1Input: OutputXpt.SDIIn1}
 
     def test_sdi_rgb_with_csc(self):
@@ -38,7 +40,9 @@ class TestRouteCapture:
 
     def test_hdmi_ycbcr_no_csc(self):
         """HDMI input + YCbCr: direct connection (HDMI not in _YCBCR_INPUT_SOURCES)."""
-        routes = route_capture(InputSource.HDMI1, Channel.CH1, PixelFormat.FBF_8BIT_YCBCR)
+        routes = route_capture(
+            InputSource.HDMI1, Channel.CH1, PixelFormat.FBF_8BIT_YCBCR
+        )
         assert routes == {InputXpt.FrameBuffer1Input: OutputXpt.HDMIIn1}
 
     def test_hdmi_rgb_no_csc(self):
@@ -50,18 +54,36 @@ class TestRouteCapture:
 class TestRouteCaptureAllChannels:
     """Verify route_capture succeeds for every valid Channel (CH1-CH8)."""
 
-    @pytest.mark.parametrize("channel", [
-        Channel.CH1, Channel.CH2, Channel.CH3, Channel.CH4,
-        Channel.CH5, Channel.CH6, Channel.CH7, Channel.CH8,
-    ])
+    @pytest.mark.parametrize(
+        "channel",
+        [
+            Channel.CH1,
+            Channel.CH2,
+            Channel.CH3,
+            Channel.CH4,
+            Channel.CH5,
+            Channel.CH6,
+            Channel.CH7,
+            Channel.CH8,
+        ],
+    )
     def test_all_channels_ycbcr(self, channel):
         routes = route_capture(InputSource.SDI1, channel, PixelFormat.FBF_10BIT_YCBCR)
         assert len(routes) == 1
 
-    @pytest.mark.parametrize("channel", [
-        Channel.CH1, Channel.CH2, Channel.CH3, Channel.CH4,
-        Channel.CH5, Channel.CH6, Channel.CH7, Channel.CH8,
-    ])
+    @pytest.mark.parametrize(
+        "channel",
+        [
+            Channel.CH1,
+            Channel.CH2,
+            Channel.CH3,
+            Channel.CH4,
+            Channel.CH5,
+            Channel.CH6,
+            Channel.CH7,
+            Channel.CH8,
+        ],
+    )
     def test_all_channels_rgb(self, channel):
         routes = route_capture(InputSource.SDI1, channel, PixelFormat.FBF_ARGB)
         assert len(routes) == 2  # CSC path
@@ -86,7 +108,9 @@ class TestRouteCaptureNegative:
 class TestRoutePlayout:
     def test_sdi_ycbcr_no_csc(self):
         """YCbCr pixel format -> SDI: direct connection."""
-        routes = route_playout(Channel.CH1, OutputDest.SDI1, PixelFormat.FBF_10BIT_YCBCR)
+        routes = route_playout(
+            Channel.CH1, OutputDest.SDI1, PixelFormat.FBF_10BIT_YCBCR
+        )
         assert routes == {InputXpt.SDIOut1Input: OutputXpt.FrameBuffer1YUV}
 
     def test_sdi_rgb_with_csc(self):
@@ -112,17 +136,26 @@ class TestRoutePlayout:
 
     def test_hdmi_ycbcr_no_csc(self):
         """YCbCr -> HDMI: direct connection."""
-        routes = route_playout(Channel.CH1, OutputDest.HDMI1, PixelFormat.FBF_8BIT_YCBCR)
+        routes = route_playout(
+            Channel.CH1, OutputDest.HDMI1, PixelFormat.FBF_8BIT_YCBCR
+        )
         assert routes == {InputXpt.HDMIOutQ1Input: OutputXpt.FrameBuffer1YUV}
+
+
+_SDI_OUTPUTS = [
+    OutputDest.SDI1,
+    OutputDest.SDI2,
+    OutputDest.SDI3,
+    OutputDest.SDI4,
+    OutputDest.SDI5,
+    OutputDest.SDI6,
+    OutputDest.SDI7,
+    OutputDest.SDI8,
+]
 
 
 class TestRoutePlayoutAllSDIOutputs:
     """Verify all 8 SDI output destinations produce valid routes."""
-
-    _SDI_OUTPUTS = [
-        OutputDest.SDI1, OutputDest.SDI2, OutputDest.SDI3, OutputDest.SDI4,
-        OutputDest.SDI5, OutputDest.SDI6, OutputDest.SDI7, OutputDest.SDI8,
-    ]
 
     @pytest.mark.parametrize("output", _SDI_OUTPUTS)
     def test_sdi_ycbcr(self, output):
@@ -138,18 +171,36 @@ class TestRoutePlayoutAllSDIOutputs:
 class TestRoutePlayoutAllChannels:
     """Verify route_playout succeeds for every valid Channel (CH1-CH8)."""
 
-    @pytest.mark.parametrize("channel", [
-        Channel.CH1, Channel.CH2, Channel.CH3, Channel.CH4,
-        Channel.CH5, Channel.CH6, Channel.CH7, Channel.CH8,
-    ])
+    @pytest.mark.parametrize(
+        "channel",
+        [
+            Channel.CH1,
+            Channel.CH2,
+            Channel.CH3,
+            Channel.CH4,
+            Channel.CH5,
+            Channel.CH6,
+            Channel.CH7,
+            Channel.CH8,
+        ],
+    )
     def test_all_channels_ycbcr(self, channel):
         routes = route_playout(channel, OutputDest.SDI1, PixelFormat.FBF_10BIT_YCBCR)
         assert len(routes) == 1
 
-    @pytest.mark.parametrize("channel", [
-        Channel.CH1, Channel.CH2, Channel.CH3, Channel.CH4,
-        Channel.CH5, Channel.CH6, Channel.CH7, Channel.CH8,
-    ])
+    @pytest.mark.parametrize(
+        "channel",
+        [
+            Channel.CH1,
+            Channel.CH2,
+            Channel.CH3,
+            Channel.CH4,
+            Channel.CH5,
+            Channel.CH6,
+            Channel.CH7,
+            Channel.CH8,
+        ],
+    )
     def test_all_channels_rgb(self, channel):
         routes = route_playout(channel, OutputDest.SDI1, PixelFormat.FBF_ARGB)
         assert len(routes) == 2  # CSC path

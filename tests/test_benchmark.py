@@ -193,7 +193,7 @@ class TestDmaThroughput4K60:
             replace=False,
         )
 
-        buf_mm, buf = _page_aligned_buffer(FRAME_BYTES)
+        _buf_mm, buf = _page_aligned_buffer(FRAME_BYTES)
         card.dma_buffer_lock(buf)
 
         cap_xfer = Transfer()
@@ -264,25 +264,23 @@ class TestDmaThroughput4K60:
             rt_stats = _stats(roundtrip_arr)
 
             # report
-            print()  # noqa: T201
-            print(  # noqa: T201
-                f"4K/60 DMA benchmark "
-                f"({transferred} frames, "
-                f"{FRAME_BYTES} bytes/frame)"
+            print()
+            print(
+                f"4K/60 DMA benchmark ({transferred} frames, {FRAME_BYTES} bytes/frame)"
             )
             for label, s in [
                 ("capture ", cap_stats),
                 ("playout ", out_stats),
                 ("two-hop ", rt_stats),
             ]:
-                print(  # noqa: T201
+                print(
                     f"  {label}  "
                     f"min={s['min']:.3f}  "
                     f"mean={s['mean']:.3f}  "
                     f"max={s['max']:.3f}  "
                     f"p99={s['p99']:.3f} ms"
                 )
-            print(  # noqa: T201
+            print(
                 f"  budget={FRAME_PERIOD_MS:.3f} ms  "
                 f"headroom={FRAME_PERIOD_MS - rt_stats['p99']:.3f} ms"
             )
@@ -309,10 +307,10 @@ def _print_stats(
     frame_bytes: int,
     rows: list[tuple[str, dict[str, float]]],
 ) -> None:
-    print()  # noqa: T201
-    print(title)  # noqa: T201
+    print()
+    print(title)
     for label, s in rows:
-        print(  # noqa: T201
+        print(
             f"  {label}  "
             f"min={s['min']:.3f}  "
             f"mean={s['mean']:.3f}  "
@@ -344,7 +342,7 @@ class TestRawDmaThroughput4K:
         card.set_video_format(VIDEO_FORMAT, channel=PLAYOUT_CH)
         card.set_frame_buffer_format(PLAYOUT_CH, PIXEL_FORMAT)
 
-        buf_mm, buf = _page_aligned_buffer(FRAME_BYTES)
+        _buf_mm, buf = _page_aligned_buffer(FRAME_BYTES)
         card.dma_buffer_lock(buf)
 
         try:
@@ -380,7 +378,7 @@ class TestRawDmaThroughput4K:
                     ("two-hop", rt_stats),
                 ],
             )
-            print(  # noqa: T201
+            print(
                 f"  budget={FRAME_PERIOD_MS:.3f} ms  "
                 f"headroom={FRAME_PERIOD_MS - rt_stats['p99']:.3f} ms"
             )

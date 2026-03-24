@@ -3,16 +3,9 @@
 import pytest
 
 from pyntv2 import (
-    AudioSystem,
     Card,
     Channel,
-    InputSource,
-    InputXpt,
     Mode,
-    OutputXpt,
-    PixelFormat,
-    ReferenceSource,
-    VideoFormat,
 )
 
 

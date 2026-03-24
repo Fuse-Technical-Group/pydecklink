@@ -47,9 +47,7 @@ class TestGetFrameBytes:
         assert result > 0
 
     def test_1080p_argb(self):
-        result = get_frame_bytes(
-            VideoFormat.FORMAT_1080p_2398, PixelFormat.FBF_ARGB
-        )
+        result = get_frame_bytes(VideoFormat.FORMAT_1080p_2398, PixelFormat.FBF_ARGB)
         # 4 bytes per pixel
         assert result == 1920 * 1080 * 4
 

@@ -9,7 +9,6 @@ import numpy as np
 import pytest
 
 from pyntv2 import (
-    AudioSystem,
     Card,
     Channel,
     InputSource,
@@ -23,7 +22,6 @@ from pyntv2 import (
 )
 
 pytestmark = pytest.mark.hardware
-
 
 
 class TestDeviceIdentity:
@@ -92,7 +90,9 @@ class TestRouting:
         card.clear_routing()
 
     def test_apply_signal_route(self, card):
-        routes = route_capture(InputSource.SDI1, Channel.CH1, PixelFormat.FBF_10BIT_YCBCR)
+        routes = route_capture(
+            InputSource.SDI1, Channel.CH1, PixelFormat.FBF_10BIT_YCBCR
+        )
         card.apply_signal_route(routes, replace=True)
         card.clear_routing()
 

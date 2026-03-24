@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from pyntv2._bindings import (
     Channel,
     InputSource,
@@ -115,49 +117,51 @@ _OUTPUT_DEST_TO_SDI_INPUT: dict[OutputDest, InputXpt] = {
 }
 
 # Pixel formats whose framebuffer stores RGB data
-_RGB_PIXEL_FORMATS: frozenset[PixelFormat] = frozenset({
-    PixelFormat.FBF_ARGB,
-    PixelFormat.FBF_RGBA,
-    PixelFormat.FBF_10BIT_RGB,
-    PixelFormat.FBF_ABGR,
-    PixelFormat.FBF_10BIT_DPX,
-    PixelFormat.FBF_10BIT_DPX_LE,
-    PixelFormat.FBF_24BIT_RGB,
-    PixelFormat.FBF_24BIT_BGR,
-    PixelFormat.FBF_48BIT_RGB,
-    PixelFormat.FBF_12BIT_RGB_PACKED,
-    PixelFormat.FBF_10BIT_RGB_PACKED,
-    PixelFormat.FBF_10BIT_ARGB,
-    PixelFormat.FBF_16BIT_ARGB,
-    PixelFormat.FBF_10BIT_RAW_RGB,
-})
+_RGB_PIXEL_FORMATS: frozenset[PixelFormat] = frozenset(
+    {
+        PixelFormat.FBF_ARGB,
+        PixelFormat.FBF_RGBA,
+        PixelFormat.FBF_10BIT_RGB,
+        PixelFormat.FBF_ABGR,
+        PixelFormat.FBF_10BIT_DPX,
+        PixelFormat.FBF_10BIT_DPX_LE,
+        PixelFormat.FBF_24BIT_RGB,
+        PixelFormat.FBF_24BIT_BGR,
+        PixelFormat.FBF_48BIT_RGB,
+        PixelFormat.FBF_12BIT_RGB_PACKED,
+        PixelFormat.FBF_10BIT_RGB_PACKED,
+        PixelFormat.FBF_10BIT_ARGB,
+        PixelFormat.FBF_16BIT_ARGB,
+        PixelFormat.FBF_10BIT_RAW_RGB,
+    }
+)
 
 # SDI carries YCbCr; HDMI can carry either but we assume YCbCr for
 # routing purposes (the CSC handles conversion when needed).
-_YCBCR_INPUT_SOURCES: frozenset[InputSource] = frozenset({
-    InputSource.SDI1,
-    InputSource.SDI2,
-    InputSource.SDI3,
-    InputSource.SDI4,
-    InputSource.SDI5,
-    InputSource.SDI6,
-    InputSource.SDI7,
-    InputSource.SDI8,
-})
+_YCBCR_INPUT_SOURCES: frozenset[InputSource] = frozenset(
+    {
+        InputSource.SDI1,
+        InputSource.SDI2,
+        InputSource.SDI3,
+        InputSource.SDI4,
+        InputSource.SDI5,
+        InputSource.SDI6,
+        InputSource.SDI7,
+        InputSource.SDI8,
+    }
+)
 
 
 def _is_rgb(pixel_format: PixelFormat) -> bool:
     return pixel_format in _RGB_PIXEL_FORMATS
 
 
-def _lookup(table: dict, key: object, param_name: str) -> object:
+def _lookup(table: dict[Any, Any], key: Any, param_name: str) -> Any:
     """Look up *key* in *table*, raising ValueError on miss."""
     try:
         return table[key]
     except KeyError:
-        raise ValueError(
-            f"unsupported {param_name}: {key!r}"
-        ) from None
+        raise ValueError(f"unsupported {param_name}: {key!r}") from None
 
 
 def route_capture(

@@ -1,7 +1,5 @@
 """Tests for NTV2 enum bindings."""
 
-import pytest
-
 from pyntv2 import (
     AudioSystem,
     Channel,

@@ -50,6 +50,7 @@ def _page_aligned_buffer(size: int) -> tuple[mmap.mmap, np.ndarray]:
     backing = mmap.mmap(-1, size)
     return backing, np.frombuffer(backing, dtype=np.uint8)
 
+
 pytestmark = pytest.mark.hardware
 
 # ── Constants ────────────────────────────────────────────────────────
@@ -248,8 +249,8 @@ class TestCpuLoopback:
         _set_reference(card)
         _apply_loopback_routes(card)
 
-        out_mm, out_buf = _page_aligned_buffer(MAX_FRAME_BYTES)
-        cap_mm, cap_buf = _page_aligned_buffer(MAX_FRAME_BYTES)
+        _out_mm, out_buf = _page_aligned_buffer(MAX_FRAME_BYTES)
+        _cap_mm, cap_buf = _page_aligned_buffer(MAX_FRAME_BYTES)
         _fill_pattern(out_buf, pattern)
         # Keep a copy for comparison — capture overwrites cap_buf.
         expected = out_buf.copy()
@@ -287,9 +288,7 @@ class TestCpuLoopback:
             assert cap_status.has_available_input_frame, "no frame available to capture"
             card.autocirculate_transfer(CAPTURE_CH, cap_xfer)
 
-            np.testing.assert_array_equal(
-                cap_buf[:FRAME_BYTES], expected[:FRAME_BYTES]
-            )
+            np.testing.assert_array_equal(cap_buf[:FRAME_BYTES], expected[:FRAME_BYTES])
         finally:
             _stop_pair(card)
             card.dma_buffer_unlock(out_buf)
@@ -309,7 +308,7 @@ class TestCpuPassthrough:
         _set_reference(card)
         _apply_loopback_routes(card)
 
-        buf_mm, buf = _page_aligned_buffer(MAX_FRAME_BYTES)
+        _buf_mm, buf = _page_aligned_buffer(MAX_FRAME_BYTES)
         card.dma_buffer_lock(buf)
 
         cap_xfer = Transfer()
@@ -360,5 +359,3 @@ class TestCpuPassthrough:
             _stop_pair(card)
             card.dma_buffer_unlock(buf)
             card.clear_routing()
-
-

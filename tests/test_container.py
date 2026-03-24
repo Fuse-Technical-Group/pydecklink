@@ -52,7 +52,7 @@ class TestSharedMemory:
     def test_shm_size_at_least_1g(self) -> None:
         stat = os.statvfs("/dev/shm")
         size_bytes = stat.f_blocks * stat.f_frsize
-        one_gb = 1024 ** 3
+        one_gb = 1024**3
         assert size_bytes >= one_gb, (
             f"/dev/shm is {size_bytes / (1024**2):.0f} MB, expected >= 1024 MB. "
             f"--shm-size=1g is not taking effect."
