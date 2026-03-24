@@ -10,4 +10,3 @@ dist/
 build/
 *.so
 .venv/
-.venv-dev/

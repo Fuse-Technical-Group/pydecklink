@@ -18,34 +18,38 @@
     "SSH_AUTH_SOCK": "/tmp/ssh-agent.sock"
   },
 
+  "features": {
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "installZsh": false,
+      "installOhMyZsh": false,
+      "installOhMyZshConfig": false,
+      "upgradePackages": false,
+      "username": "ubuntu",
+      "userUid": "automatic",
+      "userGid": "automatic"
+    },
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    "ghcr.io/devcontainers/features/fish:1": {}
+  },
+
   "mounts": [
     // Named volume for container-local Claude state (history, cache, etc.)
-    "source=claude-config-${devcontainerId},target=/home/dev/.claude,type=volume",
+    "source=claude-config-${devcontainerId},target=/home/ubuntu/.claude,type=volume",
     // Bind mount Claude auth and settings from host (read-only credentials, read-write settings)
-    "source=${localEnv:HOME}/.claude/.credentials.json,target=/home/dev/.claude/.credentials.json,type=bind",
-    "source=${localEnv:HOME}/.claude/settings.json,target=/home/dev/.claude/settings.json,type=bind",
-    "source=${localEnv:HOME}/.claude/CLAUDE.md,target=/home/dev/.claude/CLAUDE.md,type=bind",
-    "source=${localEnv:HOME}/.claude/ORCHESTRATOR.md,target=/home/dev/.claude/ORCHESTRATOR.md,type=bind",
-    "source=${localEnv:HOME}/.claude/commands,target=/home/dev/.claude/commands,type=bind",
+    "source=${localEnv:HOME}/.claude/.credentials.json,target=/home/ubuntu/.claude/.credentials.json,type=bind",
+    "source=${localEnv:HOME}/.claude/settings.json,target=/home/ubuntu/.claude/settings.json,type=bind",
+    "source=${localEnv:HOME}/.claude/CLAUDE.md,target=/home/ubuntu/.claude/CLAUDE.md,type=bind",
+    "source=${localEnv:HOME}/.claude/ORCHESTRATOR.md,target=/home/ubuntu/.claude/ORCHESTRATOR.md,type=bind",
+    "source=${localEnv:HOME}/.claude/commands,target=/home/ubuntu/.claude/commands,type=bind",
     // SSH agent forwarding for git signing/commits
     "source=${localEnv:SSH_AUTH_SOCK},target=/tmp/ssh-agent.sock,type=bind",
     // Git config for commit signing and user identity
-    "source=${localEnv:HOME}/.gitconfig,target=/home/dev/.gitconfig,type=bind,readonly",
+    "source=${localEnv:HOME}/.gitconfig,target=/home/ubuntu/.gitconfig,type=bind,readonly",
     // GitHub CLI auth (uses host login, read-only to avoid token conflicts)
-    "source=${localEnv:HOME}/.config/gh,target=/home/dev/.config/gh,type=bind,readonly"
+    "source=${localEnv:HOME}/.config/gh,target=/home/ubuntu/.config/gh,type=bind,readonly"
   ],
 
-  "remoteEnv": {
-    "UV_PROJECT_ENVIRONMENT": ".venv-dev",
-    "VIRTUAL_ENV": "${containerWorkspaceFolder}/.venv-dev"
-  },
-
-  // Ensure the named volume for .claude is writable by the dev user.
-  // Podman creates named volumes owned by root; the bind-mounted files
-  // on top work fine, but Claude needs to create subdirs (plans/, session-env/).
-  "postCreateCommand": "sudo chown dev:dev /home/dev/.claude",
-
-  "remoteUser": "dev",
+  "remoteUser": "ubuntu",
   "customizations": {
     "vscode": {
       "extensions": [
