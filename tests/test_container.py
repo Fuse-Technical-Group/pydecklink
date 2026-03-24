@@ -20,6 +20,10 @@ from __future__ import annotations
 import os
 import resource
 
+import pytest
+
+pytestmark = pytest.mark.hardware
+
 
 class TestUlimits:
     """Validate memlock ulimit.
