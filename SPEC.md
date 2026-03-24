@@ -135,6 +135,13 @@ Naming follows Python convention: `AutoCirculateStart` →
 Wraps `CNTV2Card`. Opens the device on construction or via `open()`.
 Supports context manager protocol for deterministic cleanup.
 
+Device identity is available after opening:
+
+- `device_id → int` — the `NTV2DeviceID` value identifying the card
+  model (e.g. Corvid 44 12G, Kona 5). Read-only property.
+- `display_name → str` — human-readable device name returned by the
+  SDK. Read-only property.
+
 ### 5.2 Format Detection and Configuration
 
 The module exposes format detection and card configuration methods
@@ -319,6 +326,28 @@ Two variants:
 - **CPU passthrough**: numpy buffer, single-buffer round-trip.
 - **GPU passthrough**: CuPy buffer, RDMA both directions. Validates
   that frames never touch system memory.
+
+### 7.3 DMA Throughput Benchmark
+
+Measures per-frame DMA transfer time on the CH3↔CH4 loopback path
+at 3840×2160p59.94 (single-link 12G-SDI). The card is a Corvid 44
+12G — each SDI port carries 12G, so 4K/60 fits a single link without
+quad-link ganging.
+
+The benchmark runs the same capture→playout loop as §7.2 but
+instruments each `autocirculate_transfer` call with
+`time.perf_counter`. It reports min, max, mean, and p99 DMA times
+for both capture and playout directions.
+
+Frame size: 22,118,400 bytes (21.1 MB) at 10-bit YCbCr. Frame
+budget: 16.68 ms. The two-hop round trip (capture + playout DMA)
+must complete within one frame period. SWIOTLB bounce-buffer
+overhead is included in the measurement — this is the real-world
+path, not a synthetic DMA-only test.
+
+The benchmark is a pytest test marked `hardware` and `benchmark`.
+It asserts zero dropped frames as a pass/fail gate but primarily
+exists to produce timing data for capacity planning.
 
 ## 8. Secondary Use Case: Test Pattern Generation
 
