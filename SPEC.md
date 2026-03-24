@@ -39,9 +39,13 @@ avoid `LD_LIBRARY_PATH` and work with `setcap` file capabilities.
 - The Dockerfile's pinned SDK tag must match the host's loaded AJA
   kernel driver version. AJA documents compatible pairs in their
   release notes.
-- The container runs as a non-root user via `--userns=keep-id`. The
-  host's AJA device node (`/dev/ajantv20`) is passed through via
-  `--device`.
+- The container runs as the base image's default non-root user
+  (`ubuntu:1000` on `ubuntu:24.04`). `--userns=keep-id` maps the
+  host user's UID 1000 to container UID 1000, so files created
+  inside the container on bind-mounted volumes are owned by the
+  host user. This allows a single `.venv` shared between host and
+  container with no ownership conflicts. The host's AJA device
+  node (`/dev/ajantv20`) is passed through via `--device`.
 - GPU passthrough (NVIDIA Container Toolkit) is not needed — see §4
   for why GPU RDMA is infeasible with this hardware.
 
