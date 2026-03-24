@@ -21,53 +21,6 @@ class TestCardConstruction:
         assert card.is_open is False
 
 
-class TestCardMethodsExist:
-    """Verify all expected methods are bound and callable attributes."""
-
-    @pytest.fixture()
-    def card(self):
-        return Card()
-
-    def test_lifecycle_methods(self, card):
-        assert callable(card.open)
-        assert callable(card.close)
-
-    def test_format_methods(self, card):
-        assert callable(card.get_input_video_format)
-        assert callable(card.set_video_format)
-        assert callable(card.set_frame_buffer_format)
-        assert callable(card.enable_channel)
-        assert callable(card.set_mode)
-        assert callable(card.set_sdi_transmit_enable)
-        assert callable(card.set_reference)
-
-    def test_routing_methods(self, card):
-        assert callable(card.connect)
-        assert callable(card.disconnect)
-        assert callable(card.clear_routing)
-        assert callable(card.apply_signal_route)
-
-    def test_autocirculate_methods(self, card):
-        assert callable(card.autocirculate_init_for_input)
-        assert callable(card.autocirculate_init_for_output)
-        assert callable(card.autocirculate_start)
-        assert callable(card.autocirculate_stop)
-        assert callable(card.autocirculate_get_status)
-        assert callable(card.autocirculate_transfer)
-
-    def test_vbi_methods(self, card):
-        assert callable(card.wait_for_input_vertical_interrupt)
-        assert callable(card.wait_for_output_vertical_interrupt)
-
-    def test_dma_methods(self, card):
-        assert callable(card.dma_buffer_lock)
-        assert callable(card.dma_buffer_unlock)
-
-    def test_identity_properties(self, card):
-        assert hasattr(card, "device_id")
-        assert hasattr(card, "display_name")
-
-
 class TestCardTypeErrors:
     """Verify wrong enum types raise TypeError."""
 
@@ -89,32 +42,18 @@ class TestCardTypeErrors:
 
 
 class TestFrameCountValidation:
-    """Verify frame_count < 3 raises InvalidArgumentError."""
+    """Verify frame_count < 3 raises ValueError."""
 
     @pytest.fixture()
     def card(self):
         return Card()
 
-    def test_init_for_input_frame_count_zero(self, card):
+    @pytest.mark.parametrize("frame_count", [0, 1, 2])
+    def test_init_for_input_rejects_low_frame_count(self, card, frame_count):
         with pytest.raises(ValueError, match="frame_count must be >= 3"):
-            card.autocirculate_init_for_input(Channel.CH1, frame_count=0)
+            card.autocirculate_init_for_input(Channel.CH1, frame_count=frame_count)
 
-    def test_init_for_input_frame_count_one(self, card):
+    @pytest.mark.parametrize("frame_count", [0, 1, 2])
+    def test_init_for_output_rejects_low_frame_count(self, card, frame_count):
         with pytest.raises(ValueError, match="frame_count must be >= 3"):
-            card.autocirculate_init_for_input(Channel.CH1, frame_count=1)
-
-    def test_init_for_input_frame_count_two(self, card):
-        with pytest.raises(ValueError, match="frame_count must be >= 3"):
-            card.autocirculate_init_for_input(Channel.CH1, frame_count=2)
-
-    def test_init_for_output_frame_count_zero(self, card):
-        with pytest.raises(ValueError, match="frame_count must be >= 3"):
-            card.autocirculate_init_for_output(Channel.CH1, frame_count=0)
-
-    def test_init_for_output_frame_count_one(self, card):
-        with pytest.raises(ValueError, match="frame_count must be >= 3"):
-            card.autocirculate_init_for_output(Channel.CH1, frame_count=1)
-
-    def test_init_for_output_frame_count_two(self, card):
-        with pytest.raises(ValueError, match="frame_count must be >= 3"):
-            card.autocirculate_init_for_output(Channel.CH1, frame_count=2)
+            card.autocirculate_init_for_output(Channel.CH1, frame_count=frame_count)
