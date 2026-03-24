@@ -1,7 +1,7 @@
-cmake_minimum_required(VERSION 3.17...3.31)
+cmake_minimum_required(VERSION 3.26...3.31)
 project(${SKBUILD_PROJECT_NAME} LANGUAGES CXX)
 
-find_package(Python 3.12 REQUIRED COMPONENTS Interpreter Development.Module)
+find_package(Python 3.12 REQUIRED COMPONENTS Interpreter Development.Module Development.SABIModule)
 find_package(nanobind CONFIG REQUIRED)
 find_package(ajantv2 REQUIRED)
 
