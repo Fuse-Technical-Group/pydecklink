@@ -138,6 +138,22 @@ void init_card(nb::module_& m) {
             check(self.WaitForOutputVerticalInterrupt(channel, repeat_count), "Card.wait_for_output_vertical_interrupt");
         }, nb::arg("channel") = NTV2_CHANNEL1, nb::arg("repeat_count") = 1, nb::call_guard<nb::gil_scoped_release>())
 
+        // ── Direct DMA ───────────────────────────────────────────────
+        .def("dma_read_frame", [](CNTV2Card& self, ULWord frame_number, nb::ndarray<> buffer, NTV2Channel channel) {
+            check(self.DMAReadFrame(frame_number,
+                                    reinterpret_cast<ULWord*>(buffer.data()),
+                                    static_cast<ULWord>(buffer.nbytes()),
+                                    channel),
+                  "Card.dma_read_frame");
+        }, nb::arg("frame_number"), nb::arg("buffer"), nb::arg("channel"), nb::call_guard<nb::gil_scoped_release>())
+        .def("dma_write_frame", [](CNTV2Card& self, ULWord frame_number, nb::ndarray<> buffer, NTV2Channel channel) {
+            check(self.DMAWriteFrame(frame_number,
+                                     reinterpret_cast<const ULWord*>(buffer.data()),
+                                     static_cast<ULWord>(buffer.nbytes()),
+                                     channel),
+                  "Card.dma_write_frame");
+        }, nb::arg("frame_number"), nb::arg("buffer"), nb::arg("channel"), nb::call_guard<nb::gil_scoped_release>())
+
         // ── DMA Buffer Lock ──────────────────────────────────────────
         .def("dma_buffer_lock", [](CNTV2Card& self, nb::ndarray<> buffer) {
             auto ptr = reinterpret_cast<uintptr_t>(buffer.data());

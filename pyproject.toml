@@ -17,7 +17,10 @@ test = ["pytest>=8"]
 dev = ["pytest>=8"]
 
 [tool.pytest.ini_options]
-markers = ["hardware: requires AJA hardware (deselected by default)"]
+markers = [
+    "hardware: requires AJA hardware (deselected by default)",
+    "benchmark: DMA throughput benchmarks (use with hardware marker)",
+]
 addopts = "-m 'not hardware'"
 
 [tool.scikit-build]
