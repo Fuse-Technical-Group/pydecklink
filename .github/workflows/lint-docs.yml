@@ -3,14 +3,20 @@ name: lint-docs
 on:
   push:
     branches: [main]
-    paths: ["*.md"]
   pull_request:
-    paths: ["*.md"]
 
 jobs:
   markdown-lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
-      - run: uv tool run pymarkdownlnt scan SPEC.md ROADMAP.md CHANGELOG.md
+      - uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          filters: |
+            docs:
+              - '*.md'
+      - if: steps.changes.outputs.docs == 'true'
+        uses: astral-sh/setup-uv@v5
+      - if: steps.changes.outputs.docs == 'true'
+        run: uv tool run pymarkdownlnt scan SPEC.md ROADMAP.md CHANGELOG.md
