@@ -3,6 +3,7 @@
 #include <ntv2signalrouter.h>
 #include <nanobind/ndarray.h>
 #include <nanobind/stl/map.h>
+#include <nanobind/stl/string.h>
 
 void init_card(nb::module_& m) {
     nb::class_<CNTV2Card>(m, "Card")
@@ -19,6 +20,10 @@ void init_card(nb::module_& m) {
         }, nb::arg("index"))
         .def("close", [](CNTV2Card& self) { if (self.IsOpen()) self.Close(); })
         .def_prop_ro("is_open", &CNTV2Card::IsOpen)
+        .def_prop_ro("device_id", [](CNTV2Card& self) {
+            return static_cast<int>(self.GetDeviceID());
+        })
+        .def_prop_ro("display_name", &CNTV2Card::GetDisplayName)
         .def("__enter__", [](nb::object self) -> nb::object { return self; })
         .def("__exit__", [](CNTV2Card& self, nb::args) {
             if (!self.IsOpen()) return;

@@ -26,6 +26,16 @@ pytestmark = pytest.mark.hardware
 
 
 
+class TestDeviceIdentity:
+    def test_device_id_nonzero(self, card):
+        assert card.device_id != 0
+
+    def test_display_name_nonempty(self, card):
+        name = card.display_name
+        assert isinstance(name, str)
+        assert len(name) > 0
+
+
 class TestLifecycle:
     def test_open_close(self):
         card = Card()
