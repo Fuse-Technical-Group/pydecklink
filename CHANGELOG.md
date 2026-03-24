@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.1.8](https://github.com/Fuse-Technical-Group/pyntv2/compare/v0.1.7...v0.1.8) (2026-03-24)
+
+
+### Added
+
+* reliability engineering (Spec §9) ([0f44b4d](https://github.com/Fuse-Technical-Group/pyntv2/commit/0f44b4d61a009cd7e522e0cbf89b9a86d99bfcda))
+
+
+### Fixed
+
+* **test:** exclude warmup drops from dropped-frame assertions ([372bf7e](https://github.com/Fuse-Technical-Group/pyntv2/commit/372bf7e20dc3209fed4eb288b6edd83ae206798c))
+* **test:** mark container environment tests as hardware ([fb565e1](https://github.com/Fuse-Technical-Group/pyntv2/commit/fb565e14420b3e88b333236f876038bae793b7e0))
+* **test:** release stream ownership in probe finally blocks ([216173f](https://github.com/Fuse-Technical-Group/pyntv2/commit/216173f25a0fc7c3c710421bb48a5909908cc2b4))
+* **test:** upgrade integration tests to 4K/60 and fix SDI loopback assertion ([0bb3117](https://github.com/Fuse-Technical-Group/pyntv2/commit/0bb3117e8c4c7bc54621f99e103faee00ab7ddd9))
+
 ## [0.1.7](https://github.com/Fuse-Technical-Group/pyntv2/compare/v0.1.6...v0.1.7) (2026-03-24)
 
 
