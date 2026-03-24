@@ -4,7 +4,7 @@ build-backend = "scikit_build_core.build"
 
 [project]
 name = "pyntv2"
-version = "0.1.5"
+version = "0.1.6"
 description = "Python bindings for AJA's libajantv2 SDK"
 license = "MIT"
 requires-python = ">=3.12"
