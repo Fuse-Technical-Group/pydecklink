@@ -43,14 +43,15 @@ A VS Code devcontainer builds libajantv2 from source at a pinned
 release tag and provides a ready-to-code environment for the Python
 and C++ layers.
 
-> **Note:** DMA transfers do not yet work inside the container. The
-> devcontainer is useful for building and editing, but capture/playout
-> must run on the host. Container-based DMA is a work in progress —
-> see SPEC.md §2 for the capability requirements under investigation.
+> DMA transfers work inside the container. The devcontainer passes
+> `/dev/ajantv20` through via `--device` and runs with
+> `--userns=keep-id` so the host user's device permissions apply
+> unchanged. See SPEC.md §2 for details.
 
 ## Quick start
 
 ```python
+import mmap
 import numpy as np
 from pyntv2 import (
     Card, Channel, InputSource, Mode, PixelFormat,
@@ -70,7 +71,10 @@ with Card(device_index=0) as card:
         route_capture(InputSource.SDI1, Channel.CH1, PixelFormat.FBF_10BIT_YCBCR)
     )
 
-    buf = np.zeros(3840 * 2160 * 4, dtype=np.uint8)
+    # DMA buffers must be page-aligned (4096 bytes)
+    size = 3840 * 2160 * 4
+    backing = mmap.mmap(-1, size)
+    buf = np.frombuffer(backing, dtype=np.uint8)
     card.dma_buffer_lock(buf)
 
     card.autocirculate_init_for_input(Channel.CH1)
