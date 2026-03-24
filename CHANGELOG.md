@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.6](https://github.com/Fuse-Technical-Group/pyntv2/compare/v0.1.5...v0.1.6) (2026-03-24)
+
+
+### Fixed
+
+* **build:** request SABIModule so nanobind actually enables stable ABI ([cf837ef](https://github.com/Fuse-Technical-Group/pyntv2/commit/cf837ef151addd485c424e97690878e29069b548))
+* **build:** request SABIModule so nanobind enables stable ABI ([51e2ddc](https://github.com/Fuse-Technical-Group/pyntv2/commit/51e2ddc10409d55902a6d6f6892a6492d1f4916c))
+
 ## [0.1.5](https://github.com/Fuse-Technical-Group/pyntv2/compare/v0.1.4...v0.1.5) (2026-03-24)
 
 
