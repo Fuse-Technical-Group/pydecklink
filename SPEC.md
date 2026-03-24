@@ -123,7 +123,7 @@ wrapper changes.
 
 ## 5. Python API (Phase 1)
 
-*Status: complete*
+*Status: in progress*
 
 The API is a thin 1:1 mapping of `CNTV2Card` methods to Python. Each
 C++ method that returns `bool` raises `RuntimeError` on failure.
@@ -187,7 +187,8 @@ route via `card.apply_signal_route()`.
 - `autocirculate_get_status(channel) → Status` — returns a read-only
   snapshot of circulation state.
 - `autocirculate_transfer(channel, transfer)` — executes a DMA
-  transfer using a `Transfer` object.
+  transfer using a `Transfer` object. Releases the GIL during the
+  blocking DMA call so other Python threads can run concurrently.
 
 ### 5.5 Transfer
 
@@ -211,8 +212,13 @@ avoids per-frame page pinning overhead.
 
 ### 5.7 Frame Sync
 
-`wait_for_input_vertical_interrupt(channel, repeat_count=1)` blocks
-until the next vertical blanking interval.
+- `wait_for_input_vertical_interrupt(channel, repeat_count=1)` —
+  blocks until the next input vertical blanking interval.
+- `wait_for_output_vertical_interrupt(channel, repeat_count=1)` —
+  blocks until the next output vertical blanking interval. Needed
+  for playout pacing.
+
+Both calls release the GIL during the blocking wait.
 
 ### 5.8 Status
 
@@ -221,7 +227,28 @@ Read-only snapshot from `AUTOCIRCULATE_STATUS`. Fields:
 `can_accept_more_output_frames`, `dropped_frame_count`,
 `buffer_level`, `with_audio`, `with_custom_anc`.
 
-### 5.9 Enums
+### 5.9 Transfer Status
+
+After `autocirculate_transfer()` completes, the `Transfer` object
+exposes `transferred_frame` — the on-device frame index used for
+the transfer. Read from `acTransferStatus.acTransferFrame`.
+Debugging aid for correlating DMA transfers with hardware state.
+
+### 5.10 Format Metadata
+
+Module-level helpers extract video format properties from
+`NTV2FormatDescriptor`:
+
+- `get_frame_bytes(video_format, pixel_format) → int` — total frame
+  byte count. Used for allocating page-aligned DMA buffers.
+- `get_format_width(video_format) → int` — raster width in pixels.
+- `get_format_height(video_format) → int` — raster height in lines.
+- `get_format_fps(video_format) → float` — frame rate in Hz.
+
+These allow a consuming application to satisfy `FrameSource` protocol
+properties (resolution, frame rate) without hardcoding format tables.
+
+### 5.11 Enums
 
 Bound from NTV2 C++ enums via `nb::enum_<>`:
 
