@@ -24,6 +24,14 @@ from pyntv2 import (
 pytestmark = pytest.mark.hardware
 
 
+@pytest.fixture()
+def _cleanup(card):
+    """Defensive teardown — stop CH1 autocirculate and clear routing."""
+    yield
+    card.autocirculate_stop(Channel.CH1, abort=True)
+    card.clear_routing()
+
+
 class TestDeviceIdentity:
     def test_device_id_nonzero(self, card):
         assert card.device_id != 0
@@ -80,6 +88,7 @@ class TestChannelConfiguration:
         card.set_reference(ReferenceSource.FREERUN)
 
 
+@pytest.mark.usefixtures("_cleanup")
 class TestRouting:
     def test_connect_disconnect(self, card):
         card.connect(InputXpt.FrameBuffer1Input, OutputXpt.SDIIn1)
@@ -103,6 +112,7 @@ class TestRouting:
         card.clear_routing()
 
 
+@pytest.mark.usefixtures("_cleanup")
 class TestAutoCirculate:
     def test_init_status_stop(self, card):
         card.enable_channel(Channel.CH1)
