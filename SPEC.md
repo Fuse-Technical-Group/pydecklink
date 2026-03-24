@@ -467,6 +467,15 @@ pointer, and errno. The simpler methods produce only
 `"Card.set_mode failed"` with no indication of which channel or
 mode was requested.
 
+AutoCirculate state-transition methods (`autocirculate_start`,
+`autocirculate_stop`, `autocirculate_init_for_input`,
+`autocirculate_init_for_output`) shall query
+`autocirculate_get_status` on failure and include the current
+`acState` in the error message. Calling `start` on a channel that
+was never initialized or is already running produces a silent
+`false` from the SDK — the error message must say what state the
+channel was actually in.
+
 ### 9.7 Expanded Unit Test Coverage
 
 New no-hardware unit tests shall cover:
@@ -490,6 +499,28 @@ The wildcard re-export (`from _bindings import *`) currently leaks
 any internal symbol nanobind generates. `__all__` makes the public
 API explicit and prevents accidental breakage when nanobind
 internals change.
+
+### 9.9 Script Retirement
+
+The `scripts/` directory contains exploration code written before
+the Python bindings and test suite existed:
+
+- `test_capture_minimal.cpp` + `CMakeLists.txt` — standalone C++
+  capture test. Superseded by `tests/test_integration.py` (loopback
+  probe, data integrity, passthrough) and `examples/passthrough.py`.
+- `probe_capture_dma.py` — single-channel Python capture probe.
+  Superseded by `_probe_capture_dma()` in `test_integration.py` and
+  by `examples/passthrough.py`.
+
+These shall be deleted. Their diagnostic value is fully covered by
+the test suite and example code.
+
+`reset_card.sh` shall remain. It performs PCI function-level reset
+and driver reload after a DMA timeout — an operational recovery
+procedure that cannot be replaced by Python-level code.
+
+The `.gitignore` in `scripts/` shall be simplified to cover only
+`reset_card.sh`'s concerns (no build artifacts from removed C++).
 
 ## 10. Explicit Non-Goals (Phase 1)
 
