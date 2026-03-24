@@ -23,5 +23,8 @@ void init_transfer(nb::module_& m) {
         .def_prop_ro("captured_audio_byte_count", &AUTOCIRCULATE_TRANSFER::GetCapturedAudioByteCount)
         .def_prop_ro("captured_anc_byte_count", [](const AUTOCIRCULATE_TRANSFER& self) {
             return self.GetCapturedAncByteCount(false);
+        })
+        .def_prop_ro("transferred_frame", [](const AUTOCIRCULATE_TRANSFER& self) {
+            return self.GetTransferStatus().GetTransferFrame();
         });
 }

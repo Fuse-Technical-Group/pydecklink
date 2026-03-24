@@ -62,8 +62,9 @@ class TestCardMethodsExist:
         assert callable(card.autocirculate_get_status)
         assert callable(card.autocirculate_transfer)
 
-    def test_vbi_method(self, card):
+    def test_vbi_methods(self, card):
         assert callable(card.wait_for_input_vertical_interrupt)
+        assert callable(card.wait_for_output_vertical_interrupt)
 
     def test_dma_methods(self, card):
         assert callable(card.dma_buffer_lock)

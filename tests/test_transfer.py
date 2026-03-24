@@ -24,6 +24,10 @@ class TestTransferConstruction:
         t = Transfer()
         assert t.captured_anc_byte_count == 0
 
+    def test_transferred_frame(self):
+        t = Transfer()
+        assert isinstance(t.transferred_frame, int)
+
 
 class TestStatusProperties:
     """Status is not user-constructable, but we verify the class exists

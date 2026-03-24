@@ -119,7 +119,7 @@ void init_card(nb::module_& m) {
                 msg += ")";
                 throw std::runtime_error(msg);
             }
-        }, nb::arg("channel"), nb::arg("transfer"))
+        }, nb::arg("channel"), nb::arg("transfer"), nb::call_guard<nb::gil_scoped_release>())
 
         .def("get_every_frame_services", [](CNTV2Card& self) {
             NTV2EveryFrameTaskMode mode;
@@ -133,7 +133,10 @@ void init_card(nb::module_& m) {
         // ── VBI ──────────────────────────────────────────────────────
         .def("wait_for_input_vertical_interrupt", [](CNTV2Card& self, NTV2Channel channel, UWord repeat_count) {
             check(self.WaitForInputVerticalInterrupt(channel, repeat_count), "Card.wait_for_input_vertical_interrupt");
-        }, nb::arg("channel") = NTV2_CHANNEL1, nb::arg("repeat_count") = 1)
+        }, nb::arg("channel") = NTV2_CHANNEL1, nb::arg("repeat_count") = 1, nb::call_guard<nb::gil_scoped_release>())
+        .def("wait_for_output_vertical_interrupt", [](CNTV2Card& self, NTV2Channel channel, UWord repeat_count) {
+            check(self.WaitForOutputVerticalInterrupt(channel, repeat_count), "Card.wait_for_output_vertical_interrupt");
+        }, nb::arg("channel") = NTV2_CHANNEL1, nb::arg("repeat_count") = 1, nb::call_guard<nb::gil_scoped_release>())
 
         // ── DMA Buffer Lock ──────────────────────────────────────────
         .def("dma_buffer_lock", [](CNTV2Card& self, nb::ndarray<> buffer) {
