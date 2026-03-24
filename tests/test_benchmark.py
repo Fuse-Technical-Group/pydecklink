@@ -142,6 +142,7 @@ def _probe_4k60_dma() -> bool:
                 for buf in locked_bufs:
                     card.dma_buffer_unlock(buf)
                 card.clear_routing()
+                card.release_stream_for_application(_APP_SIG, os.getpid())
     except RuntimeError:
         return False
 
