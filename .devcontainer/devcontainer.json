@@ -40,6 +40,11 @@
     "VIRTUAL_ENV": "${containerWorkspaceFolder}/.venv-dev"
   },
 
+  // Ensure the named volume for .claude is writable by the dev user.
+  // Podman creates named volumes owned by root; the bind-mounted files
+  // on top work fine, but Claude needs to create subdirs (plans/, session-env/).
+  "postCreateCommand": "sudo chown dev:dev /home/dev/.claude",
+
   "remoteUser": "dev",
   "customizations": {
     "vscode": {
