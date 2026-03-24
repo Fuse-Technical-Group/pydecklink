@@ -10,9 +10,8 @@ out to CLI tools or write C++. This blocks adoption in Python-centric
 video pipelines (ML inference, QC, monitoring, live production tooling).
 
 pyntv2 exposes the AutoCirculate API — AJA's high-performance
-frame-accurate capture/playout engine — as a Python module. It supports
-both CPU buffers (numpy) and NVIDIA GPU buffers (CuPy/PyTorch) for
-RDMA-enabled zero-copy streaming.
+frame-accurate capture/playout engine — as a Python module. It uses
+CPU buffers (numpy) for DMA transfers.
 
 ## 2. Development Environment
 
@@ -43,7 +42,8 @@ avoid `LD_LIBRARY_PATH` and work with `setcap` file capabilities.
 - The container runs as a non-root user via `--userns=keep-id`. The
   host's AJA device node (`/dev/ajantv20`) is passed through via
   `--device`.
-- GPU passthrough (NVIDIA Container Toolkit) is deferred to Phase 2.
+- GPU passthrough (NVIDIA Container Toolkit) is not needed — see §4
+  for why GPU RDMA is infeasible with this hardware.
 
 ### Container device access
 
@@ -74,15 +74,13 @@ pybind11).
 
 ### Why nanobind
 
-- `nb::ndarray<>` dispatches on device tags (`nb::device::cpu`,
-  `nb::device::cuda`). One C++ binding handles both CPU and GPU
-  buffers; the device determines whether `DMABufferLock` uses RDMA.
+- `nb::ndarray<>` provides a uniform buffer interface for numpy,
+  CuPy, and PyTorch arrays without manual buffer-protocol handling.
 - 2.7–4.4× faster compile times than pybind11. The NTV2 SDK has
   hundreds of enums; compile time compounds.
 - ~3–10× lower call overhead. AutoCirculate runs at frame rate
   (≤16.7 ms at 60 fps); dispatch cost matters.
 - Built-in `.pyi` stub generation via `nanobind_add_stub()`.
-- Production-proven for GPU bindings (JAX, Apple MLX, XLA).
 
 ### Build system
 
@@ -97,29 +95,49 @@ pybind11).
 
 *Status: complete*
 
-pyntv2 accepts any array-like object that implements the buffer protocol
-or DLPack. nanobind's `nb::ndarray<>` inspects the device at dispatch
-time.
+pyntv2 uses CPU buffers (numpy) for all DMA transfers. The binding
+accepts any `nb::ndarray<>`-compatible object, but only CPU-resident
+buffers produce correct DMA transfers.
 
-| Buffer source | Device tag | DMABufferLock | Platform |
-|---|---|---|---|
-| numpy array | `nb::device::cpu` | `rdma=false` | Linux, macOS, Windows |
-| CuPy array | `nb::device::cuda` | `rdma=true` | Linux only |
-| PyTorch CPU tensor | `nb::device::cpu` | `rdma=false` | Linux, macOS, Windows |
-| PyTorch CUDA tensor | `nb::device::cuda` | `rdma=true` | Linux only |
+| Buffer source | DMABufferLock | Platform |
+|---|---|---|
+| numpy array | `rdma=false` | Linux, macOS, Windows |
+| PyTorch CPU tensor | `rdma=false` | Linux, macOS, Windows |
 
-### Why this design
+### 32-bit DMA constraint
 
-The AJA kernel driver's RDMA path calls NVIDIA's `nvidia_p2p_*` APIs
-directly. No user-space GPU interop is needed — the driver pins GPU
-pages and builds scatter-gather lists internally. From the wrapper's
-perspective, the only difference between CPU and GPU is the `rdma` flag
-on `DMABufferLock`.
+The AJA NTV2 DMA engine is 32-bit addressable. The kernel driver
+sets `DMA_BIT_MASK(32)` during probe (`ntv2driver.c`); some firmware
+revisions upgrade to 64-bit, but the cards in use here do not.
 
-The driver's RDMA interface is pluggable (`struct ntv2_page_fops`), but
-only NVIDIA callbacks exist today. If AMD ROCm support lands in the AJA
-driver, `nb::ndarray<nb::device::rocm>` tensors would work without
-wrapper changes.
+On x86_64 systems, physical memory above 4 GB is not directly
+addressable by the DMA engine. The kernel's SWIOTLB bounce-buffer
+layer translates high-address pages into the 32-bit range
+transparently. This works for CPU buffers allocated via
+`get_user_pages`.
+
+`iommu=pt` (IOMMU passthrough) must be disabled. In passthrough
+mode the kernel bypasses SWIOTLB, and DMA to high-address pages
+fails silently or returns errors. Use `iommu=soft` or remove
+`iommu=pt` from kernel parameters.
+
+### Why GPU RDMA is not feasible
+
+The AJA driver's RDMA path (`ntv2rdma.c`) calls NVIDIA's
+`nvidia_p2p_get_pages()` to pin GPU memory and obtain physical
+addresses for scatter-gather DMA. These addresses correspond to GPU
+BAR windows, which modern systems map above 4 GB. The
+`nvidia_p2p_*` API provides no mechanism to constrain returned
+addresses below 4 GB.
+
+The 32-bit DMA engine cannot address GPU BAR memory. SWIOTLB does
+not intercede for `nvidia_p2p_*` mappings — those bypass the kernel
+DMA allocator entirely. The result is truncated addresses and DMA
+failures.
+
+This is a hardware limitation of the DMA engine, not a software
+issue. GPU frames must pass through CPU memory (capture → CPU →
+GPU copy, or GPU → CPU copy → playout).
 
 ## 5. Python API (Phase 1)
 
@@ -204,8 +222,8 @@ sets the video buffer via `set_video_buffer()`, and reuses it across
 frames. This maps 1:1 to the C++ usage pattern.
 
 `set_video_buffer` accepts any `nb::ndarray<>`-compatible object
-(numpy, CuPy, PyTorch). It extracts the raw pointer and byte size
-from the array.
+(numpy, PyTorch CPU tensors). It extracts the raw pointer and byte
+size from the array. Only CPU-resident buffers are supported (see §4).
 
 After a capture transfer, `captured_audio_byte_count` and
 `captured_anc_byte_count` properties report transfer metadata.
@@ -213,8 +231,9 @@ After a capture transfer, `captured_audio_byte_count` and
 ### 5.6 Buffer Locking
 
 `dma_buffer_lock(buffer)` and `dma_buffer_unlock(buffer)` pre-lock
-buffer pages for DMA. The device tag on the array determines whether
-RDMA is used. Optional but recommended for sustained streaming —
+buffer pages for DMA. Buffers must be page-aligned (4096 bytes);
+use `mmap.mmap(-1, size)` + `numpy.frombuffer()` instead of
+`numpy.zeros()`. Optional but recommended for sustained streaming —
 avoids per-frame page pinning overhead.
 
 ### 5.7 Frame Sync
@@ -277,13 +296,14 @@ Bound from NTV2 C++ enums via `nb::enum_<>`:
 *Status: not started*
 
 The system supports an ML inference passthrough pipeline: capture a
-live SDI/HDMI signal on one channel, process frames on GPU (or CPU),
-and play out the result on another channel at the same format.
+live SDI/HDMI signal on one channel, process frames on CPU, and play
+out the result on another channel at the same format.
 
 The input video format is auto-detected from the signal. The output
 channel is configured to match. Both channels use the same pixel
-format. Frames transfer directly between the AJA card and GPU memory
-via RDMA, bypassing system memory entirely.
+format. Frames transfer between the AJA card and CPU memory via DMA.
+GPU processing requires an explicit CPU↔GPU copy step (see §4 for
+why direct GPU RDMA is infeasible).
 
 ## 7. Integration Testing
 
@@ -304,28 +324,19 @@ checkerboard (0xAA/0x55). Each catches a different class of
 corruption (stuck bits, byte swaps, stride misalignment, adjacent-bit
 crosstalk).
 
-Two variants exercise the same path with different buffer types:
-
-- **CPU loopback**: numpy buffers, `rdma=false`.
-- **GPU loopback**: CuPy buffers, `rdma=true`. Requires NVIDIA GPU +
-  AJA card on the same PCIe bridge.
+Exercises the CPU DMA path with numpy buffers.
 
 ### 7.2 Passthrough (frame-rate transfer)
 
-Capture on CH4, DMA to host/GPU memory, DMA back out on CH3.
+Capture on CH4, DMA to CPU memory, DMA back out on CH3.
 Exercises the sustained AutoCirculate pump: init → start → transfer
 loop → stop. The loopback cable feeds CH3's output back to CH4's
 input, creating a closed loop.
 
 Verification: run for N frames, assert zero dropped frames and
 stable buffer levels. Data integrity is already covered by 7.1;
-this test validates timing and flow control.
-
-Two variants:
-
-- **CPU passthrough**: numpy buffer, single-buffer round-trip.
-- **GPU passthrough**: CuPy buffer, RDMA both directions. Validates
-  that frames never touch system memory.
+this test validates timing and flow control. Uses numpy buffers
+with a single-buffer round-trip.
 
 ### 7.3 DMA Throughput Benchmark
 
@@ -353,8 +364,9 @@ exists to produce timing data for capacity planning.
 
 *Status: not started*
 
-The primary use case is GPU RDMA streaming (Section 6). A secondary
-use case is CPU-buffer playout of static test patterns for display
+The primary use case is the CPU DMA passthrough pipeline (Section 6).
+A secondary use case is CPU-buffer playout of static test patterns for
+display
 measurement, integrating with
 [OLE-Toolset](https://github.com/OpenLEDEval/OLE-Toolset) via
 [bmd-signal-gen](https://github.com/OpenLEDEval/bmd-signal-gen).
@@ -375,17 +387,16 @@ implement it without changes.
 
 ### Why this is secondary
 
-GPU RDMA streaming operates at frame rate with locked buffers and
-sustained AutoCirculate. Test pattern output sends one frame and
-holds — no continuous transfer loop, no GPU memory, no latency
-constraints. The API surface overlaps but the performance envelope
-is different.
+The passthrough pipeline operates at frame rate with locked buffers
+and sustained AutoCirculate. Test pattern output sends one frame and
+holds — no continuous transfer loop, no latency constraints. The API
+surface overlaps but the performance envelope is different.
 
 ## 9. Explicit Non-Goals (Phase 1)
 
-- **AMD GPU RDMA.** No AJA driver support exists. The architecture
-  doesn't block it if support arrives.
-- **Apple-specific features.** CPU path works on macOS. No RDMA.
+- **GPU RDMA.** The 32-bit DMA engine cannot address GPU BAR memory
+  (see §4). GPU frames require explicit CPU↔GPU copies.
+- **Apple-specific features.** CPU path works on macOS.
 - **Audio capture/playout.** `AudioSystem` param exists but audio
   buffer transfer is deferred.
 - **Ancillary data.** SDI ancillary data (closed captions, timecode

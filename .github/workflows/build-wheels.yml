@@ -1,8 +1,11 @@
 name: build-wheels
 
 on:
-  release:
-    types: [published]
+  workflow_call:
+    inputs:
+      tag_name:
+        required: true
+        type: string
   workflow_dispatch:
 
 permissions:
@@ -94,7 +97,7 @@ jobs:
           path: dist/*.whl
 
       - name: Upload wheel to release
-        if: github.event_name == 'release'
+        if: inputs.tag_name != ''
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ github.event.release.tag_name }}" dist/*.whl --clobber
+        run: gh release upload "${{ inputs.tag_name }}" dist/*.whl --clobber
