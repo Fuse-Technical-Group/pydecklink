@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.7](https://github.com/Fuse-Technical-Group/pyntv2/compare/v0.1.6...v0.1.7) (2026-03-24)
+
+
+### Fixed
+
+* **docs:** merge adjacent blockquotes to fix MD028 ([73479f6](https://github.com/Fuse-Technical-Group/pyntv2/commit/73479f6e83376505f6d799daf684718e47ce0a4d))
+* **docs:** merge adjacent blockquotes to fix MD028 lint violation ([bf70117](https://github.com/Fuse-Technical-Group/pyntv2/commit/bf70117352389e630342c4de7853a8503b36b239))
+
 ## [0.1.6](https://github.com/Fuse-Technical-Group/pyntv2/compare/v0.1.5...v0.1.6) (2026-03-24)
 
 
