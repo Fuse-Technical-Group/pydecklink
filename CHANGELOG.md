@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.3](https://github.com/Fuse-Technical-Group/pyntv2/compare/v0.1.2...v0.1.3) (2026-03-24)
+
+
+### Fixed
+
+* document 32-bit DMA constraint, remove GPU RDMA, fix buffer lock test ([1148853](https://github.com/Fuse-Technical-Group/pyntv2/commit/11488539a9dcf0c3e2400f1d4b35a444f6bc65c2))
+* **test:** use page-aligned buffer in DMA buffer lock test ([bf271a1](https://github.com/Fuse-Technical-Group/pyntv2/commit/bf271a118a750c3f60f17a9827db79fe0554781e))
+
 ## [0.1.2](https://github.com/Fuse-Technical-Group/pyntv2/compare/v0.1.1...v0.1.2) (2026-03-24)
 
 
