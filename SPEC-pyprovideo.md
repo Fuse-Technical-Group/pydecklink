@@ -30,14 +30,14 @@ frame rate, without unnecessary memory copies.
 
 ### Mono-repo with independent packages
 
-```
-pyprovideo-project/
+```text
+pyntv2/                  # existing repo — renamed after migration
   packages/
-    pyprovideo/        # vendor-neutral protocols + device discovery
-    pyntv2/            # AJA NTV2 backend (nanobind, existing)
-    pydecklink/        # Blackmagic DeckLink backend (nanobind, new)
-    pydeltacast/       # Deltacast VideoMaster backend (future)
-  pyproject.toml       # uv workspace root
+    pyprovideo/          # vendor-neutral protocols + device discovery
+    pyntv2/              # AJA NTV2 backend (nanobind, existing)
+    pydecklink/          # Blackmagic DeckLink backend (nanobind, new)
+    pydeltacast/         # Deltacast VideoMaster backend (future)
+  pyproject.toml         # uv workspace root
 ```
 
 Each package publishes independently to PyPI. `pyprovideo` has no
@@ -54,10 +54,10 @@ pyntv2`) makes it available to pyprovideo via entry-point discovery.
 
 ### Why separate packages (not one fat package)
 
-- Each backend links a different vendor SDK. Building one package
-  would require all SDKs present at build time.
-- Users install only the vendor they have hardware for. A Blackmagic
-  user has no reason to pull in libajantv2.
+- Install-time independence. Users install only the vendor they have
+  hardware for. A Blackmagic user has no reason to pull in libajantv2.
+- Per-package versioning. A pydecklink bugfix ships without rebuilding
+  pyntv2.
 
 ### Testing model
 
@@ -66,6 +66,19 @@ pure-Python unit tests, and wheel builds. All hardware integration
 tests run locally on a dev machine with the relevant capture cards
 installed. The dev machine currently has an AJA card; a Blackmagic
 card will be added for cross-vendor testing.
+
+### Migration from pyntv2 repo
+
+The existing pyntv2 repository becomes the mono-repo root. Existing
+code moves to `packages/pyntv2/`. New packages are added alongside.
+The repo is renamed after pyntv2 is stable in its new location.
+
+pydecklink is extracted from bmd-signal-gen. The DeckLink hardware
+interface (`cpp/`, `bmd_sg/decklink/`) is copied into
+`packages/pydecklink/` and rewritten with nanobind. Signal
+generation code stays in the bmd-signal-gen repo and becomes a
+pyprovideo consumer. Git history for the original DeckLink wrapper
+lives in the bmd-signal-gen repo.
 
 ## 3. Device Discovery
 
@@ -134,11 +147,14 @@ applications program against them.
 ### OutputStream
 
 ```python
+FrameBuffer = Union[numpy.ndarray, "cupy.ndarray", "torch.Tensor", Any]
+# Any object supporting the buffer protocol or DLPack.
+
 class OutputStream(Protocol):
     def configure(self, fmt: VideoFormat, pix: PixelFormat) -> None: ...
     def start(self) -> None: ...
     def stop(self) -> None: ...
-    def submit_frame(self, frame: numpy.ndarray) -> None: ...
+    def submit_frame(self, frame: FrameBuffer) -> None: ...
     def status(self) -> StreamStatus: ...
 ```
 
@@ -154,13 +170,26 @@ class InputStream(Protocol):
     def configure(self, fmt: VideoFormat, pix: PixelFormat) -> None: ...
     def start(self) -> None: ...
     def stop(self) -> None: ...
-    def acquire_frame(self, buffer: numpy.ndarray) -> FrameMetadata: ...
+    def acquire_frame(
+        self, buffer: FrameBuffer, timeout: float | None = None,
+    ) -> FrameMetadata: ...
     def detected_format(self) -> VideoFormat | None: ...
     def status(self) -> StreamStatus: ...
 ```
 
 `acquire_frame` writes into a caller-supplied buffer. The buffer
 may be CPU or GPU memory. The backend handles DMA targeting.
+
+`timeout` is seconds. `None` blocks until the next frame. On
+timeout, raises `TimeoutError`. Each backend translates to its
+native wait mechanism — AJA polls `has_available_input_frame` per
+VBI; Blackmagic pops from an internal callback queue.
+
+`FrameMetadata` includes a `signal_present: bool` field. On signal
+loss, AJA returns no frames (timeout); Blackmagic delivers frames
+with `bmdFrameHasNoInputSource` (signal_present=False, frame data
+invalid). Callers check `signal_present` rather than branching on
+vendor.
 
 ### StreamStatus
 
@@ -173,6 +202,24 @@ class StreamStatus:
     dropped_frame_count: int
     buffer_level: int
 ```
+
+### Stream state machine
+
+Both `InputStream` and `OutputStream` enforce the same external
+state contract. Each backend owns its internal init/teardown
+sequence but must map to these transitions:
+
+```text
+IDLE ──configure()──▶ CONFIGURED ──start()──▶ RUNNING ──stop()──▶ CONFIGURED
+                         ▲                                           │
+                         └───────────────configure()─────────────────┘
+```
+
+- `start()` from IDLE raises `RuntimeError`.
+- `configure()` while RUNNING raises `RuntimeError` (must stop first).
+- `stop()` from IDLE or CONFIGURED is a no-op.
+- `close()` (context manager exit) calls `stop()` then releases
+  hardware resources. The stream is not reusable after close.
 
 ### Stream acquisition
 
@@ -218,21 +265,29 @@ Round-tripping is lossless for formats the backend supports.
 
 ### PixelFormat
 
-A constrained enum of formats that all backends must support:
+The enum defines a baseline that all backends must support, plus
+optional formats that backends may advertise.
 
 ```python
 class PixelFormat(Enum):
+    # Baseline — every backend must support these four.
     YCBCR_8   = auto()
     YCBCR_10  = auto()
     RGB_8     = auto()
     RGB_10    = auto()
+
+    # Optional — backends advertise support via
+    # Device.supported_pixel_formats().
     RGB_12    = auto()
     RGBA_8    = auto()
     RGBA_10   = auto()
 ```
 
-Backends may support additional native formats via their own API.
-The pyprovideo enum covers the common subset.
+`Device.supported_pixel_formats()` returns the set of `PixelFormat`
+values the device handles natively. The baseline four are always
+present. Callers targeting cross-vendor compatibility should stick
+to the baseline. Backends that receive an unsupported format raise
+`ValueError`.
 
 ### HDRMetadata
 
@@ -268,7 +323,7 @@ don't silently ignore it.
 The target pipeline — AJA capture to GPU, process, Blackmagic
 output — involves an asymmetric DMA path:
 
-```
+```text
 AJA card ──RDMA──▶ GPU memory ──process──▶ GPU memory
                                               │
                                          cudaMemcpy
@@ -282,10 +337,12 @@ AJA card ──RDMA──▶ GPU memory ──process──▶ GPU memory
 ```
 
 The GPU→host copy on the output side is unavoidable given current
-Blackmagic SDK constraints. pyprovideo handles this transparently:
+Blackmagic SDK constraints. Each backend handles this internally:
 when `submit_frame` receives a GPU buffer and the backend lacks
-RDMA, it copies to a pinned host staging buffer before DMA. The
-caller does not branch on vendor.
+RDMA, the backend copies to a pinned host staging buffer before
+DMA. pyprovideo remains pure Python — GPU interop logic (including
+`cudaMemcpy`) lives in the vendor package that needs it. The caller
+does not branch on vendor.
 
 ### Buffer lifecycle
 
@@ -383,39 +440,7 @@ card = device.native  # pyntv2.Card instance
 card.apply_signal_route(custom_routes)
 ```
 
-## 9. Migration Plan
-
-*Status: not started*
-
-### Repo structure
-
-The pyntv2 repository becomes the mono-repo root. Existing code
-moves to `packages/pyntv2/`. New packages are added alongside it.
-
-### bmd-signal-gen decomposition
-
-bmd-signal-gen contains two concerns:
-
-1. **DeckLink hardware interface** — `cpp/`, `bmd_sg/decklink/`.
-   This becomes `pydecklink`.
-2. **Signal generation** — `bmd_sg/image_generators/`,
-   `bmd_sg/charts/`, `bmd_sg/cli/`, `bmd_sg/api/`. This stays
-   in the bmd-signal-gen repo (or a new `signal-gen` repo) and
-   becomes a pure library that depends on `pyprovideo` for output.
-
-The DeckLink wrapper code is copied into `packages/pydecklink/`
-and rewritten with nanobind. Git history for the original code
-lives in the bmd-signal-gen repo.
-
-### What signal-gen becomes
-
-A hardware-independent library. Pattern generation, chart rendering,
-color science, HDR metadata assembly — all producing numpy arrays.
-Output goes through `pyprovideo.OutputStream.submit_frame()`. The
-CLI and API server use pyprovideo for device selection. No `ctypes`,
-no `libdecklink.dylib`, no vendor imports.
-
-## 10. Explicit Non-Goals
+## 9. Explicit Non-Goals
 
 *Status: not started*
 

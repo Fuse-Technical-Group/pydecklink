@@ -99,24 +99,10 @@ Depends on: backend shims, pyntv2 GPU RDMA (existing Phase 2 work).
   CuPy buffer → identity transform → Blackmagic output. Verify
   zero dropped frames over N seconds.
 
-## signal-gen refactor
-
-Refactor bmd-signal-gen to use pyprovideo for device output.
-Separate concern — lives in the bmd-signal-gen / signal-gen repo,
-not in this mono-repo.
-
-Depends on: backend shims.
-
-- **strip-decklink-dep**: Replace direct `BMDDeckLink` usage in
-  CLI commands and API server with `pyprovideo.enumerate_devices()`
-  + `OutputStream.submit_frame()`. Remove `bmd_sg/decklink/`
-  directory.
-- **vendor-neutral-cli**: CLI device selection flag accepts vendor
-  and index (e.g., `--device aja:0`, `--device blackmagic:0`).
-  Default: first available device.
-
 ## Future
 
+- **signal-gen-refactor**: Refactor bmd-signal-gen to use pyprovideo
+  for device output. Lives in the bmd-signal-gen repo, not here.
 - **pydeltacast**: Deltacast VideoMaster backend. Wrap `VHD_*`
   flat C API with nanobind. Board/stream/slot → Device/Stream/Frame.
   Blocked — requires Deltacast hardware and SDK access.
