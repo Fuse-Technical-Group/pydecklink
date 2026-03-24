@@ -42,9 +42,14 @@ RUN mkdir -p -m 755 /etc/apt/keyrings \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends gh \
     && rm -rf /var/lib/apt/lists/*
 
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends sudo \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN userdel -r ubuntu 2>/dev/null; \
     groupadd --gid 1000 dev || true \
-    && useradd --uid 1000 --gid 1000 --create-home --shell /bin/bash dev
+    && useradd --uid 1000 --gid 1000 --create-home --shell /bin/bash dev \
+    && echo "dev ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/dev
 
 # Unlimited memlock — the NTV2 driver pins user-space pages via
 # get_user_pages for DMA transfers.  --ulimit=memlock=-1:-1 in
