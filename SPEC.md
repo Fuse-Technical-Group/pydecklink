@@ -394,7 +394,7 @@ surface overlaps but the performance envelope is different.
 
 ## 9. Reliability Engineering
 
-*Status: not started*
+*Status: complete*
 
 The codebase has no static analysis, no Python linting, and CI does
 not run the existing unit tests. Buffer validation in the C++ layer

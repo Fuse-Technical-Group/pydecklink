@@ -5,6 +5,19 @@
 #include <nanobind/stl/map.h>
 #include <nanobind/stl/string.h>
 
+/// Query AutoCirculate state for a channel and format it into an error string.
+static std::string ac_state_msg(CNTV2Card& card, NTV2Channel ch, const char* method) {
+    AUTOCIRCULATE_STATUS st;
+    std::string msg = std::string(method) + " failed (ch=";
+    msg += std::to_string(ch);
+    if (card.AutoCirculateGetStatus(ch, st)) {
+        msg += " acState=";
+        msg += std::to_string(st.acState);
+    }
+    msg += ")";
+    return msg;
+}
+
 void init_card(nb::module_& m) {
     nb::class_<CNTV2Card>(m, "Card")
         .def(nb::init<>())
@@ -48,22 +61,32 @@ void init_card(nb::module_& m) {
             return self.GetInputVideoFormat(source, is_progressive);
         }, nb::arg("source"), nb::arg("is_progressive") = false)
         .def("set_video_format", [](CNTV2Card& self, NTV2VideoFormat format, NTV2Channel channel) {
-            check(self.SetVideoFormat(format, false, false, channel), "Card.set_video_format");
+            check(self.SetVideoFormat(format, false, false, channel),
+                  "Card.set_video_format(format=" + std::to_string(format) +
+                  " ch=" + std::to_string(channel) + ")");
         }, nb::arg("format"), nb::arg("channel") = NTV2_CHANNEL1)
         .def("set_frame_buffer_format", [](CNTV2Card& self, NTV2Channel channel, NTV2FrameBufferFormat pixel_format) {
-            check(self.SetFrameBufferFormat(channel, pixel_format), "Card.set_frame_buffer_format");
+            check(self.SetFrameBufferFormat(channel, pixel_format),
+                  "Card.set_frame_buffer_format(ch=" + std::to_string(channel) +
+                  " pf=" + std::to_string(pixel_format) + ")");
         }, nb::arg("channel"), nb::arg("pixel_format"))
         .def("enable_channel", [](CNTV2Card& self, NTV2Channel channel) {
-            check(self.EnableChannel(channel), "Card.enable_channel");
+            check(self.EnableChannel(channel),
+                  "Card.enable_channel(ch=" + std::to_string(channel) + ")");
         }, nb::arg("channel"))
         .def("set_mode", [](CNTV2Card& self, NTV2Channel channel, NTV2Mode mode) {
-            check(self.SetMode(channel, mode), "Card.set_mode");
+            check(self.SetMode(channel, mode),
+                  "Card.set_mode(ch=" + std::to_string(channel) +
+                  " mode=" + std::to_string(mode) + ")");
         }, nb::arg("channel"), nb::arg("mode"))
         .def("set_sdi_transmit_enable", [](CNTV2Card& self, NTV2Channel channel, bool enable) {
-            check(self.SetSDITransmitEnable(channel, enable), "Card.set_sdi_transmit_enable");
+            check(self.SetSDITransmitEnable(channel, enable),
+                  "Card.set_sdi_transmit_enable(ch=" + std::to_string(channel) +
+                  " enable=" + std::to_string(enable) + ")");
         }, nb::arg("channel"), nb::arg("enable"))
         .def("set_reference", [](CNTV2Card& self, NTV2ReferenceSource source) {
-            check(self.SetReference(source), "Card.set_reference");
+            check(self.SetReference(source),
+                  "Card.set_reference(source=" + std::to_string(source) + ")");
         }, nb::arg("source"))
 
         // ── Signal Routing ───────────────────────────────────────────
@@ -84,22 +107,27 @@ void init_card(nb::module_& m) {
         .def("autocirculate_init_for_input", [](CNTV2Card& self, NTV2Channel channel, UWord frame_count, NTV2AudioSystem audio_system, ULWord option_flags) {
             if (frame_count < 3)
                 throw std::invalid_argument("frame_count must be >= 3 (HasAvailableInputFrame requires buffer_level > 1)");
-            check(self.AutoCirculateInitForInput(channel, frame_count, audio_system, option_flags), "Card.autocirculate_init_for_input");
+            bool ok = self.AutoCirculateInitForInput(channel, frame_count, audio_system, option_flags);
+            if (!ok) throw std::runtime_error(ac_state_msg(self, channel, "Card.autocirculate_init_for_input"));
         }, nb::arg("channel"), nb::arg("frame_count") = 7, nb::arg("audio_system") = NTV2_AUDIOSYSTEM_INVALID, nb::arg("option_flags") = 0)
         .def("autocirculate_init_for_output", [](CNTV2Card& self, NTV2Channel channel, UWord frame_count, NTV2AudioSystem audio_system, ULWord option_flags) {
             if (frame_count < 3)
                 throw std::invalid_argument("frame_count must be >= 3 (CanAcceptMoreOutputFrames requires (frame_count - buffer_level) > 1)");
-            check(self.AutoCirculateInitForOutput(channel, frame_count, audio_system, option_flags), "Card.autocirculate_init_for_output");
+            bool ok = self.AutoCirculateInitForOutput(channel, frame_count, audio_system, option_flags);
+            if (!ok) throw std::runtime_error(ac_state_msg(self, channel, "Card.autocirculate_init_for_output"));
         }, nb::arg("channel"), nb::arg("frame_count") = 7, nb::arg("audio_system") = NTV2_AUDIOSYSTEM_INVALID, nb::arg("option_flags") = 0)
         .def("autocirculate_start", [](CNTV2Card& self, NTV2Channel channel) {
-            check(self.AutoCirculateStart(channel), "Card.autocirculate_start");
+            bool ok = self.AutoCirculateStart(channel);
+            if (!ok) throw std::runtime_error(ac_state_msg(self, channel, "Card.autocirculate_start"));
         }, nb::arg("channel"))
         .def("autocirculate_stop", [](CNTV2Card& self, NTV2Channel channel, bool abort) {
-            check(self.AutoCirculateStop(channel, abort), "Card.autocirculate_stop");
+            bool ok = self.AutoCirculateStop(channel, abort);
+            if (!ok) throw std::runtime_error(ac_state_msg(self, channel, "Card.autocirculate_stop"));
         }, nb::arg("channel"), nb::arg("abort") = false)
         .def("autocirculate_get_status", [](CNTV2Card& self, NTV2Channel channel) {
             AUTOCIRCULATE_STATUS status;
-            check(self.AutoCirculateGetStatus(channel, status), "Card.autocirculate_get_status");
+            check(self.AutoCirculateGetStatus(channel, status),
+                  "Card.autocirculate_get_status(ch=" + std::to_string(channel) + ")");
             return status;
         }, nb::arg("channel"))
         .def("autocirculate_transfer", [](CNTV2Card& self, NTV2Channel channel, AUTOCIRCULATE_TRANSFER& transfer) {
@@ -129,34 +157,41 @@ void init_card(nb::module_& m) {
         .def("get_every_frame_services", [](CNTV2Card& self) {
             NTV2EveryFrameTaskMode mode;
             check(self.GetEveryFrameServices(mode), "Card.get_every_frame_services");
-            return static_cast<int>(mode);
+            return mode;
         })
-        .def("set_every_frame_services", [](CNTV2Card& self, int mode) {
-            check(self.SetEveryFrameServices(static_cast<NTV2EveryFrameTaskMode>(mode)), "Card.set_every_frame_services");
+        .def("set_every_frame_services", [](CNTV2Card& self, NTV2EveryFrameTaskMode mode) {
+            check(self.SetEveryFrameServices(mode),
+                  "Card.set_every_frame_services(mode=" + std::to_string(mode) + ")");
         }, nb::arg("mode"))
 
         // ── VBI ──────────────────────────────────────────────────────
         .def("wait_for_input_vertical_interrupt", [](CNTV2Card& self, NTV2Channel channel, UWord repeat_count) {
-            check(self.WaitForInputVerticalInterrupt(channel, repeat_count), "Card.wait_for_input_vertical_interrupt");
+            check(self.WaitForInputVerticalInterrupt(channel, repeat_count),
+                  "Card.wait_for_input_vertical_interrupt(ch=" + std::to_string(channel) + ")");
         }, nb::arg("channel") = NTV2_CHANNEL1, nb::arg("repeat_count") = 1, nb::call_guard<nb::gil_scoped_release>())
         .def("wait_for_output_vertical_interrupt", [](CNTV2Card& self, NTV2Channel channel, UWord repeat_count) {
-            check(self.WaitForOutputVerticalInterrupt(channel, repeat_count), "Card.wait_for_output_vertical_interrupt");
+            check(self.WaitForOutputVerticalInterrupt(channel, repeat_count),
+                  "Card.wait_for_output_vertical_interrupt(ch=" + std::to_string(channel) + ")");
         }, nb::arg("channel") = NTV2_CHANNEL1, nb::arg("repeat_count") = 1, nb::call_guard<nb::gil_scoped_release>())
 
         // ── Direct DMA ───────────────────────────────────────────────
         .def("dma_read_frame", [](CNTV2Card& self, ULWord frame_number, nb::ndarray<> buffer, NTV2Channel channel) {
+            check_contiguous(buffer);
             check(self.DMAReadFrame(frame_number,
                                     reinterpret_cast<ULWord*>(buffer.data()),
                                     static_cast<ULWord>(buffer.nbytes()),
                                     channel),
-                  "Card.dma_read_frame");
+                  "Card.dma_read_frame(frame=" + std::to_string(frame_number) +
+                  " ch=" + std::to_string(channel) + ")");
         }, nb::arg("frame_number"), nb::arg("buffer"), nb::arg("channel"), nb::call_guard<nb::gil_scoped_release>())
         .def("dma_write_frame", [](CNTV2Card& self, ULWord frame_number, nb::ndarray<> buffer, NTV2Channel channel) {
+            check_contiguous(buffer);
             check(self.DMAWriteFrame(frame_number,
                                      reinterpret_cast<const ULWord*>(buffer.data()),
                                      static_cast<ULWord>(buffer.nbytes()),
                                      channel),
-                  "Card.dma_write_frame");
+                  "Card.dma_write_frame(frame=" + std::to_string(frame_number) +
+                  " ch=" + std::to_string(channel) + ")");
         }, nb::arg("frame_number"), nb::arg("buffer"), nb::arg("channel"), nb::call_guard<nb::gil_scoped_release>())
 
         // ── DMA Buffer Lock ──────────────────────────────────────────

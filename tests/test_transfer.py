@@ -29,6 +29,32 @@ class TestTransferConstruction:
         assert isinstance(t.transferred_frame, int)
 
 
+class TestBufferValidation:
+    """Verify set_video_buffer rejects non-contiguous buffers."""
+
+    def test_non_contiguous_slice_raises(self):
+        arr = np.zeros((10, 10), dtype=np.uint8)
+        sliced = arr[:, ::2]  # non-contiguous
+        assert not sliced.flags["C_CONTIGUOUS"]
+        t = Transfer()
+        with pytest.raises(ValueError, match="C-contiguous"):
+            t.set_video_buffer(sliced)
+
+    def test_transposed_raises(self):
+        arr = np.zeros((4, 8), dtype=np.uint8)
+        transposed = arr.T  # Fortran-contiguous, not C-contiguous
+        assert not transposed.flags["C_CONTIGUOUS"]
+        t = Transfer()
+        with pytest.raises(ValueError, match="C-contiguous"):
+            t.set_video_buffer(transposed)
+
+    def test_contiguous_copy_succeeds(self):
+        arr = np.zeros((10, 10), dtype=np.uint8)
+        sliced = np.ascontiguousarray(arr[:, ::2])
+        t = Transfer()
+        t.set_video_buffer(sliced)  # should not raise
+
+
 class TestStatusProperties:
     """Status is not user-constructable, but we verify the class exists
     and has the expected property descriptors."""

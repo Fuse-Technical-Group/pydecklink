@@ -6,6 +6,18 @@ on:
   pull_request:
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Ruff lint
+        run: uv tool run ruff check src/ tests/
+
+      - name: Ruff format
+        run: uv tool run ruff format --check src/ tests/
+
   compile:
     runs-on: ubuntu-latest
     steps:
@@ -39,12 +51,21 @@ jobs:
           uv sync
           uv run python -c "import pyntv2; print('import OK')"
 
+      - name: Mypy
+        run: uv run mypy
+
+      - name: Unit tests
+        run: uv run pytest -x --tb=short
+
   build:
     if: always()
-    needs: [compile]
+    needs: [lint, compile]
     runs-on: ubuntu-latest
     steps:
       - run: |
+          if [[ "${{ needs.lint.result }}" != "success" ]]; then
+            exit 1
+          fi
           if [[ "${{ needs.compile.result }}" != "success" ]]; then
             exit 1
           fi
