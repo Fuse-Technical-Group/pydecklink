@@ -18,6 +18,7 @@ void init_transfer(nb::module_& m) {
     nb::class_<AUTOCIRCULATE_TRANSFER>(m, "Transfer")
         .def(nb::init<>())
         .def("set_video_buffer", [](AUTOCIRCULATE_TRANSFER& self, nb::ndarray<> buffer) {
+            check_contiguous(buffer);
             self.SetVideoBuffer(reinterpret_cast<ULWord*>(buffer.data()), static_cast<ULWord>(buffer.nbytes()));
         }, nb::arg("buffer"))
         .def_prop_ro("captured_audio_byte_count", &AUTOCIRCULATE_TRANSFER::GetCapturedAudioByteCount)

@@ -145,6 +145,7 @@ void init_card(nb::module_& m) {
 
         // ── Direct DMA ───────────────────────────────────────────────
         .def("dma_read_frame", [](CNTV2Card& self, ULWord frame_number, nb::ndarray<> buffer, NTV2Channel channel) {
+            check_contiguous(buffer);
             check(self.DMAReadFrame(frame_number,
                                     reinterpret_cast<ULWord*>(buffer.data()),
                                     static_cast<ULWord>(buffer.nbytes()),
@@ -152,6 +153,7 @@ void init_card(nb::module_& m) {
                   "Card.dma_read_frame");
         }, nb::arg("frame_number"), nb::arg("buffer"), nb::arg("channel"), nb::call_guard<nb::gil_scoped_release>())
         .def("dma_write_frame", [](CNTV2Card& self, ULWord frame_number, nb::ndarray<> buffer, NTV2Channel channel) {
+            check_contiguous(buffer);
             check(self.DMAWriteFrame(frame_number,
                                      reinterpret_cast<const ULWord*>(buffer.data()),
                                      static_cast<ULWord>(buffer.nbytes()),
