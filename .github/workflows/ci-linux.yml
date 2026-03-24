@@ -6,7 +6,7 @@ on:
   pull_request:
 
 jobs:
-  build:
+  compile:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -38,3 +38,13 @@ jobs:
         run: |
           uv sync
           uv run python -c "import pyntv2; print('import OK')"
+
+  build:
+    if: always()
+    needs: [compile]
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          if [[ "${{ needs.compile.result }}" != "success" ]]; then
+            exit 1
+          fi
