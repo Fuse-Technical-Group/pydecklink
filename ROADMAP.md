@@ -20,7 +20,9 @@ Derived from [SPEC.md](SPEC.md). Sections are in build-dependency order.
   `ValueError` in `route_capture()` and `route_playout()`. (§9.5)
 - **rich-check-errors**: Extend `check()` in `bind_common.h` to accept
   formatted strings with argument values. Update callers that take enum
-  arguments. (§9.6)
+  arguments. Add state-query-on-failure to AutoCirculate transition
+  methods (`start`, `stop`, `init_for_input`, `init_for_output`) so
+  errors report the channel's current `acState`. (§9.6)
 - **expand-unit-tests**: Add tests for `get_frame_bytes`, exhaustive
   channel coverage on routing tables, routing negative paths,
   `frame_count < 3` validation, buffer validation negative paths, and
@@ -28,6 +30,9 @@ Derived from [SPEC.md](SPEC.md). Sections are in build-dependency order.
   routing-input-validation. (§9.7)
 - **define-public-all**: Add `__all__` to `__init__.py` listing every
   public name. (§9.8)
+- **retire-scripts**: Delete `test_capture_minimal.cpp`,
+  `CMakeLists.txt`, and `probe_capture_dma.py` from `scripts/`.
+  Simplify `scripts/.gitignore`. Keep `reset_card.sh`. (§9.9)
 
 ## Phase 2 (Future)
 
