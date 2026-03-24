@@ -70,6 +70,10 @@ class TestCardMethodsExist:
         assert callable(card.dma_buffer_lock)
         assert callable(card.dma_buffer_unlock)
 
+    def test_identity_properties(self, card):
+        assert hasattr(card, "device_id")
+        assert hasattr(card, "display_name")
+
 
 class TestCardTypeErrors:
     """Verify wrong enum types raise TypeError."""
