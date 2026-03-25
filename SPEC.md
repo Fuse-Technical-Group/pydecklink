@@ -268,7 +268,7 @@ Module-level helpers (derived from display mode properties):
 
 ## 6. Target Workflow
 
-*Status: not started*
+*Status: complete*
 
 Same goal as pyntv2: an ML inference passthrough pipeline. Capture a
 live SDI signal, process frames on CPU, play out the result — all
@@ -280,7 +280,7 @@ processing requires explicit CPU↔GPU copies (see §4).
 
 ## 7. Integration Testing
 
-*Status: not started*
+*Status: complete*
 
 Integration tests require DeckLink hardware. Tests run locally with
 `pytest -m hardware`.
