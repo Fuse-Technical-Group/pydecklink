@@ -94,7 +94,7 @@ frame pool avoids per-frame allocation. Together these reduce the
 per-frame CPU overhead to ~4.7ms at 4K 59.94 10-bit YUV, leaving
 ~10ms for processing.
 
-### Custom buffer allocators (Phase 2 infrastructure)
+### Custom buffer allocators
 
 The SDK v15.3 provides `IDeckLinkVideoBufferAllocator` and
 `IDeckLinkVideoBufferAllocatorProvider` to control how DMA buffers
@@ -103,9 +103,65 @@ and `VideoBufferAllocatorProvider`, backed by `ManagedBuffer`
 (an `IDeckLinkVideoBuffer` implementation).
 
 By default, allocators use malloc/free. Users can supply custom
-allocation functions (e.g. CUDA `cudaHostAlloc`) at construction
-time. The allocator provider caches allocators by buffer size so
-the SDK reuses them across format changes.
+Python callables for alloc/free at construction time. The allocator
+provider caches allocators by buffer size so the SDK reuses them
+across format changes.
+
+### CUDA pinned memory integration
+
+CUDA pinned memory (`cudaHostAlloc`) produces page-locked system
+RAM mapped into both CPU and GPU address spaces. Any PCIe device
+— including DeckLink — can DMA to it. CUDA has no awareness of
+third-party DMA; coherency is the application's responsibility.
+
+#### SDK buffer lifecycle
+
+The DeckLink SDK owns buffer lifecycle through COM ref counting.
+When capture is active, the SDK:
+
+1. Calls `AllocateVideoBuffer` to get a buffer.
+2. DMAs frame data into it.
+3. Wraps it in an `IDeckLinkVideoInputFrame` and delivers via
+   callback.
+4. Releases the buffer when the frame is no longer needed.
+
+The SDK may call alloc/free many times per second. With malloc
+this is cheap. With `cudaHostAlloc`/`cudaFreeHost` it is not —
+these are kernel operations (~1ms each) involving page table
+manipulation and `mlock`. Per-frame pinning causes hangs.
+
+#### Buffer recycling requirement
+
+The allocator must pool buffers: allocate pinned memory once at
+init, recycle on SDK Release (ref count → 0), free at shutdown.
+`ManagedBuffer::Release` must return the buffer to the allocator's
+free pool instead of calling the free function. The SDK calls
+`AllocateVideoBuffer` again for the next frame and receives a
+recycled buffer.
+
+#### Alternative: cudaHostRegister
+
+Instead of providing CUDA-allocated buffers to the SDK, let the
+SDK allocate with its default allocator (malloc), then call
+`cudaHostRegister` once per buffer to pin it for fast GPU access.
+Avoids the custom allocator entirely but requires registering
+buffers as they're first seen in the capture callback.
+
+#### Synchronization contract
+
+- Do not `cudaMemcpyAsync` from a buffer while DeckLink is
+  writing to it. Wait for the frame callback.
+- Do not let DeckLink reuse a buffer while `cudaMemcpyAsync`
+  is reading from it. Hold the `CaptureFrameRef` until the
+  CUDA stream completes.
+- Triple-buffer: DeckLink writes buffer N, GPU copies buffer
+  N-1, GPU processes buffer N-2.
+
+#### cudaHostAlloc flags
+
+`cudaHostAllocWriteCombined` avoids CPU cache pollution for
+frames that only the GPU reads. Use `cudaHostAllocDefault` if
+the CPU also needs to inspect frame data (metadata, overlay).
 
 **Capture path**: `enable_video_input_with_allocator()` calls
 `IDeckLinkInput::EnableVideoInputWithAllocatorProvider`, directing
