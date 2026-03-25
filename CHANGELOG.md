@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.1.13](https://github.com/Fuse-Technical-Group/pyntv2/compare/v0.1.12...v0.1.13) (2026-03-25)
+
+
+### Added
+
+* **pydecklink:** add output frame pool and capture timing instrumentation ([fa22c46](https://github.com/Fuse-Technical-Group/pyntv2/commit/fa22c46b32f698d85b6d1fb085963e3ce337e94b))
+* **pydecklink:** zero-copy capture, profile management, passthrough ([b502003](https://github.com/Fuse-Technical-Group/pyntv2/commit/b502003dc0dbfe07a3c21a49aaa80de4f8cf1861))
+
+
+### Fixed
+
+* **devcontainer:** add ldconfig for Desktop Video libs ([bc287ac](https://github.com/Fuse-Technical-Group/pyntv2/commit/bc287ac2c90448aa11ae2d58e07aad4304bc0bc6))
+
 ## [0.1.12](https://github.com/Fuse-Technical-Group/pyntv2/compare/v0.1.11...v0.1.12) (2026-03-25)
 
 
