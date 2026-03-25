@@ -92,8 +92,32 @@ frame transfers. A zero-copy path (`CaptureFrameRef`) avoids memcpy
 by holding the SDK's DMA buffer by reference. A pre-allocated output
 frame pool avoids per-frame allocation. Together these reduce the
 per-frame CPU overhead to ~4.7ms at 4K 59.94 10-bit YUV, leaving
-~10ms for processing. GPU DMA via `IDeckLinkMemoryAllocator` with
-CUDA pinned memory is a Phase 2 goal.
+~10ms for processing.
+
+### Custom buffer allocators (Phase 2 infrastructure)
+
+The SDK v15.3 provides `IDeckLinkVideoBufferAllocator` and
+`IDeckLinkVideoBufferAllocatorProvider` to control how DMA buffers
+are allocated. The binding exposes these as `VideoBufferAllocator`
+and `VideoBufferAllocatorProvider`, backed by `ManagedBuffer`
+(an `IDeckLinkVideoBuffer` implementation).
+
+By default, allocators use malloc/free. Users can supply custom
+allocation functions (e.g. CUDA `cudaHostAlloc`) at construction
+time. The allocator provider caches allocators by buffer size so
+the SDK reuses them across format changes.
+
+**Capture path**: `enable_video_input_with_allocator()` calls
+`IDeckLinkInput::EnableVideoInputWithAllocatorProvider`, directing
+the DeckLink DMA engine to write into user-allocated buffers.
+
+**Output path**: `create_frame_pool_pinned()` creates frames via
+`IDeckLinkOutput::CreateVideoFrameWithBuffer`, each backed by a
+`ManagedBuffer` from the allocator. These frames enter the existing
+output pool and are recycled via `ScheduledFrameCompleted`.
+
+This infrastructure is allocator-agnostic. CUDA pinned memory
+is a configuration choice, not a code change.
 
 ### Why C++ callback queues
 
@@ -367,11 +391,34 @@ pydecklink can output directly via `display_frame_sync`.
 The integration path is the same as pyntv2's §8: a narrow
 `FrameOutput` protocol in signal-gen that either backend can satisfy.
 
+### 5.10 Custom Buffer Allocators
+
+Wraps `IDeckLinkVideoBufferAllocator`, `IDeckLinkVideoBufferAllocatorProvider`,
+and `IDeckLinkVideoBuffer` for user-controlled DMA buffer allocation.
+
+- `VideoBufferAllocator(size)` — allocator producing buffers of
+  `size` bytes. Uses malloc/free by default.
+- `VideoBufferAllocator.allocate() → ManagedBuffer`
+- `VideoBufferAllocator.size → int`
+- `VideoBufferAllocator.allocated_count → int`
+- `VideoBufferAllocatorProvider()` — creates allocators on demand,
+  caching by buffer size.
+- `VideoBufferAllocatorProvider.get_allocator(buffer_size, width,
+  height, row_bytes, pixel_format) → VideoBufferAllocator`
+- `ManagedBuffer.data → numpy.ndarray` — writeable uint8 view.
+- `ManagedBuffer.size → int`
+- `device.enable_video_input_with_allocator(mode, pixel_format,
+  flags, allocator_provider, zero_copy=True)` — capture with
+  custom-allocated DMA buffers.
+- `device.create_frame_pool_pinned(count, width, height, row_bytes,
+  pixel_format, allocator)` — output pool backed by
+  allocator-managed buffers via `CreateVideoFrameWithBuffer`.
+
 ## 9. Explicit Non-Goals (Phase 1)
 
-- **GPU RDMA (Phase 1).** Phase 1 uses CPU memory. The zero-copy
-  frame pool is designed to support `IDeckLinkMemoryAllocator` with
-  CUDA pinned memory in Phase 2.
+- **GPU RDMA (Phase 1).** Phase 1 uses CPU memory. The allocator
+  infrastructure supports CUDA pinned memory; wiring `cudaHostAlloc`
+  as the allocation function is a Phase 2 configuration step.
 - **Audio.** Deferred. The SDK supports audio scheduling; the binding
   does not expose it yet.
 - **Ancillary data.** Timecode, closed captions — deferred.

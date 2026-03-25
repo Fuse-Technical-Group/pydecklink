@@ -1,0 +1,141 @@
+#include "bind_allocator.h"
+#include "allocator.h"
+#include "bind_device.h"
+#include "bind_input.h"
+#include "bind_output.h"
+#include "DeckLinkAPI.h"
+#include <nanobind/nanobind.h>
+#include <nanobind/ndarray.h>
+#include <nanobind/stl/optional.h>
+#include <stdexcept>
+#include <string>
+
+namespace nb = nanobind;
+
+void init_decklink_allocator(nb::module_& m, nb::class_<Device>& device) {
+
+    // -- ManagedBuffer --
+    nb::class_<ManagedBuffer>(m, "ManagedBuffer")
+        .def_prop_ro("size", &ManagedBuffer::size,
+                     "Buffer size in bytes.")
+        .def_prop_ro("data", [](nb::handle self) {
+            auto& buf = nb::cast<ManagedBuffer&>(self);
+            void* ptr = buf.data();
+            if (!ptr)
+                throw std::runtime_error("Buffer has no data");
+            size_t n = buf.size();
+            return nb::ndarray<nb::numpy, uint8_t, nb::ndim<1>>(
+                ptr, {n}, self);
+        }, "Writeable numpy uint8 view of the buffer.")
+        .def("__repr__", [](const ManagedBuffer& self) {
+            return "ManagedBuffer(size=" + std::to_string(self.size()) + ")";
+        });
+
+    // -- VideoBufferAllocator --
+    nb::class_<VideoBufferAllocator>(m, "VideoBufferAllocator")
+        .def(nb::init<size_t>(), nb::arg("size"),
+             "Create a buffer allocator for the given buffer size. "
+             "Uses malloc/free by default.")
+        .def_prop_ro("size", &VideoBufferAllocator::buffer_size,
+                     "Buffer size that this allocator produces.")
+        .def_prop_ro("allocated_count", &VideoBufferAllocator::allocated_count,
+                     "Number of buffers allocated so far.")
+        .def("allocate", &VideoBufferAllocator::allocate_managed,
+             nb::rv_policy::take_ownership,
+             "Allocate a new ManagedBuffer.")
+        .def("__repr__", [](const VideoBufferAllocator& self) {
+            return "VideoBufferAllocator(size=" +
+                   std::to_string(self.buffer_size()) + ", allocated=" +
+                   std::to_string(self.allocated_count()) + ")";
+        });
+
+    // -- VideoBufferAllocatorProvider --
+    nb::class_<VideoBufferAllocatorProvider>(m, "VideoBufferAllocatorProvider")
+        .def(nb::init<>(),
+             "Create a buffer allocator provider. "
+             "Returns allocators on demand, caching by buffer size.")
+        .def("get_allocator",
+             [](VideoBufferAllocatorProvider& self,
+                uint32_t buffer_size, uint32_t width, uint32_t height,
+                uint32_t row_bytes, _BMDPixelFormat pixel_format) {
+                 return self.get_allocator_py(
+                     buffer_size, width, height, row_bytes,
+                     static_cast<BMDPixelFormat>(pixel_format));
+             },
+             nb::rv_policy::reference,
+             nb::arg("buffer_size"), nb::arg("width"), nb::arg("height"),
+             nb::arg("row_bytes"), nb::arg("pixel_format"),
+             "Get or create a VideoBufferAllocator for the given parameters.")
+        .def("__repr__", [](const VideoBufferAllocatorProvider&) {
+            return "VideoBufferAllocatorProvider()";
+        });
+
+    // -- Device: enable_video_input_with_allocator --
+    device.def("enable_video_input_with_allocator",
+        [](Device& self, _BMDDisplayMode mode, _BMDPixelFormat pixel_format,
+           _BMDVideoInputFlags flags, VideoBufferAllocatorProvider& provider,
+           bool zero_copy) {
+            IDeckLinkInput* input = nullptr;
+            if (self.dl->QueryInterface(IID_IDeckLinkInput, (void**)&input) != S_OK)
+                throw std::runtime_error("Device does not support input");
+            HRESULT hr = input->EnableVideoInputWithAllocatorProvider(
+                mode, pixel_format, flags, &provider);
+            if (hr != S_OK) {
+                input->Release();
+                throw std::runtime_error(
+                    "EnableVideoInputWithAllocatorProvider failed (HRESULT " +
+                    std::to_string(hr) + ")");
+            }
+            self.input_ = ComPtr<IDeckLinkInput>(input);
+            self.input_callback_ = new InputCallback(input, 8, zero_copy);
+            self.input_callback_->set_current_format(mode, pixel_format, flags);
+            bool format_detection = (flags & bmdVideoInputEnableFormatDetection) != 0;
+            self.input_callback_->set_format_detection(format_detection);
+            input->SetCallback(self.input_callback_);
+        },
+        nb::arg("mode"), nb::arg("pixel_format"),
+        nb::arg("flags"), nb::arg("allocator_provider"),
+        nb::arg("zero_copy") = true,
+        "Enable video input using a custom buffer allocator provider. "
+        "The SDK will call the provider to obtain allocators for DMA buffers, "
+        "enabling GPU-pinned memory for zero-copy capture.");
+
+    // -- Device: create_frame_pool_pinned --
+    device.def("create_frame_pool_pinned",
+        [](Device& self, int count, int32_t width, int32_t height,
+           int32_t row_bytes, _BMDPixelFormat pixel_format,
+           VideoBufferAllocator& allocator) {
+            if (!self.output_)
+                throw std::runtime_error("Video output not enabled");
+            if (!self.output_callback_)
+                throw std::runtime_error("No output callback");
+
+            // Allocate frames using CreateVideoFrameWithBuffer with
+            // ManagedBuffer backing stores from the allocator.
+            for (int i = 0; i < count; ++i) {
+                ManagedBuffer* buf = allocator.allocate_managed();
+                IDeckLinkMutableVideoFrame* raw = nullptr;
+                HRESULT hr = self.output_->CreateVideoFrameWithBuffer(
+                    width, height, row_bytes, pixel_format,
+                    bmdFrameFlagDefault,
+                    static_cast<IDeckLinkVideoBuffer*>(buf),
+                    &raw);
+                if (hr != S_OK || !raw) {
+                    buf->Release();
+                    throw std::runtime_error(
+                        "CreateVideoFrameWithBuffer failed for pool frame " +
+                        std::to_string(i) + " (HRESULT " + std::to_string(hr) + ")");
+                }
+                // The OutputCallback pool takes ownership.
+                self.output_callback_->add_pinned_frame(raw);
+                // buf is held alive by the frame (the SDK retains the
+                // IDeckLinkVideoBuffer reference).
+            }
+        },
+        nb::arg("count"), nb::arg("width"), nb::arg("height"),
+        nb::arg("row_bytes"), nb::arg("pixel_format"),
+        nb::arg("allocator"),
+        "Create a frame pool backed by pinned (allocator-managed) buffers. "
+        "Each frame uses CreateVideoFrameWithBuffer. "
+        "For GPU DMA, pass an allocator using CUDA pinned memory.");
+}

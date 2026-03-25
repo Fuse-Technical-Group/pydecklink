@@ -1,5 +1,18 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+* **allocator:** custom video buffer allocator infrastructure for GPU DMA
+* **allocator:** VideoBufferAllocator, VideoBufferAllocatorProvider, ManagedBuffer
+* **device:** enable_video_input_with_allocator() for custom DMA buffers
+* **device:** create_frame_pool_pinned() for allocator-backed output frames
+
+### Changed
+
+* **build:** move OutputCallback and InputCallback to headers for cross-module access
+
 ## [0.1.15](https://github.com/Fuse-Technical-Group/pyntv2/compare/v0.1.14...v0.1.15) (2026-03-25)
 
 
