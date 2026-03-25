@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.16](https://github.com/Fuse-Technical-Group/pyntv2/compare/v0.1.15...v0.1.16) (2026-03-25)
+
+
+### Added
+
+* **allocator:** add custom video buffer allocator for GPU DMA ([b73f935](https://github.com/Fuse-Technical-Group/pyntv2/commit/b73f935024b74556680e3973ff649c9d4953d51b))
+* **allocator:** custom video buffer allocator for GPU DMA ([ed5a00b](https://github.com/Fuse-Technical-Group/pyntv2/commit/ed5a00b13e8933677b37f0e9b562bcb684d3efec))
+
 ## [Unreleased]
 
 ### Added
