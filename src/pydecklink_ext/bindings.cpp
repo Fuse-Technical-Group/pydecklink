@@ -8,6 +8,7 @@ namespace nb = nanobind;
 #include "bind_format.h"
 #include "bind_output.h"
 #include "bind_input.h"
+#include "bind_allocator.h"
 #endif
 
 NB_MODULE(_bindings, m) {
@@ -19,6 +20,7 @@ NB_MODULE(_bindings, m) {
     init_decklink_format(m);
     init_decklink_output(m, device_cls);
     init_decklink_input(m, device_cls);
+    init_decklink_allocator(m, device_cls);
 #else
     m.attr("HAS_SDK") = false;
 #endif

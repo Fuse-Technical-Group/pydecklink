@@ -24,6 +24,7 @@ if(EXISTS "${DECKLINK_SDK_DIR}/DeckLinkAPIDispatch.cpp")
     src/pydecklink_ext/bind_format.cpp
     src/pydecklink_ext/bind_output.cpp
     src/pydecklink_ext/bind_input.cpp
+    src/pydecklink_ext/bind_allocator.cpp
   )
   set(HAVE_DECKLINK_SDK TRUE)
 else()
