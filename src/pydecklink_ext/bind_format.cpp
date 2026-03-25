@@ -199,4 +199,9 @@ void init_decklink_format(nb::module_& m) {
         return row_bytes * info.height;
     }, nb::arg("mode"), nb::arg("pixel_format"),
        "Return the total frame byte count for a display mode and pixel format.");
+
+    m.def("get_row_bytes", [](_BMDPixelFormat pf, long width) -> long {
+        return compute_row_bytes(width, pf);
+    }, nb::arg("pixel_format"), nb::arg("width"),
+       "Return the row byte count for a pixel format and width.");
 }
