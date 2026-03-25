@@ -26,12 +26,12 @@
       "userGid": "automatic"
     },
     "ghcr.io/devcontainers/features/github-cli:1": {},
-    "ghcr.io/devcontainers/features/fish:1": {}
+    "ghcr.io/meaningful-ooo/devcontainer-features/fish:2": {}
   },
 
   "mounts": [
     // Bind-mount libDeckLinkAPI.so from host (installed via Desktop Video)
-    "source=/usr/lib/libDeckLinkAPI.so,target=/usr/lib/libDeckLinkAPI.so,type=bind,readonly",
+    "source=/usr/lib64/libDeckLinkAPI.so,target=/usr/lib/libDeckLinkAPI.so,type=bind,readonly",
     // Named volume for container-local Claude state (history, cache, etc.)
     "source=claude-config-${devcontainerId},target=/home/ubuntu/.claude,type=volume",
     // Bind mount Claude auth and settings from host (read-only credentials, read-write settings)
