@@ -31,11 +31,13 @@
   },
 
   "mounts": [
-    // Bind-mount Desktop Video libraries and helpers from host
-    "source=/usr/lib64/libDeckLinkAPI.so,target=/usr/lib/libDeckLinkAPI.so,type=bind,readonly",
-    "source=/usr/lib64/libDeckLinkPreviewAPI.so,target=/usr/lib/libDeckLinkPreviewAPI.so,type=bind,readonly",
-    "source=/usr/lib64/blackmagic/DesktopVideo/DesktopVideoHelper,target=/usr/lib/blackmagic/DesktopVideo/DesktopVideoHelper,type=bind,readonly",
-    "source=/usr/lib64/blackmagic/DesktopVideo/DesktopVideoNotifier,target=/usr/lib/blackmagic/DesktopVideo/DesktopVideoNotifier,type=bind,readonly",
+    // Bind-mount Desktop Video SDK libs and private runtime from host.
+    // lib/ has libDeckLinkAPI.so (RUNPATH: $ORIGIN/blackmagic/DesktopVideo)
+    //   and symlinks at lib/blackmagic/DesktopVideo/ -> bin/ for RUNPATH resolution.
+    // bin/ has binaries + private libc++/libc++abi (RUNPATH: $ORIGIN).
+    // Both must be at host paths so the symlinks resolve.
+    "source=/var/lib/blackmagic/lib,target=/var/lib/blackmagic/lib,type=bind,readonly",
+    "source=/var/lib/blackmagic/bin,target=/var/lib/blackmagic/bin,type=bind,readonly",
     // Named volume for container-local Claude state (history, cache, etc.)
     "source=claude-config-${devcontainerId},target=/home/ubuntu/.claude,type=volume",
     // Bind mount Claude auth and settings from host (read-only credentials, read-write settings)
@@ -51,6 +53,9 @@
     // GitHub CLI auth (uses host login, read-only to avoid token conflicts)
     "source=${localEnv:HOME}/.config/gh,target=/home/ubuntu/.config/gh,type=bind,readonly"
   ],
+
+  // Rebuild ld.so cache so the linker finds bind-mounted Desktop Video libs.
+  "postCreateCommand": "sudo ldconfig",
 
   "remoteUser": "ubuntu",
   "customizations": {

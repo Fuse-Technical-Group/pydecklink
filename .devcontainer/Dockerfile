@@ -15,6 +15,11 @@ RUN apt-get update \
 RUN curl -LsSf https://astral.sh/uv/install.sh | UV_INSTALL_DIR=/usr/local/bin sh \
     && uv python install 3.13
 
+# Tell the linker where Desktop Video SDK libs live (bind-mounted from host).
+# The mount won't exist at build time, but ldconfig will re-run at container
+# start when the mount appears (or we can run it in postCreateCommand).
+RUN echo "/var/lib/blackmagic/lib" > /etc/ld.so.conf.d/blackmagic.conf
+
 # Pre-seed GitHub SSH host key so git-over-SSH works immediately
 # with the forwarded SSH agent (mounted via devcontainer.json).
 RUN mkdir -p /root/.ssh /home/ubuntu/.ssh \
