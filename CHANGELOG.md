@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.11](https://github.com/Fuse-Technical-Group/pyntv2/compare/v0.1.10...v0.1.11) (2026-03-25)
+
+
+### Added
+
+* add video output and capture input bindings ([e6a1192](https://github.com/Fuse-Technical-Group/pyntv2/commit/e6a1192a8ce9417860b9d70d4b84618ce9c34d3f))
+* **input:** add video capture bindings ([0ed736f](https://github.com/Fuse-Technical-Group/pyntv2/commit/0ed736f25730a2f6f4919c6bfcc97711ee3f71ff))
+* **output:** add synchronous and scheduled video output bindings ([e2fac75](https://github.com/Fuse-Technical-Group/pyntv2/commit/e2fac751d82c92b0685862a06bdda757af76bbb3))
+
 ## [0.1.10](https://github.com/Fuse-Technical-Group/pyntv2/compare/v0.1.9...v0.1.10) (2026-03-25)
 
 
