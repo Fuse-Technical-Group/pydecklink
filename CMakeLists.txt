@@ -10,7 +10,12 @@ set(DECKLINK_SDK_DIR "${CMAKE_SOURCE_DIR}/vendor/Blackmagic DeckLink SDK 15.3/Li
 set(_bindings_sources src/pydecklink_ext/bindings.cpp)
 
 if(EXISTS "${DECKLINK_SDK_DIR}/DeckLinkAPIDispatch.cpp")
-  list(APPEND _bindings_sources "${DECKLINK_SDK_DIR}/DeckLinkAPIDispatch.cpp")
+  list(APPEND _bindings_sources
+    "${DECKLINK_SDK_DIR}/DeckLinkAPIDispatch.cpp"
+    src/pydecklink_ext/bind_enums.cpp
+    src/pydecklink_ext/bind_device.cpp
+    src/pydecklink_ext/bind_format.cpp
+  )
   set(HAVE_DECKLINK_SDK TRUE)
 else()
   message(STATUS "DeckLink SDK not found — building without SDK dispatch")
@@ -18,8 +23,10 @@ else()
 endif()
 
 nanobind_add_module(_bindings STABLE_ABI ${_bindings_sources})
+target_include_directories(_bindings PRIVATE "${CMAKE_SOURCE_DIR}/src/pydecklink_ext")
 if(HAVE_DECKLINK_SDK)
   target_include_directories(_bindings PRIVATE "${DECKLINK_SDK_DIR}")
+  target_compile_definitions(_bindings PRIVATE HAVE_DECKLINK_SDK)
 endif()
 install(TARGETS _bindings LIBRARY DESTINATION pydecklink)
 
