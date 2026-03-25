@@ -1,6 +1,13 @@
 """Tests for pydecklink format metadata helpers."""
 
+import pytest
+
 import pydecklink
+
+pytestmark = pytest.mark.skipif(
+    not getattr(pydecklink, "HAS_SDK", False),
+    reason="Built without DeckLink SDK headers",
+)
 
 
 class TestGetModeWidth:
