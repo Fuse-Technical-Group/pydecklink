@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.1.9](https://github.com/Fuse-Technical-Group/pyntv2/compare/v0.1.8...v0.1.9) (2026-03-25)
+
+
+### Added
+
+* build foundation — pydecklink scaffold and devcontainer ([e2e5237](https://github.com/Fuse-Technical-Group/pyntv2/commit/e2e52379d561ff7ea275c6fb376ad98af5998502))
+* **build:** replace pyntv2 build config with pydecklink ([441f421](https://github.com/Fuse-Technical-Group/pyntv2/commit/441f421ad303c7321f0be17af9b5da96fa5692d4))
+
+
+### Fixed
+
+* **build:** remove unused noqa directive in pydecklink __init__ ([fa868bf](https://github.com/Fuse-Technical-Group/pyntv2/commit/fa868bf7637d0248979e0000e1c6afaf657d97c1))
+* **ci:** update ci-linux for pydecklink build ([c7851de](https://github.com/Fuse-Technical-Group/pyntv2/commit/c7851de74a5e7a0b3c363f9a34ebff22f75537c4))
+
 ## [0.1.8](https://github.com/Fuse-Technical-Group/pyntv2/compare/v0.1.7...v0.1.8) (2026-03-24)
 
 
