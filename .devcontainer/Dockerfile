@@ -32,41 +32,22 @@ RUN git clone --depth 1 --branch "${AJANTV2_TAG}" \
 RUN curl -LsSf https://astral.sh/uv/install.sh | UV_INSTALL_DIR=/usr/local/bin sh \
     && uv python install 3.13
 
-RUN mkdir -p -m 755 /etc/apt/keyrings \
-    && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
-       -o /etc/apt/keyrings/githubcli-archive-keyring.gpg \
-    && chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
-    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
-       > /etc/apt/sources.list.d/github-cli.list \
-    && apt-get update \
-    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends gh \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN apt-get update \
-    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends sudo \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN userdel -r ubuntu 2>/dev/null; \
-    groupadd --gid 1000 dev || true \
-    && useradd --uid 1000 --gid 1000 --create-home --shell /bin/bash dev \
-    && echo "dev ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/dev
-
 # Unlimited memlock — the NTV2 driver pins user-space pages via
 # get_user_pages for DMA transfers.  --ulimit=memlock=-1:-1 in
 # devcontainer.json is silently ignored by the devcontainer CLI,
-# so we set it here instead.  The dev user entry covers non-root
+# so we set it here instead.  The ubuntu user entry covers non-root
 # shells; root is unlimited by default.
-RUN echo "dev  -  memlock  unlimited" >> /etc/security/limits.conf
+RUN echo "ubuntu  -  memlock  unlimited" >> /etc/security/limits.conf
 
 # Pre-seed GitHub SSH host key so git-over-SSH works immediately
 # with the forwarded SSH agent (mounted via devcontainer.json).
-RUN mkdir -p /root/.ssh /home/dev/.ssh \
+RUN mkdir -p /root/.ssh /home/ubuntu/.ssh \
     && ssh-keyscan github.com >> /root/.ssh/known_hosts 2>/dev/null \
-    && cp /root/.ssh/known_hosts /home/dev/.ssh/known_hosts \
-    && chown -R 1000:1000 /home/dev/.ssh
+    && cp /root/.ssh/known_hosts /home/ubuntu/.ssh/known_hosts \
+    && chown -R 1000:1000 /home/ubuntu/.ssh
 
-# Install Claude Code for root (remoteUser) and dev (fallback).
+# Install Claude Code for root and ubuntu user.
 RUN curl -fsSL https://claude.ai/install.sh | bash
-USER dev
-ENV PATH="${PATH}:/home/dev/.local/bin"
+USER ubuntu
+ENV PATH="${PATH}:/home/ubuntu/.local/bin"
 RUN curl -fsSL https://claude.ai/install.sh | bash

@@ -46,6 +46,10 @@ avoid `LD_LIBRARY_PATH` and work with `setcap` file capabilities.
   host user. This allows a single `.venv` shared between host and
   container with no ownership conflicts. The host's AJA device
   node (`/dev/ajantv20`) is passed through via `--device`.
+- Common developer tools (sudo, GitHub CLI, fish shell) are installed
+  via devcontainer features, not manual Dockerfile steps. This keeps
+  the Dockerfile focused on project-specific build dependencies
+  (libajantv2, uv, Claude Code).
 - GPU passthrough (NVIDIA Container Toolkit) is not needed — see §4
   for why GPU RDMA is infeasible with this hardware.
 
