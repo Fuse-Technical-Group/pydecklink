@@ -2,10 +2,6 @@
 
 Derived from [SPEC.md](SPEC.md). Sections are in build-dependency order.
 
-## Enum and device layer
-
-Completed: bind-enums, bind-device.
-
 ## Output path
 
 Depends on bind-device.
@@ -54,10 +50,6 @@ Depends on bind-output-scheduled, bind-input.
   capture, compare buffers). Passthrough sustained streaming test
   (run N frames, assert zero drops). Signal detection test.
   Marked `pytest -m hardware`.
-
-## Format metadata helpers
-
-Completed: format-helpers.
 
 ## Future
 

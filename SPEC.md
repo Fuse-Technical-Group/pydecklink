@@ -127,7 +127,7 @@ The C++ callback implementations must:
 
 ## 5. Python API
 
-*Status: not started*
+*Status: in progress*
 
 ### 5.1 Device
 
