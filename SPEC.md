@@ -75,7 +75,7 @@ compiles but has no DeckLink functionality until the SDK is available.
 
 ## 4. Device Model
 
-*Status: not started*
+*Status: in progress*
 
 ### COM on Linux
 
