@@ -2,17 +2,6 @@
 
 Derived from [SPEC.md](SPEC.md). Sections are in build-dependency order.
 
-## Type stubs and API completeness
-
-- **type-stubs**: Generate `.pyi` stubs for `pydecklink._bindings`.
-  nanobind supports stub generation via `nanobind.stubgen`. Current
-  stubs are near-empty (`HAS_SDK: bool = False`), blocking downstream
-  type checking.
-- **get-frame-rate**: Expose `IDeckLinkDisplayMode::GetFrameRate` so
-  Python can get native `(duration, timescale)` per mode instead of
-  hardcoding `60000/1001`. Partially addressed by
-  `DisplayModeInfo.frame_rate` — standalone function remains.
-
 ## GPU DMA (Phase 2)
 
 - **custom-allocator**: Implement `IDeckLinkMemoryAllocator` that
