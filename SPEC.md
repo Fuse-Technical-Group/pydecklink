@@ -23,77 +23,55 @@ with nanobind, scheduled playback, capture input, and Linux support.
 
 ## 2. Development Environment
 
-*Status: in progress*
+*Status: complete*
 
-Development uses a VS Code devcontainer. The DeckLink SDK headers are
-vendored locally (not redistributed — Blackmagic's license prohibits
-it). The Desktop Video runtime (`libDeckLinkAPI.so`) is installed on
-the host and accessed from the container.
+VS Code devcontainer based on `ubuntu:24.04` with devcontainer
+features (cmake, ninja, uv). DeckLink SDK headers vendored locally
+(gitignored — Blackmagic's license prohibits redistribution).
 
 ### Why a devcontainer
 
 Pins the compiler, Python version, and build toolchain for
-reproducibility. The DeckLink SDK is header-only on Linux — no
-library to build from source. The runtime shared library
-(`libDeckLinkAPI.so`) is provided by the Desktop Video package
-installed on the host.
+reproducibility.
 
 ### SDK integration
 
-The DeckLink SDK consists of:
-
-- **Headers** (`DeckLinkAPI.h`, `LinuxCOM.h`, etc.) — vendored in
-  `vendor/` (gitignored). Copied from the SDK distribution at a
-  pinned version (currently 15.3).
+- **Headers** — vendored in `vendor/` at a pinned version (15.3).
+  Header-only on Linux.
 - **Dispatch source** (`DeckLinkAPIDispatch.cpp`) — compiled into the
   extension. Uses `dlopen` to load `libDeckLinkAPI.so` at runtime.
-- **Runtime library** (`libDeckLinkAPI.so`) — installed on the host
-  via the Desktop Video package. Not vendored or linked at build time.
-
-This means the extension has no link-time dependency on Blackmagic
-libraries. It loads the runtime via `dlopen` at import time. If
-Desktop Video is not installed, the module raises `RuntimeError` on
-first use.
+  CMake conditionally includes it when the vendor directory exists,
+  allowing CI to build without the SDK.
+- **Runtime library** (`libDeckLinkAPI.so`) — host-installed via
+  Desktop Video. No link-time dependency; `dlopen` at import time.
 
 ### Constraints
 
-- The vendored SDK header version should match the installed Desktop
-  Video version. Blackmagic maintains backward compatibility within
-  major versions.
-- The container runs as `ubuntu:1000` with `--userns=keep-id` (same
-  pattern as pyntv2). The host's DeckLink device nodes
-  (`/dev/blackmagic/*`) are passed through via `--device`.
-- `libDeckLinkAPI.so` must be accessible inside the container. Either
-  bind-mount from the host or install Desktop Video in the container.
-
-### Container device access
-
-The DeckLink driver creates device nodes under `/dev/blackmagic/`.
-Access requires read/write permission on the device node. The
-`--userns=keep-id` mapping preserves host permissions.
+- SDK header version should match installed Desktop Video version.
+- Container runs as `ubuntu:1000` with `--userns=keep-id`. Host
+  DeckLink device nodes (`/dev/blackmagic/*`) passed via `--device`.
+- `libDeckLinkAPI.so` bind-mounted from host into container.
 
 ## 3. Binding Technology
 
 *Status: complete*
 
-Same technology stack as pyntv2:
 [nanobind](https://github.com/wjakob/nanobind) with
 [scikit-build-core](https://github.com/scikit-build/scikit-build-core).
 
 ### Why nanobind
 
-- `nb::ndarray<>` for zero-copy numpy/PyTorch buffer integration.
-- Low call overhead — frame-rate callbacks need fast dispatch.
+- `nb::ndarray<>` for zero-copy numpy buffer integration.
+- Low call overhead for frame-rate callbacks.
 - Built-in `.pyi` stub generation.
-- Stable ABI support for cross-version binary compatibility.
+- Stable ABI (abi3) for cross-version binary compatibility.
 
 ### Build system
 
-- scikit-build-core drives Python packaging. Requires Python ≥3.12.
-- CMake finds the vendored SDK headers via `target_include_directories`.
-- `DeckLinkAPIDispatch.cpp` is compiled into the extension module
-  (no external library to link).
-- nanobind is fetched via `find_package(nanobind)`.
+scikit-build-core drives Python packaging (Python ≥3.12). CMake
+finds nanobind via `find_package`, conditionally includes vendored
+SDK sources when present. CI builds without the SDK; the extension
+compiles but has no DeckLink functionality until the SDK is available.
 
 ## 4. Device Model
 
