@@ -4,39 +4,11 @@ Derived from [SPEC.md](SPEC.md). Sections are in build-dependency order.
 
 ## Output path
 
-Depends on bind-device.
-
-- **bind-output-sync**: Synchronous output in `bind_output.cpp`.
-  `IDeckLinkOutput::EnableVideoOutput`, `DisableVideoOutput`,
-  `CreateVideoFrame`. Frame buffer access via
-  `IDeckLinkVideoBuffer` → numpy. `display_frame_sync(buffer)` —
-  creates frame, copies data, calls `DisplayVideoFrameSync`.
-  Configuration: `IDeckLinkConfiguration::SetFlag` for SDI 4:4:4
-  mode (must be set before `EnableVideoOutput`). Hardware test:
-  display a solid color frame, verify no errors.
-- **bind-output-scheduled**: Scheduled playback in `bind_output.cpp`.
-  `ScheduleVideoFrame`, `StartScheduledPlayback`,
-  `StopScheduledPlayback`. C++ `IDeckLinkVideoOutputCallback`
-  implementation tracking completion results (completed, late,
-  dropped, flushed). Preroll management respecting
-  `BMDDeckLinkMinimumPrerollFrames`. `OutputStatus` exposing
-  dropped/late counts. Hardware test: schedule N frames at frame
-  rate, verify zero dropped.
+Completed: bind-output-sync, bind-output-scheduled.
 
 ## Input path
 
-Depends on bind-device.
-
-- **bind-input**: Capture in `bind_input.cpp`. `IDeckLinkInput`:
-  `EnableVideoInput`, `DisableVideoInput`, `StartStreams`,
-  `StopStreams`. C++ `IDeckLinkInputCallback` implementation:
-  `VideoInputFrameArrived` copies frame data into bounded
-  thread-safe queue. `pop_capture_frame(timeout_ms)` returns
-  `CaptureFrame` (numpy data, dimensions, stream time, signal
-  flag). `VideoInputFormatChanged` handler: auto-reconfigure on
-  signal change when format detection is enabled. GIL released
-  during queue wait. Hardware test: capture frames from live
-  signal, verify timestamps, signal flag, data non-zero.
+Completed: bind-input.
 
 ## Integration
 
