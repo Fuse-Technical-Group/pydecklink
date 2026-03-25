@@ -4,21 +4,7 @@ Derived from [SPEC.md](SPEC.md). Sections are in build-dependency order.
 
 ## Enum and device layer
 
-- **bind-enums**: Bind core SDK enums in `bind_enums.cpp`.
-  `BMDDisplayMode` (SD through 8K), `BMDPixelFormat` (YUV/RGB
-  variants), `BMDVideoInputFlags`, `BMDVideoOutputFlags`,
-  `BMDFieldDominance`, `BMDFrameFlags`,
-  `BMDDetectedVideoInputFormatFlags`,
-  `BMDOutputFrameCompletionResult`, configuration and attribute IDs.
-  Unit tests: enum values exist, can compare, repr is readable.
-- **bind-device**: Device enumeration and properties in
-  `bind_device.cpp`. Wrap `IDeckLinkIterator` for discovery.
-  `Device` class with context manager, model/display name,
-  capability queries via `IDeckLinkProfileAttributes` (duplex mode,
-  I/O support, format detection, min preroll frames). Module-level
-  `device_count()` and `list_devices()`. Unit tests: construction,
-  type validation. Hardware tests: enumerate real devices, check
-  properties.
+Completed: bind-enums, bind-device.
 
 ## Output path
 
@@ -71,13 +57,7 @@ Depends on bind-output-scheduled, bind-input.
 
 ## Format metadata helpers
 
-Depends on bind-enums.
-
-- **format-helpers**: Module-level `get_frame_bytes(mode,
-  pixel_format)`, `get_mode_width(mode)`, `get_mode_height(mode)`,
-  `get_mode_fps(mode)`. Implemented by querying
-  `IDeckLinkDisplayMode` properties from the SDK's mode iterator.
-  Unit tests for known formats.
+Completed: format-helpers.
 
 ## Future
 

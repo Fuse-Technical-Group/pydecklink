@@ -74,7 +74,7 @@ Access requires read/write permission on the device node. The
 
 ## 3. Binding Technology
 
-*Status: in progress*
+*Status: complete*
 
 Same technology stack as pyntv2:
 [nanobind](https://github.com/wjakob/nanobind) with
@@ -97,7 +97,7 @@ Same technology stack as pyntv2:
 
 ## 4. Device Model
 
-*Status: not started*
+*Status: in progress*
 
 ### COM on Linux
 
