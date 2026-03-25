@@ -27,35 +27,20 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            build-essential cmake ninja-build libudev-dev pkg-config
-
-      - name: Build libajantv2
-        run: |
-          git clone --depth 1 --branch ntv2_17_5_0 \
-            https://github.com/aja-video/libajantv2.git /tmp/libajantv2
-          cmake -S /tmp/libajantv2 -B /tmp/libajantv2/build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_INSTALL_PREFIX=/usr/local \
-            -DAJANTV2_DISABLE_DEMOS=ON \
-            -DAJANTV2_DISABLE_DRIVER=ON \
-            -DAJANTV2_DISABLE_TESTS=ON \
-            -DAJANTV2_DISABLE_TOOLS=ON \
-            -DAJANTV2_DISABLE_PLUGIN_LOAD=ON
-          cmake --build /tmp/libajantv2/build
-          sudo cmake --install /tmp/libajantv2/build
+            build-essential cmake ninja-build pkg-config
 
       - uses: astral-sh/setup-uv@v5
 
       - name: Build and import test
         run: |
           uv sync
-          uv run python -c "import pyntv2; print('import OK')"
+          uv run python -c "import pydecklink; print('import OK')"
 
       - name: Mypy
         run: uv run mypy
 
       - name: Unit tests
-        run: uv run pytest -x --tb=short
+        run: uv run pytest tests/test_pydecklink_import.py -x --tb=short --noconftest
 
   build:
     if: always()

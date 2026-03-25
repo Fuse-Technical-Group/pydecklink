@@ -23,7 +23,7 @@ with nanobind, scheduled playback, capture input, and Linux support.
 
 ## 2. Development Environment
 
-*Status: not started*
+*Status: in progress*
 
 Development uses a VS Code devcontainer. The DeckLink SDK headers are
 vendored locally (not redistributed — Blackmagic's license prohibits
@@ -74,7 +74,7 @@ Access requires read/write permission on the device node. The
 
 ## 3. Binding Technology
 
-*Status: not started*
+*Status: in progress*
 
 Same technology stack as pyntv2:
 [nanobind](https://github.com/wjakob/nanobind) with
