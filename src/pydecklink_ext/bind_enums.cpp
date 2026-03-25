@@ -266,6 +266,26 @@ void init_decklink_enums(nb::module_& m) {
         .value("Simplex", bmdDuplexSimplex)
         .value("Inactive", bmdDuplexInactive);
 
+    // -- BMDSupportedVideoModeFlags --
+    nb::enum_<_BMDSupportedVideoModeFlags>(m, "SupportedVideoModeFlag")
+        .value("Default", bmdSupportedVideoModeDefault)
+        .value("Keying", bmdSupportedVideoModeKeying)
+        .value("DualStream3D", bmdSupportedVideoModeDualStream3D)
+        .value("SDISingleLink", bmdSupportedVideoModeSDISingleLink)
+        .value("SDIDualLink", bmdSupportedVideoModeSDIDualLink);
+
+    // -- BMDVideoOutputConversionMode --
+    nb::enum_<_BMDVideoOutputConversionMode>(m, "VideoOutputConversionMode")
+        .value("NoConversion", bmdNoVideoOutputConversion)
+        .value("LetterboxDownconversion", bmdVideoOutputLetterboxDownconversion)
+        .value("AnamorphicDownconversion", bmdVideoOutputAnamorphicDownconversion)
+        .value("HD720toHD1080", bmdVideoOutputHD720toHD1080Conversion)
+        .value("HardwareLetterboxDownconversion", bmdVideoOutputHardwareLetterboxDownconversion)
+        .value("HardwareAnamorphicDownconversion", bmdVideoOutputHardwareAnamorphicDownconversion)
+        .value("HardwareCenterCutDownconversion", bmdVideoOutputHardwareCenterCutDownconversion)
+        .value("Hardware720p1080pCrossconversion", bmdVideoOutputHardware720p1080pCrossconversion)
+        .value("HardwareAnamorphic720pUpconversion", bmdVideoOutputHardwareAnamorphic720pUpconversion);
+
     // -- BMDProfileID --
     nb::enum_<_BMDProfileID>(m, "ProfileID")
         .value("OneSubDeviceFullDuplex", bmdProfileOneSubDeviceFullDuplex)
