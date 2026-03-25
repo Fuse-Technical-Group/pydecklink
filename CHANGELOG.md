@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.17](https://github.com/Fuse-Technical-Group/pyntv2/compare/v0.1.16...v0.1.17) (2026-03-25)
+
+
+### Fixed
+
+* **examples:** reduce passthrough pre-roll from 60 to 3 frames ([717b664](https://github.com/Fuse-Technical-Group/pyntv2/commit/717b664c9b15d9a8885c9709627cebb3f3af8c73))
+* **examples:** reduce passthrough pre-roll from 60 to 3 frames ([e30ff2a](https://github.com/Fuse-Technical-Group/pyntv2/commit/e30ff2a625c0b1829af977f0551eb3956efd1233))
+
 ## [0.1.16](https://github.com/Fuse-Technical-Group/pyntv2/compare/v0.1.15...v0.1.16) (2026-03-25)
 
 
