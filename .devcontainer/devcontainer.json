@@ -4,14 +4,11 @@
     "context": ".."
   },
 
-  // AJA NTV2 device passthrough
+  // DeckLink device passthrough and host library access
   "runArgs": [
-    "--device=/dev/ajantv20",
+    "--device=/dev/blackmagic",
     "--userns=keep-id",
-    "--security-opt=label=disable",
-    "--ulimit", "memlock=-1",
-    "--ulimit", "stack=67108864",
-    "--shm-size", "1g"
+    "--security-opt=label=disable"
   ],
 
   "containerEnv": {
@@ -33,6 +30,8 @@
   },
 
   "mounts": [
+    // Bind-mount libDeckLinkAPI.so from host (installed via Desktop Video)
+    "source=/usr/lib/libDeckLinkAPI.so,target=/usr/lib/libDeckLinkAPI.so,type=bind,readonly",
     // Named volume for container-local Claude state (history, cache, etc.)
     "source=claude-config-${devcontainerId},target=/home/ubuntu/.claude,type=volume",
     // Bind mount Claude auth and settings from host (read-only credentials, read-write settings)
