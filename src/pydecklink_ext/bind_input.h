@@ -13,6 +13,7 @@ struct CaptureFrameRef {
     int64_t stream_time = 0;
     int64_t stream_duration = 0;
     int64_t hw_ref_timestamp = 0;
+    int64_t callback_arrived_us = 0;  // CLOCK_MONOTONIC_RAW, microseconds
 
     long width() const { return frame ? frame->GetWidth() : 0; }
     long height() const { return frame ? frame->GetHeight() : 0; }
