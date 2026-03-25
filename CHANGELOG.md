@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.15](https://github.com/Fuse-Technical-Group/pyntv2/compare/v0.1.14...v0.1.15) (2026-03-25)
+
+
+### Added
+
+* **device:** add display mode query and validation methods ([adef7c3](https://github.com/Fuse-Technical-Group/pyntv2/commit/adef7c32da2050e4d8c360686fd0154ce7bdac6e))
+* **device:** add display mode query methods ([d1c6ee8](https://github.com/Fuse-Technical-Group/pyntv2/commit/d1c6ee8aad44eb721f39a9972d8178e471521734))
+* **device:** add display mode query methods ([d8ec255](https://github.com/Fuse-Technical-Group/pyntv2/commit/d8ec2552d12a778a27dedb75d7a9c16cce412476))
+* **format:** add get_mode_frame_duration for native frame rate ([6afd424](https://github.com/Fuse-Technical-Group/pyntv2/commit/6afd4240f1be11861667acd18648f358847bbe7d))
+* **format:** add get_mode_frame_duration for native frame rate access ([225ec95](https://github.com/Fuse-Technical-Group/pyntv2/commit/225ec955e20a0982c6beaec0756a52178b163b87))
+* **stubs:** generate .pyi type stubs for pydecklink._bindings ([132c1c7](https://github.com/Fuse-Technical-Group/pyntv2/commit/132c1c7bee6a7e060727646c6715e0a5480ba478))
+
 ## [0.1.14](https://github.com/Fuse-Technical-Group/pyntv2/compare/v0.1.13...v0.1.14) (2026-03-25)
 
 
