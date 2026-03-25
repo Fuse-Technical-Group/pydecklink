@@ -2,17 +2,7 @@
 
 Derived from [SPEC.md](SPEC.md). Sections are in build-dependency order.
 
-## Output path
-
-Completed: bind-output-sync, bind-output-scheduled.
-
-## Input path
-
-Completed: bind-input.
-
 ## Integration
-
-Depends on bind-output-scheduled, bind-input.
 
 - **passthrough-example**: End-to-end capture → playout example
   in `examples/passthrough.py`. Auto-detect input format, configure

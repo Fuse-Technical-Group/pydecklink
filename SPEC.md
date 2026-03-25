@@ -75,55 +75,29 @@ compiles but has no DeckLink functionality until the SDK is available.
 
 ## 4. Device Model
 
-*Status: in progress*
+*Status: complete*
 
-### COM on Linux
+### Why COM lifetime is hidden
 
-The DeckLink SDK uses COM interfaces on all platforms. On Linux,
-`LinuxCOM.h` provides the `IUnknown` base class with
-`AddRef`/`Release`/`QueryInterface`. All SDK objects are reference-
-counted.
+The DeckLink SDK uses COM (`AddRef`/`Release`) on all platforms. The
+binding manages COM lifetimes via RAII `ComPtr<T>` — Python never
+calls `AddRef` or `Release`. This prevents leaks and use-after-free
+from Python's non-deterministic GC.
 
-The nanobind binding manages COM lifetimes internally. Python never
-calls `AddRef` or `Release`. Each bound object holds a COM pointer
-and releases it on destruction.
+### Why CPU buffers only
 
-### Interface hierarchy
+The SDK provides no GPU RDMA path (`NVIDIA_GPUDirect/` contains only
+deprecated DVP headers). All frame data passes through CPU memory as
+numpy arrays. GPU processing requires explicit copies.
 
-A physical device is represented by `IDeckLink`. Callers obtain
-functional interfaces via `QueryInterface`:
+### Why C++ callback queues
 
-| Interface | Purpose |
-|---|---|
-| `IDeckLinkInput` | Capture: enable input, start/stop streams |
-| `IDeckLinkOutput` | Playout: enable output, schedule frames |
-| `IDeckLinkConfiguration` | Device settings (SDI mode, etc.) |
-| `IDeckLinkProfileAttributes` | Capability queries (duplex, HDR, etc.) |
-| `IDeckLinkStatus` | Runtime status (reference lock, etc.) |
-
-The Python `Device` class wraps `IDeckLink` and lazily acquires
-sub-interfaces on first use.
-
-### Frame buffers
-
-DeckLink uses CPU buffers for all DMA transfers. The SDK provides no
-GPU RDMA path (the `NVIDIA_GPUDirect/` folder in the SDK contains
-only deprecated DVP headers, no integration code). GPU frames require
-explicit CPU↔GPU copies.
-
-Frame data is accessed via `IDeckLinkVideoBuffer::GetBytes()` after
-`StartAccess`/`EndAccess` bracketing. The binding exposes frame data
-as numpy arrays.
-
-### Callback threading
-
-DeckLink callbacks (`VideoInputFrameArrived`,
-`ScheduledFrameCompleted`) execute on the SDK's internal threads.
-The C++ callback implementations must:
-
-- Not block (the SDK thread serves all callbacks for that device).
-- Acquire the GIL only when touching Python objects.
-- Queue data to a thread-safe buffer for Python consumption.
+SDK callbacks (`VideoInputFrameArrived`, `ScheduledFrameCompleted`)
+run on internal SDK threads. Acquiring the GIL at frame rate would
+block the SDK thread if Python is slow. Instead, C++ callbacks copy
+frame data into bounded thread-safe queues; Python consumes via
+blocking pop. The queue drops oldest frames on overflow, matching
+hardware behavior.
 
 ## 5. Python API
 
