@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.1.12](https://github.com/Fuse-Technical-Group/pyntv2/compare/v0.1.11...v0.1.12) (2026-03-25)
+
+
+### Added
+
+* DeckLink passthrough example and integration tests ([e1a16fa](https://github.com/Fuse-Technical-Group/pyntv2/commit/e1a16fae85e7e4c6800d589266dcb9430045214b))
+* **examples:** add DeckLink SDI passthrough example ([f86e886](https://github.com/Fuse-Technical-Group/pyntv2/commit/f86e886e7af88587ebb144537964e6356a9b02d8))
+
+
+### Fixed
+
+* **build:** forward DECKLINK_SDK_DIR to CMake for isolated builds ([b88227d](https://github.com/Fuse-Technical-Group/pyntv2/commit/b88227dcd96dfdcd0de0ffa015dbdd10d8acdf6d))
+* **build:** forward DECKLINK_SDK_DIR to CMake for isolated builds ([71319b9](https://github.com/Fuse-Technical-Group/pyntv2/commit/71319b91b6914510207acf480400fe81e709545a))
+* **devcontainer:** mount all Desktop Video binaries from host ([80d1285](https://github.com/Fuse-Technical-Group/pyntv2/commit/80d1285020f2b4c3a018229e85f05b593413834b))
+* **devcontainer:** mount all Desktop Video binaries from host lib64 ([d87585c](https://github.com/Fuse-Technical-Group/pyntv2/commit/d87585c555dea663a598522d3ac5a22b1b8a8c54))
+* **devcontainer:** use community fish feature and correct lib64 path ([ee74c82](https://github.com/Fuse-Technical-Group/pyntv2/commit/ee74c82bf9a4057d5e926a794b164c80be6c5645))
+* **devcontainer:** use community fish feature and correct lib64 path ([4f85260](https://github.com/Fuse-Technical-Group/pyntv2/commit/4f85260033ee9bab93e78b5e32ff63d05e6cb035))
+
 ## [0.1.11](https://github.com/Fuse-Technical-Group/pyntv2/compare/v0.1.10...v0.1.11) (2026-03-25)
 
 
