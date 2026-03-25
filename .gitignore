@@ -10,3 +10,6 @@ dist/
 build/
 *.so
 .venv/
+
+# Vendored SDKs (not redistributable)
+vendor/

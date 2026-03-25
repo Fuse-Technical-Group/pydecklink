@@ -3,9 +3,9 @@ requires = ["scikit-build-core>=0.10", "nanobind>=2.4"]
 build-backend = "scikit_build_core.build"
 
 [project]
-name = "pyntv2"
-version = "0.1.8"
-description = "Python bindings for AJA's libajantv2 SDK"
+name = "pydecklink"
+version = "0.1.0"
+description = "Python bindings for Blackmagic DeckLink SDK"
 license = "MIT"
 requires-python = ">=3.12"
 dependencies = ["numpy>=1.26"]
@@ -18,8 +18,7 @@ dev = ["pytest>=8", "mypy>=1.13"]
 
 [tool.pytest.ini_options]
 markers = [
-    "hardware: requires AJA hardware (deselected by default)",
-    "benchmark: DMA throughput benchmarks (use with hardware marker)",
+    "hardware: requires DeckLink hardware (deselected by default)",
 ]
 addopts = "-m 'not hardware'"
 
@@ -44,14 +43,14 @@ python_version = "3.12"
 strict = true
 warn_return_any = true
 warn_unused_configs = true
-files = ["src/pyntv2"]
+files = ["src/pydecklink"]
 
 [[tool.mypy.overrides]]
-module = "pyntv2._bindings"
+module = "pydecklink._bindings"
 ignore_missing_imports = true
 
 [tool.scikit-build]
 minimum-version = "0.10"
 build-dir = "build/{wheel_tag}"
 wheel.py-api = "cp312"
-wheel.packages = ["src/pyntv2"]
+wheel.packages = ["src/pydecklink"]
