@@ -2,7 +2,7 @@
 
 ## 1. Problem Statement
 
-*Status: not started*
+*Status: complete*
 
 Blackmagic provides no Python interface to the DeckLink SDK. Users who
 want to capture or play out video via DeckLink hardware from Python
