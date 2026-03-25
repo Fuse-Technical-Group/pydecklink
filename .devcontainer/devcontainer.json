@@ -31,8 +31,11 @@
   },
 
   "mounts": [
-    // Bind-mount libDeckLinkAPI.so from host (installed via Desktop Video)
+    // Bind-mount Desktop Video libraries and helpers from host
     "source=/usr/lib64/libDeckLinkAPI.so,target=/usr/lib/libDeckLinkAPI.so,type=bind,readonly",
+    "source=/usr/lib64/libDeckLinkPreviewAPI.so,target=/usr/lib/libDeckLinkPreviewAPI.so,type=bind,readonly",
+    "source=/usr/lib64/blackmagic/DesktopVideo/DesktopVideoHelper,target=/usr/lib/blackmagic/DesktopVideo/DesktopVideoHelper,type=bind,readonly",
+    "source=/usr/lib64/blackmagic/DesktopVideo/DesktopVideoNotifier,target=/usr/lib/blackmagic/DesktopVideo/DesktopVideoNotifier,type=bind,readonly",
     // Named volume for container-local Claude state (history, cache, etc.)
     "source=claude-config-${devcontainerId},target=/home/ubuntu/.claude,type=volume",
     // Bind mount Claude auth and settings from host (read-only credentials, read-write settings)
