@@ -1,9 +1,11 @@
 #include "bind_device.h"
 #include "DeckLinkAPI.h"
 #include <nanobind/stl/string.h>
+#include <nanobind/stl/tuple.h>
 #include <nanobind/stl/vector.h>
 #include <stdexcept>
 #include <string>
+#include <tuple>
 #include <vector>
 
 // --- Device implementation ---
@@ -84,6 +86,41 @@ bool Device::supports_hdr() const {
     attrs->GetFlag(BMDDeckLinkSupportsHDRMetadata, &flag);
     attrs->Release();
     return flag;
+}
+
+/// Python-visible display mode properties extracted from IDeckLinkDisplayMode.
+struct DisplayModeInfo {
+    _BMDDisplayMode mode;
+    std::string name;
+    long width;
+    long height;
+    std::tuple<int64_t, int64_t> frame_rate;  // (duration, timescale)
+    _BMDFieldDominance field_dominance;
+    uint32_t flags;
+};
+
+/// Extract DisplayModeInfo from an IDeckLinkDisplayMode pointer.
+/// The caller must ensure dm is non-null.
+static DisplayModeInfo extract_display_mode_info(IDeckLinkDisplayMode* dm) {
+    DisplayModeInfo info;
+    info.mode = static_cast<_BMDDisplayMode>(dm->GetDisplayMode());
+    info.width = dm->GetWidth();
+    info.height = dm->GetHeight();
+    info.field_dominance = static_cast<_BMDFieldDominance>(dm->GetFieldDominance());
+    info.flags = dm->GetFlags();
+
+    BMDTimeValue duration = 0;
+    BMDTimeScale timescale = 0;
+    dm->GetFrameRate(&duration, &timescale);
+    info.frame_rate = std::make_tuple(static_cast<int64_t>(duration),
+                                      static_cast<int64_t>(timescale));
+
+    const char* str = nullptr;
+    if (dm->GetName(&str) == S_OK && str) {
+        info.name = str;
+        free(const_cast<char*>(str));
+    }
+    return info;
 }
 
 // --- Module bindings ---
@@ -222,6 +259,93 @@ nb::class_<Device> init_decklink_device(nb::module_& m) {
             },
             nb::arg("attr_id"),
             "Get a boolean profile attribute.");
+
+    // -- DisplayModeInfo --
+    nb::class_<DisplayModeInfo>(m, "DisplayModeInfo")
+        .def_ro("mode", &DisplayModeInfo::mode)
+        .def_ro("name", &DisplayModeInfo::name)
+        .def_ro("width", &DisplayModeInfo::width)
+        .def_ro("height", &DisplayModeInfo::height)
+        .def_ro("frame_rate", &DisplayModeInfo::frame_rate)
+        .def_ro("field_dominance", &DisplayModeInfo::field_dominance)
+        .def_ro("flags", &DisplayModeInfo::flags)
+        .def("__repr__", [](const DisplayModeInfo& self) {
+            auto [dur, ts] = self.frame_rate;
+            return "DisplayModeInfo('" + self.name +
+                   "', " + std::to_string(self.width) +
+                   "x" + std::to_string(self.height) +
+                   ", " + std::to_string(static_cast<double>(ts) / dur) + " fps)";
+        });
+
+    // -- Display mode query methods on Device --
+
+    device_cls.def("get_display_mode",
+        [](Device& self, _BMDDisplayMode mode) -> DisplayModeInfo {
+            IDeckLinkOutput* output = nullptr;
+            if (self.dl->QueryInterface(IID_IDeckLinkOutput, (void**)&output) != S_OK)
+                throw std::runtime_error("Device does not support output");
+            ComPtr<IDeckLinkOutput> guard(output);
+
+            IDeckLinkDisplayMode* dm = nullptr;
+            HRESULT hr = output->GetDisplayMode(mode, &dm);
+            if (hr != S_OK || !dm)
+                throw std::runtime_error("GetDisplayMode failed (HRESULT " + std::to_string(hr) + ")");
+            ComPtr<IDeckLinkDisplayMode> dm_guard(dm);
+            return extract_display_mode_info(dm);
+        },
+        nb::arg("mode"),
+        "Get display mode properties for a given BMDDisplayMode.");
+
+    device_cls.def("list_output_modes",
+        [](Device& self) -> std::vector<DisplayModeInfo> {
+            IDeckLinkOutput* output = nullptr;
+            if (self.dl->QueryInterface(IID_IDeckLinkOutput, (void**)&output) != S_OK)
+                throw std::runtime_error("Device does not support output");
+            ComPtr<IDeckLinkOutput> guard(output);
+
+            IDeckLinkDisplayModeIterator* iter = nullptr;
+            HRESULT hr = output->GetDisplayModeIterator(&iter);
+            if (hr != S_OK || !iter)
+                throw std::runtime_error("GetDisplayModeIterator failed (HRESULT " + std::to_string(hr) + ")");
+            ComPtr<IDeckLinkDisplayModeIterator> iter_guard(iter);
+
+            std::vector<DisplayModeInfo> result;
+            IDeckLinkDisplayMode* dm = nullptr;
+            while (iter->Next(&dm) == S_OK) {
+                result.push_back(extract_display_mode_info(dm));
+                dm->Release();
+            }
+            return result;
+        },
+        "List all output display modes supported by the device.");
+
+    device_cls.def("does_support_video_mode",
+        [](Device& self,
+           _BMDVideoConnection connection,
+           _BMDDisplayMode mode,
+           _BMDPixelFormat pixel_format,
+           _BMDVideoOutputConversionMode conversion_mode,
+           _BMDSupportedVideoModeFlags flags) -> bool {
+            IDeckLinkOutput* output = nullptr;
+            if (self.dl->QueryInterface(IID_IDeckLinkOutput, (void**)&output) != S_OK)
+                throw std::runtime_error("Device does not support output");
+            ComPtr<IDeckLinkOutput> guard(output);
+
+            BMDDisplayMode actual_mode = bmdModeUnknown;
+            bool supported = false;
+            HRESULT hr = output->DoesSupportVideoMode(
+                connection, mode, pixel_format, conversion_mode, flags,
+                &actual_mode, &supported);
+            if (hr != S_OK)
+                throw std::runtime_error("DoesSupportVideoMode failed (HRESULT " + std::to_string(hr) + ")");
+            return supported;
+        },
+        nb::arg("connection"),
+        nb::arg("mode"),
+        nb::arg("pixel_format"),
+        nb::arg("conversion_mode") = bmdNoVideoOutputConversion,
+        nb::arg("flags") = bmdSupportedVideoModeDefault,
+        "Check whether the device supports a given video mode, pixel format, and connection.");
 
     return device_cls;
 }
