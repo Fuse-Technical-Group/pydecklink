@@ -84,20 +84,26 @@ binding manages COM lifetimes via RAII `ComPtr<T>` — Python never
 calls `AddRef` or `Release`. This prevents leaks and use-after-free
 from Python's non-deterministic GC.
 
-### Why CPU buffers only
+### Why CPU buffers (Phase 1)
 
-The SDK provides no GPU RDMA path (`NVIDIA_GPUDirect/` contains only
-deprecated DVP headers). All frame data passes through CPU memory as
-numpy arrays. GPU processing requires explicit copies.
+The SDK ships deprecated DVP headers for GPU direct (`NVIDIA_GPUDirect/`)
+but no maintained GPU RDMA path. Phase 1 uses CPU memory for all
+frame transfers. A zero-copy path (`CaptureFrameRef`) avoids memcpy
+by holding the SDK's DMA buffer by reference. A pre-allocated output
+frame pool avoids per-frame allocation. Together these reduce the
+per-frame CPU overhead to ~4.7ms at 4K 59.94 10-bit YUV, leaving
+~10ms for processing. GPU DMA via `IDeckLinkMemoryAllocator` with
+CUDA pinned memory is a Phase 2 goal.
 
 ### Why C++ callback queues
 
 SDK callbacks (`VideoInputFrameArrived`, `ScheduledFrameCompleted`)
 run on internal SDK threads. Acquiring the GIL at frame rate would
-block the SDK thread if Python is slow. Instead, C++ callbacks copy
-frame data into bounded thread-safe queues; Python consumes via
-blocking pop. The queue drops oldest frames on overflow, matching
-hardware behavior.
+block the SDK thread if Python is slow. Instead, C++ callbacks enqueue
+frames into bounded thread-safe queues; Python consumes via blocking
+pop. The queue drops oldest frames on overflow, matching hardware
+behavior. In zero-copy mode, the callback AddRefs the SDK frame and
+enqueues a lightweight reference — no pixel copy.
 
 ## 5. Python API
 
@@ -115,6 +121,10 @@ Supports context manager protocol.
 - `Device.supports_playback → bool` — via `BMDDeckLinkVideoIOSupport`.
 - `Device.supports_input_format_detection → bool`
 - `Device.supports_hdr → bool`
+- `Device.active_profile() → ProfileID`
+- `Device.set_profile(profile_id)` — activates a connector profile.
+- `Device.get_attribute_int(attr_id) → int`
+- `Device.get_attribute_flag(attr_id) → bool`
 
 Module-level enumeration:
 
@@ -151,7 +161,7 @@ Setup:
 - `device.stop_streams()`
 - `device.disable_video_input()`
 
-Frame retrieval:
+Frame retrieval (copy mode):
 
 - `device.pop_capture_frame(timeout_ms=1000) → CaptureFrame | None`
 
@@ -164,6 +174,17 @@ Frame retrieval:
   timescale.
 - `hardware_reference_timestamp → int`
 - `has_signal → bool` — `False` when `bmdFrameHasNoInputSource`.
+
+Frame retrieval (zero-copy mode, `zero_copy=True` on
+`enable_video_input`):
+
+- `device.pop_capture_frame_ref(timeout_ms=1000)
+  → CaptureFrameRef | None`
+
+`CaptureFrameRef` holds the SDK's `IDeckLinkVideoInputFrame` by
+reference (AddRef, no pixel copy). Same metadata as `CaptureFrame`
+plus `callback_arrived_us` for latency profiling. Can be passed
+directly to `schedule_capture_frame` for zero-copy passthrough.
 
 ### Why internal queue (not Python callbacks)
 
@@ -204,9 +225,24 @@ Two output modes: synchronous (simple, blocking) and scheduled
 
 - `device.enable_video_output(mode, flags=0)`
 - `device.schedule_frame(buffer, display_time, duration, timescale)`
+- `device.schedule_capture_frame(capture_frame_ref, display_time,
+  duration, timescale)` — zero-copy: passes the SDK input frame
+  directly to `ScheduleVideoFrame`.
+- `device.schedule_output_frame(mutable_frame, display_time,
+  duration, timescale)` — schedules a pre-allocated pool frame.
 - `device.start_scheduled_playback(start_time, timescale, speed=1.0)`
 - `device.stop_scheduled_playback()`
 - `device.is_scheduled_playback_running → bool`
+
+#### Output frame pool
+
+Pre-allocated frames avoid per-frame `CreateVideoFrame` overhead:
+
+- `device.create_frame_pool(count, width, height, row_bytes,
+  pixel_format)` — allocates `count` frames up front.
+- `device.acquire_output_frame(timeout_ms) → MutableFrame` — blocks
+  until a frame is returned by `ScheduledFrameCompleted`.
+- `device.pool_available → int` — frames currently available.
 
 The binding implements `IDeckLinkVideoOutputCallback` in C++. Frame
 completion results (completed, late, dropped, flushed) are tracked
@@ -234,6 +270,8 @@ Wraps `IDeckLinkConfiguration`:
 - `device.get_config_flag(flag) → bool`
 - `device.set_config_int(setting, value)`
 - `device.get_config_int(setting) → int`
+- `device.write_config()` — persists changes via
+  `WriteConfigurationToPreferences`.
 
 Used for SDI mode selection (4:4:4 vs 4:2:2), connector mapping, etc.
 
@@ -254,6 +292,8 @@ Bound from DeckLink SDK types via `nb::enum_<>`:
 | `ConfigFlag` | `BMDDeckLinkConfigurationID` | Flag-type config IDs |
 | `ConfigInt` | `BMDDeckLinkConfigurationID` | Int-type config IDs |
 | `DeviceAttribute` | `BMDDeckLinkAttributeID` | Capability query IDs |
+| `ProfileID` | `BMDProfileID` | Connector profile selection |
+| `DuplexMode` | `BMDDuplexMode` | Full, half, simplex, inactive |
 
 ### 5.9 Format Metadata
 
@@ -265,6 +305,10 @@ Module-level helpers (derived from display mode properties):
 - `get_mode_width(mode) → int`
 - `get_mode_height(mode) → int`
 - `get_mode_fps(mode) → float`
+- `clock_us() → int` — `CLOCK_MONOTONIC_RAW` in microseconds, for
+  latency profiling against `CaptureFrameRef.callback_arrived_us`.
+- `device.row_bytes_for_pixel_format(pixel_format, width) → int` —
+  queries the output device's expected row stride.
 
 ## 6. Target Workflow
 
@@ -325,8 +369,9 @@ The integration path is the same as pyntv2's §8: a narrow
 
 ## 9. Explicit Non-Goals (Phase 1)
 
-- **GPU RDMA.** DeckLink SDK provides no GPU direct path. GPU frames
-  require CPU copies.
+- **GPU RDMA (Phase 1).** Phase 1 uses CPU memory. The zero-copy
+  frame pool is designed to support `IDeckLinkMemoryAllocator` with
+  CUDA pinned memory in Phase 2.
 - **Audio.** Deferred. The SDK supports audio scheduling; the binding
   does not expose it yet.
 - **Ancillary data.** Timecode, closed captions — deferred.
