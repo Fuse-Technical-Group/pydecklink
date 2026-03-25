@@ -7,6 +7,7 @@
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
 #include <nanobind/stl/optional.h>
+#include <optional>
 #include <stdexcept>
 #include <string>
 
@@ -33,9 +34,43 @@ void init_decklink_allocator(nb::module_& m, nb::class_<Device>& device) {
 
     // -- VideoBufferAllocator --
     nb::class_<VideoBufferAllocator>(m, "VideoBufferAllocator")
-        .def(nb::init<size_t>(), nb::arg("size"),
-             "Create a buffer allocator for the given buffer size. "
-             "Uses malloc/free by default.")
+        .def("__init__",
+             [](VideoBufferAllocator* self, size_t size,
+                std::optional<nb::callable> alloc_fn,
+                std::optional<nb::callable> free_fn) {
+                 AllocFn a = nullptr;
+                 FreeFn f = nullptr;
+                 if (alloc_fn) {
+                     // Prevent GC of the Python callable.
+                     nb::object alloc_ref = nb::borrow(*alloc_fn);
+                     alloc_ref.inc_ref();
+                     a = [alloc_ref](size_t sz) -> void* {
+                         nb::gil_scoped_acquire gil;
+                         nb::object result = alloc_ref(sz);
+                         return reinterpret_cast<void*>(nb::cast<uintptr_t>(result));
+                     };
+                 }
+                 if (free_fn) {
+                     nb::object free_ref = nb::borrow(*free_fn);
+                     free_ref.inc_ref();
+                     f = [free_ref](void* ptr, size_t sz) {
+                         nb::gil_scoped_acquire gil;
+                         free_ref(reinterpret_cast<uintptr_t>(ptr), sz);
+                     };
+                 }
+                 new (self) VideoBufferAllocator(size, std::move(a), std::move(f));
+             },
+             nb::arg("size"),
+             nb::arg("alloc") = nb::none(),
+             nb::arg("free") = nb::none(),
+             "Create a buffer allocator for the given buffer size.\n\n"
+             "Args:\n"
+             "  size: Buffer size in bytes.\n"
+             "  alloc: Optional callable(size: int) -> int returning a pointer.\n"
+             "         Defaults to malloc.\n"
+             "  free: Optional callable(ptr: int, size: int) -> None.\n"
+             "        Defaults to free.\n\n"
+             "For CUDA pinned memory, pass cudaHostAlloc/cudaFreeHost wrappers.")
         .def_prop_ro("size", &VideoBufferAllocator::buffer_size,
                      "Buffer size that this allocator produces.")
         .def_prop_ro("allocated_count", &VideoBufferAllocator::allocated_count,
@@ -51,9 +86,39 @@ void init_decklink_allocator(nb::module_& m, nb::class_<Device>& device) {
 
     // -- VideoBufferAllocatorProvider --
     nb::class_<VideoBufferAllocatorProvider>(m, "VideoBufferAllocatorProvider")
-        .def(nb::init<>(),
-             "Create a buffer allocator provider. "
-             "Returns allocators on demand, caching by buffer size.")
+        .def("__init__",
+             [](VideoBufferAllocatorProvider* self,
+                std::optional<nb::callable> alloc_fn,
+                std::optional<nb::callable> free_fn) {
+                 AllocFn a = nullptr;
+                 FreeFn f = nullptr;
+                 if (alloc_fn) {
+                     nb::object alloc_ref = nb::borrow(*alloc_fn);
+                     alloc_ref.inc_ref();
+                     a = [alloc_ref](size_t sz) -> void* {
+                         nb::gil_scoped_acquire gil;
+                         nb::object result = alloc_ref(sz);
+                         return reinterpret_cast<void*>(nb::cast<uintptr_t>(result));
+                     };
+                 }
+                 if (free_fn) {
+                     nb::object free_ref = nb::borrow(*free_fn);
+                     free_ref.inc_ref();
+                     f = [free_ref](void* ptr, size_t sz) {
+                         nb::gil_scoped_acquire gil;
+                         free_ref(reinterpret_cast<uintptr_t>(ptr), sz);
+                     };
+                 }
+                 new (self) VideoBufferAllocatorProvider(std::move(a), std::move(f));
+             },
+             nb::arg("alloc") = nb::none(),
+             nb::arg("free") = nb::none(),
+             "Create a buffer allocator provider.\n\n"
+             "Args:\n"
+             "  alloc: Optional callable(size: int) -> int returning a pointer.\n"
+             "  free: Optional callable(ptr: int, size: int) -> None.\n\n"
+             "Allocators are cached by buffer size. Custom alloc/free are\n"
+             "propagated to each VideoBufferAllocator created by the provider.")
         .def("get_allocator",
              [](VideoBufferAllocatorProvider& self,
                 uint32_t buffer_size, uint32_t width, uint32_t height,
