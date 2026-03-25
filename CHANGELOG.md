@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.14](https://github.com/Fuse-Technical-Group/pyntv2/compare/v0.1.13...v0.1.14) (2026-03-25)
+
+
+### Fixed
+
+* **pydecklink:** fix UAF in frame data views and add missing accessors ([9d0bc81](https://github.com/Fuse-Technical-Group/pyntv2/commit/9d0bc811242c356c5d80991f9097a6c61a30fef5))
+* **pydecklink:** fix UAF in frame data views, add CaptureFrameRef.data ([f91872f](https://github.com/Fuse-Technical-Group/pyntv2/commit/f91872fb3ec7531c877f7eacea28e7243cbb4c6c))
+
 ## [0.1.13](https://github.com/Fuse-Technical-Group/pyntv2/compare/v0.1.12...v0.1.13) (2026-03-25)
 
 
