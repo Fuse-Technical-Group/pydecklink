@@ -2,27 +2,7 @@
 
 Derived from [SPEC.md](SPEC.md). Sections are in build-dependency order.
 
-## Build foundation
-
-- **repo-scaffold**: Replace pyntv2 build config with pydecklink.
-  New `pyproject.toml` (package name `pydecklink`, scikit-build-core).
-  New `CMakeLists.txt` finding vendored DeckLink SDK headers, compiling
-  `DeckLinkAPIDispatch.cpp` into the nanobind module. `src/bindings.cpp`
-  with empty `NB_MODULE`. `src/pydecklink/__init__.py` re-exporting
-  from `_bindings`. Verify `import pydecklink` succeeds (module loads,
-  `dlopen` finds `libDeckLinkAPI.so`). Existing pyntv2 `src/` files
-  are removed from the build but left on disk until the repo is
-  restructured for the mono-repo (see ROADMAP-pyprovideo.md).
-- **devcontainer-decklink**: Devcontainer config for DeckLink
-  development. Dockerfile based on `ubuntu:24.04`, installs build
-  tools (cmake, ninja, uv). SDK headers are vendored locally (not
-  in the image). Device passthrough for `/dev/blackmagic/*`.
-  `libDeckLinkAPI.so` accessed via bind-mount from host or installed
-  in container. Same `--userns=keep-id` pattern as pyntv2.
-
 ## Enum and device layer
-
-Depends on repo-scaffold.
 
 - **bind-enums**: Bind core SDK enums in `bind_enums.cpp`.
   `BMDDisplayMode` (SD through 8K), `BMDPixelFormat` (YUV/RGB
