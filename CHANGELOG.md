@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.10](https://github.com/Fuse-Technical-Group/pyntv2/compare/v0.1.9...v0.1.10) (2026-03-25)
+
+
+### Added
+
+* bind DeckLink SDK enums, device, and format helpers ([14d2d33](https://github.com/Fuse-Technical-Group/pyntv2/commit/14d2d33d28e3c8762762473e7ebbdf1a164d514f))
+
+
+### Fixed
+
+* **ci:** skip SDK-dependent tests when built without DeckLink headers ([4495711](https://github.com/Fuse-Technical-Group/pyntv2/commit/449571173e0e5a68876642d34a9c7e8437aeac96))
+
 ## [0.1.9](https://github.com/Fuse-Technical-Group/pyntv2/compare/v0.1.8...v0.1.9) (2026-03-25)
 
 
