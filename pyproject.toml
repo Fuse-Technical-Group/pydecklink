@@ -54,3 +54,7 @@ minimum-version = "0.10"
 build-dir = "build/{wheel_tag}"
 wheel.py-api = "cp312"
 wheel.packages = ["src/pydecklink"]
+cmake.build-type = "Release"
+
+[tool.scikit-build.cmake.define]
+DECKLINK_SDK_DIR = {env = "DECKLINK_SDK_DIR", default = "vendor/Blackmagic DeckLink SDK 15.3/Linux/include"}

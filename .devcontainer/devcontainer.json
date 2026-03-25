@@ -12,7 +12,8 @@
   ],
 
   "containerEnv": {
-    "SSH_AUTH_SOCK": "/tmp/ssh-agent.sock"
+    "SSH_AUTH_SOCK": "/tmp/ssh-agent.sock",
+    "DECKLINK_SDK_DIR": "/workspaces/pyntv2/vendor/Blackmagic DeckLink SDK 15.3/Linux/include"
   },
 
   "features": {
