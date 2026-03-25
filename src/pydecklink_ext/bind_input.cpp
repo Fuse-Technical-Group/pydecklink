@@ -238,10 +238,11 @@ void init_decklink_input(nb::module_& m, nb::class_<Device>& device) {
 
     // -- CaptureFrame --
     nb::class_<CaptureFrame>(m, "CaptureFrame")
-        .def_prop_ro("data", [](CaptureFrame& self) {
-            size_t n = self.pixels.size();
+        .def_prop_ro("data", [](nb::handle self) {
+            auto& cf = nb::cast<CaptureFrame&>(self);
+            size_t n = cf.pixels.size();
             return nb::ndarray<nb::numpy, uint8_t, nb::ndim<1>>(
-                self.pixels.data(), {n}, nb::handle());
+                cf.pixels.data(), {n}, self);
         }, "Frame pixel data as numpy uint8 array.")
         .def_ro("width", &CaptureFrame::width)
         .def_ro("height", &CaptureFrame::height)
@@ -260,6 +261,30 @@ void init_decklink_input(nb::module_& m, nb::class_<Device>& device) {
 
     // -- CaptureFrameRef (zero-copy) --
     nb::class_<CaptureFrameRef>(m, "CaptureFrameRef")
+        .def_prop_ro("data", [](nb::handle self) {
+            auto& cfr = nb::cast<CaptureFrameRef&>(self);
+            if (!cfr.frame)
+                throw std::runtime_error("CaptureFrameRef has no frame");
+            IDeckLinkVideoBuffer* buf = nullptr;
+            cfr.frame->QueryInterface(IID_IDeckLinkVideoBuffer, (void**)&buf);
+            if (!buf)
+                throw std::runtime_error("Frame has no video buffer");
+            buf->StartAccess(bmdBufferAccessRead);
+            void* bytes = nullptr;
+            buf->GetBytes(&bytes);
+            if (!bytes) {
+                buf->EndAccess(bmdBufferAccessRead);
+                buf->Release();
+                throw std::runtime_error("Failed to get frame buffer bytes");
+            }
+            size_t total = static_cast<size_t>(cfr.row_bytes()) * cfr.height();
+            buf->EndAccess(bmdBufferAccessRead);
+            buf->Release();
+            // The CaptureFrameRef (self) keeps the SDK frame alive via AddRef.
+            return nb::ndarray<nb::numpy, uint8_t, nb::ndim<1>>(
+                bytes, {total}, self);
+        }, "Read-only numpy view of the SDK frame buffer. "
+           "The CaptureFrameRef must outlive the array.")
         .def_prop_ro("width", &CaptureFrameRef::width)
         .def_prop_ro("height", &CaptureFrameRef::height)
         .def_prop_ro("row_bytes", &CaptureFrameRef::row_bytes)

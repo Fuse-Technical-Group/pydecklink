@@ -149,7 +149,7 @@ struct MutableFrame {
     long height() const { return frame->GetHeight(); }
     long row_bytes() const { return frame->GetRowBytes(); }
 
-    nb::ndarray<nb::numpy, uint8_t, nb::ndim<1>> data() {
+    void* get_data_ptr() {
         if (!buffer)
             throw std::runtime_error("Frame has no video buffer");
         void* bytes = nullptr;
@@ -159,10 +159,7 @@ struct MutableFrame {
             buffer->EndAccess(bmdBufferAccessReadAndWrite);
             throw std::runtime_error("Failed to get frame buffer bytes");
         }
-        size_t total = static_cast<size_t>(frame->GetRowBytes()) * frame->GetHeight();
-        // Return a non-owning view; the MutableFrame must stay alive.
-        return nb::ndarray<nb::numpy, uint8_t, nb::ndim<1>>(
-            bytes, {total}, nb::handle());
+        return bytes;
     }
 
     void end_access() {
@@ -194,8 +191,13 @@ void init_decklink_output(nb::module_& m, nb::class_<Device>& device) {
         .def_prop_ro("width", &MutableFrame::width)
         .def_prop_ro("height", &MutableFrame::height)
         .def_prop_ro("row_bytes", &MutableFrame::row_bytes)
-        .def_prop_ro("data", &MutableFrame::data,
-                     "Writeable numpy uint8 view of the frame buffer.")
+        .def_prop_ro("data", [](nb::handle self) {
+            auto& mf = nb::cast<MutableFrame&>(self);
+            void* bytes = mf.get_data_ptr();
+            size_t total = static_cast<size_t>(mf.row_bytes()) * mf.height();
+            return nb::ndarray<nb::numpy, uint8_t, nb::ndim<1>>(
+                bytes, {total}, self);
+        }, "Writeable numpy uint8 view of the frame buffer.")
         .def("end_access", &MutableFrame::end_access,
              "Release buffer access (called automatically on frame use).");
 
@@ -417,7 +419,9 @@ void init_decklink_output(nb::module_& m, nb::class_<Device>& device) {
         nb::arg("buffer"), nb::arg("width"), nb::arg("height"),
         nb::arg("row_bytes"), nb::arg("pixel_format"),
         nb::arg("display_time"), nb::arg("duration"), nb::arg("timescale"),
-        "Schedule a video frame for playback.");
+        "Schedule a video frame for playback. "
+        "Allocates a new frame per call — for sustained streaming, "
+        "use create_frame_pool + acquire_output_frame + schedule_output_frame.");
 
     device.def("schedule_capture_frame",
         [](Device& self, CaptureFrameRef& capture_frame,
