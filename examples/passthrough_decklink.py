@@ -90,9 +90,8 @@ def main() -> None:
     frame_bytes = pydecklink.get_frame_bytes(mode, pixel_format)
     row_bytes = frame_bytes // height
 
-    # Native timescale: 59.94fps = 60000/1001, 50fps = 50000/1000, etc.
-    frame_timescale = 60000
-    frame_duration = round(frame_timescale / fps)
+    # Native timescale from the SDK mode table.
+    frame_duration, frame_timescale = pydecklink.get_mode_frame_duration(mode)
 
     # Frames per second, rounded up (SDK convention).
     frames_per_second = int((frame_timescale + (frame_duration - 1)) / frame_duration)

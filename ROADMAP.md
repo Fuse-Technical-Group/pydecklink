@@ -11,9 +11,6 @@ Derived from [SPEC.md](SPEC.md). Sections are in build-dependency order.
 - **display-mode-query**: Bind `IDeckLinkOutput::GetDisplayMode` and
   `DoesSupportVideoMode`. Spec §5.2 describes these but they are not
   implemented. Needed for runtime mode validation.
-- **get-frame-rate**: Expose `IDeckLinkDisplayMode::GetFrameRate` so
-  Python can get native `(duration, timescale)` per mode instead of
-  hardcoding `60000/1001`.
 
 ## GPU DMA (Phase 2)
 
