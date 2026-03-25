@@ -2,7 +2,8 @@
 
 Auto-detects the input signal format, configures output to match,
 and loops captured frames through scheduled playback with no memcpy.
-Uses two threads (reader/writer) and SDK-style pre-roll. Ctrl-C to stop.
+Uses two threads (reader/writer) with a 3-frame pre-roll (~50ms
+latency at 59.94fps). Ctrl-C to stop.
 
 Requires two DeckLink sub-devices (or two cards) connected via SDI.
 Default: device 3 captures, device 1 plays out.
@@ -93,11 +94,13 @@ def main() -> None:
     # Native timescale from the SDK mode table.
     frame_duration, frame_timescale = pydecklink.get_mode_frame_duration(mode)
 
-    # Frames per second, rounded up (SDK convention).
-    frames_per_second = int((frame_timescale + (frame_duration - 1)) / frame_duration)
+    # Pre-roll depth: schedule this many frames before starting playback.
+    # Minimum is 1 (from BMDDeckLinkMinimumPrerollFrames on 8K Pro).
+    # 3 frames balances low latency (~50ms at 59.94) with jitter tolerance.
+    preroll_count = 3
 
     print(f"Format: {width}x{height} @ {fps:.2f} fps, {frame_bytes} bytes/frame")
-    print(f"Pre-roll: {frames_per_second} frames")
+    print(f"Pre-roll: {preroll_count} frames ({preroll_count * frame_duration / frame_timescale * 1000:.0f} ms)")
 
     # -- Configure output ---------------------------------------------------
     out_dev.enable_video_output(mode)
@@ -106,10 +109,10 @@ def main() -> None:
     cap_dev.enable_video_input(mode, pixel_format, zero_copy=True)
     cap_dev.start_streams()
 
-    # -- Pre-roll with live captured frames (SDK pattern) --------------------
+    # -- Pre-roll with live captured frames ------------------------------------
     print("Pre-rolling...", end="", flush=True)
     scheduled = 0
-    while scheduled < frames_per_second:
+    while scheduled < preroll_count:
         frame = cap_dev.pop_capture_frame_ref(timeout_ms=1000)
         if frame is None or not frame.has_signal:
             continue
@@ -125,7 +128,7 @@ def main() -> None:
 
     # -- Two-thread frame loop ----------------------------------------------
     stop = threading.Event()
-    frame_queue: queue.Queue[pydecklink.CaptureFrameRef] = queue.Queue(maxsize=8)
+    frame_queue: queue.Queue[pydecklink.CaptureFrameRef] = queue.Queue(maxsize=3)
 
     running = True
 
