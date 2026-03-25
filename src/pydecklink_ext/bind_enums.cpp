@@ -148,7 +148,7 @@ void init_decklink_enums(nb::module_& m) {
         .value("SynchronizeToCaptureGroup", bmdVideoInputSynchronizeToCaptureGroup);
 
     // -- BMDVideoOutputFlags --
-    nb::enum_<_BMDVideoOutputFlags>(m, "VideoOutputFlag")
+    nb::enum_<_BMDVideoOutputFlags>(m, "VideoOutputFlag", nb::is_arithmetic())
         .value("Default", bmdVideoOutputFlagDefault)
         .value("VANC", bmdVideoOutputVANC)
         .value("VITC", bmdVideoOutputVITC)
@@ -265,4 +265,12 @@ void init_decklink_enums(nb::module_& m) {
         .value("Half", bmdDuplexHalf)
         .value("Simplex", bmdDuplexSimplex)
         .value("Inactive", bmdDuplexInactive);
+
+    // -- BMDProfileID --
+    nb::enum_<_BMDProfileID>(m, "ProfileID")
+        .value("OneSubDeviceFullDuplex", bmdProfileOneSubDeviceFullDuplex)
+        .value("OneSubDeviceHalfDuplex", bmdProfileOneSubDeviceHalfDuplex)
+        .value("TwoSubDevicesFullDuplex", bmdProfileTwoSubDevicesFullDuplex)
+        .value("TwoSubDevicesHalfDuplex", bmdProfileTwoSubDevicesHalfDuplex)
+        .value("FourSubDevicesHalfDuplex", bmdProfileFourSubDevicesHalfDuplex);
 }
