@@ -27,7 +27,7 @@ with nanobind, scheduled playback, capture input, and Linux support.
 
 VS Code devcontainer based on `ubuntu:24.04` with devcontainer
 features (cmake, ninja, uv). DeckLink SDK headers vendored locally
-(gitignored — Blackmagic's license prohibits redistribution).
+(committed — Blackmagic's header license permits redistribution).
 
 ### Why a devcontainer
 
