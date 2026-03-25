@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.18](https://github.com/Fuse-Technical-Group/pyntv2/compare/v0.1.17...v0.1.18) (2026-03-25)
+
+
+### Added
+
+* **allocator:** accept Python callables for custom alloc/free ([3871501](https://github.com/Fuse-Technical-Group/pyntv2/commit/387150142fcda44675b764bf97f969fe1edbab3b))
+* **allocator:** accept Python callables for custom alloc/free ([d7f1a5f](https://github.com/Fuse-Technical-Group/pyntv2/commit/d7f1a5f28c34b106347d8756814cb2f639fd0656))
+
 ## [0.1.17](https://github.com/Fuse-Technical-Group/pyntv2/compare/v0.1.16...v0.1.17) (2026-03-25)
 
 
