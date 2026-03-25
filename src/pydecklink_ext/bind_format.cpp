@@ -1,7 +1,9 @@
 #include "bind_format.h"
 #include "DeckLinkAPI.h"
 #include <nanobind/nanobind.h>
+#include <nanobind/stl/tuple.h>
 #include <stdexcept>
+#include <tuple>
 #include <unordered_map>
 
 /// Mode metadata: width, height, frame duration, timescale.
@@ -192,6 +194,12 @@ void init_decklink_format(nb::module_& m) {
         return static_cast<double>(info.timescale) / static_cast<double>(info.duration);
     }, nb::arg("mode"),
        "Return the frames per second for a display mode.");
+
+    m.def("get_mode_frame_duration", [](_BMDDisplayMode mode) -> std::tuple<int64_t, int64_t> {
+        auto& info = lookup_mode(mode);
+        return {info.duration, info.timescale};
+    }, nb::arg("mode"),
+       "Return (duration, timescale) for a display mode.");
 
     m.def("get_frame_bytes", [](_BMDDisplayMode mode, _BMDPixelFormat pf) -> long {
         auto& info = lookup_mode(mode);
