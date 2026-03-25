@@ -1,14 +1,18 @@
 #include "bind_output.h"
+#include "bind_input.h"
 #include "bind_device.h"
 #include "DeckLinkAPI.h"
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
 #include <nanobind/stl/tuple.h>
 #include <atomic>
+#include <condition_variable>
 #include <cstring>
 #include <mutex>
+#include <queue>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 /// Tracks scheduled frame completion statistics.
 struct OutputStatus {
@@ -20,7 +24,7 @@ struct OutputStatus {
 };
 
 /// C++ implementation of IDeckLinkVideoOutputCallback.
-/// Tracks frame completion results for Python inspection.
+/// Tracks frame completion results and manages a frame pool.
 class OutputCallback : public IDeckLinkVideoOutputCallback {
 public:
     OutputCallback() : ref_count_(1) {}
@@ -34,14 +38,30 @@ public:
         return c;
     }
 
-    HRESULT ScheduledFrameCompleted(IDeckLinkVideoFrame*, BMDOutputFrameCompletionResult result) override {
-        std::lock_guard<std::mutex> lock(mutex_);
-        switch (result) {
-            case bmdOutputFrameCompleted:    ++status_.completed; break;
-            case bmdOutputFrameDisplayedLate: ++status_.late; break;
-            case bmdOutputFrameDropped:      ++status_.dropped; break;
-            case bmdOutputFrameFlushed:      ++status_.flushed; break;
+    HRESULT ScheduledFrameCompleted(IDeckLinkVideoFrame* completedFrame, BMDOutputFrameCompletionResult result) override {
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            switch (result) {
+                case bmdOutputFrameCompleted:    ++status_.completed; break;
+                case bmdOutputFrameDisplayedLate: ++status_.late; break;
+                case bmdOutputFrameDropped:      ++status_.dropped; break;
+                case bmdOutputFrameFlushed:      ++status_.flushed; break;
+            }
         }
+
+        // Return completed frame to pool if it belongs to one.
+        if (completedFrame && pool_enabled_) {
+            std::lock_guard<std::mutex> lock(pool_mutex_);
+            // Check if this frame is one of ours.
+            for (auto& pf : all_frames_) {
+                if (static_cast<IDeckLinkVideoFrame*>(pf.get()) == completedFrame) {
+                    available_.push(pf.get());
+                    pool_cv_.notify_one();
+                    break;
+                }
+            }
+        }
+
         return S_OK;
     }
 
@@ -61,10 +81,63 @@ public:
         status_ = OutputStatus{};
     }
 
+    // -- Frame pool --
+
+    void create_pool(IDeckLinkOutput* output, int count,
+                     int32_t width, int32_t height, int32_t row_bytes,
+                     _BMDPixelFormat pixel_format) {
+        std::lock_guard<std::mutex> lock(pool_mutex_);
+        all_frames_.clear();
+        // Drain any leftover available frames.
+        while (!available_.empty()) available_.pop();
+
+        for (int i = 0; i < count; ++i) {
+            IDeckLinkMutableVideoFrame* raw = nullptr;
+            HRESULT hr = output->CreateVideoFrame(
+                width, height, row_bytes, pixel_format,
+                bmdFrameFlagDefault, &raw);
+            if (hr != S_OK || !raw)
+                throw std::runtime_error(
+                    "CreateVideoFrame failed for pool frame " + std::to_string(i));
+            all_frames_.emplace_back(raw);
+            available_.push(raw);
+        }
+        pool_enabled_ = true;
+    }
+
+    /// Acquire a frame from the pool.  Blocks until one is available.
+    IDeckLinkMutableVideoFrame* acquire(int timeout_ms) {
+        std::unique_lock<std::mutex> lock(pool_mutex_);
+        if (!pool_cv_.wait_for(lock, std::chrono::milliseconds(timeout_ms),
+                               [this] { return !available_.empty(); })) {
+            return nullptr;  // timeout
+        }
+        auto* f = available_.front();
+        available_.pop();
+        return f;
+    }
+
+    size_t pool_size() const {
+        std::lock_guard<std::mutex> lock(pool_mutex_);
+        return all_frames_.size();
+    }
+
+    size_t pool_available() const {
+        std::lock_guard<std::mutex> lock(pool_mutex_);
+        return available_.size();
+    }
+
 private:
     std::atomic<ULONG> ref_count_;
     mutable std::mutex mutex_;
     OutputStatus status_;
+
+    // Frame pool
+    bool pool_enabled_ = false;
+    mutable std::mutex pool_mutex_;
+    std::condition_variable pool_cv_;
+    std::vector<ComPtr<IDeckLinkMutableVideoFrame>> all_frames_;
+    std::queue<IDeckLinkMutableVideoFrame*> available_;
 };
 
 /// Python-visible wrapper around IDeckLinkMutableVideoFrame.
@@ -129,11 +202,11 @@ void init_decklink_output(nb::module_& m, nb::class_<Device>& device) {
     // -- Device output methods (added to existing Device class) --
 
     device.def("enable_video_output",
-        [](Device& self, _BMDDisplayMode mode, _BMDVideoOutputFlags flags) {
+        [](Device& self, _BMDDisplayMode mode, uint32_t flags) {
             IDeckLinkOutput* output = nullptr;
             if (self.dl->QueryInterface(IID_IDeckLinkOutput, (void**)&output) != S_OK)
                 throw std::runtime_error("Device does not support output");
-            HRESULT hr = output->EnableVideoOutput(mode, flags);
+            HRESULT hr = output->EnableVideoOutput(mode, static_cast<BMDVideoOutputFlags>(flags));
             if (hr != S_OK) {
                 output->Release();
                 throw std::runtime_error("EnableVideoOutput failed (HRESULT " + std::to_string(hr) + ")");
@@ -143,8 +216,82 @@ void init_decklink_output(nb::module_& m, nb::class_<Device>& device) {
             self.output_callback_ = new OutputCallback();
             output->SetScheduledFrameCompletionCallback(self.output_callback_);
         },
-        nb::arg("mode"), nb::arg("flags") = bmdVideoOutputFlagDefault,
+        nb::arg("mode"), nb::arg("flags") = static_cast<uint32_t>(bmdVideoOutputFlagDefault),
         "Enable video output for the given display mode.");
+
+    device.def("row_bytes_for_pixel_format",
+        [](Device& self, _BMDPixelFormat pixelFormat, int32_t width) -> int32_t {
+            if (!self.output_)
+                throw std::runtime_error("Video output not enabled");
+            int32_t rowBytes = 0;
+            HRESULT hr = self.output_->RowBytesForPixelFormat(pixelFormat, width, &rowBytes);
+            if (hr != S_OK)
+                throw std::runtime_error("RowBytesForPixelFormat failed (HRESULT " + std::to_string(hr) + ")");
+            return rowBytes;
+        },
+        nb::arg("pixel_format"), nb::arg("width"),
+        "Get the row bytes for a given pixel format and width.");
+
+    device.def("create_frame_pool",
+        [](Device& self, int count, int32_t width, int32_t height,
+           int32_t row_bytes, _BMDPixelFormat pixel_format) {
+            if (!self.output_)
+                throw std::runtime_error("Video output not enabled");
+            if (!self.output_callback_)
+                throw std::runtime_error("No output callback");
+            self.output_callback_->create_pool(
+                self.output_.get(), count, width, height, row_bytes, pixel_format);
+        },
+        nb::arg("count"), nb::arg("width"), nb::arg("height"),
+        nb::arg("row_bytes"), nb::arg("pixel_format"),
+        "Pre-allocate a pool of output frames. Completed frames return to the pool automatically.");
+
+    device.def("acquire_output_frame",
+        [](Device& self, int timeout_ms) -> MutableFrame {
+            if (!self.output_callback_)
+                throw std::runtime_error("No output callback");
+            nb::gil_scoped_release release;
+            auto* raw = self.output_callback_->acquire(timeout_ms);
+            if (!raw)
+                throw std::runtime_error("Timed out waiting for output frame from pool");
+            // Build a MutableFrame without AddRef — pool owns the frame.
+            raw->AddRef();
+            MutableFrame mf;
+            mf.frame = ComPtr<IDeckLinkMutableVideoFrame>(raw);
+            IDeckLinkVideoBuffer* buf = nullptr;
+            raw->QueryInterface(IID_IDeckLinkVideoBuffer, (void**)&buf);
+            mf.buffer = ComPtr<IDeckLinkVideoBuffer>(buf);
+            return mf;
+        },
+        nb::arg("timeout_ms") = 1000,
+        "Acquire a pre-allocated output frame from the pool. Blocks until one is available.");
+
+    device.def("schedule_output_frame",
+        [](Device& self, MutableFrame& mf,
+           int64_t display_time, int64_t duration, int64_t timescale) {
+            if (!self.output_)
+                throw std::runtime_error("Video output not enabled");
+            if (!mf.frame)
+                throw std::runtime_error("MutableFrame has no frame");
+            // End buffer access before scheduling.
+            if (mf.buffer)
+                mf.buffer->EndAccess(bmdBufferAccessReadAndWrite);
+            HRESULT hr = self.output_->ScheduleVideoFrame(
+                mf.frame.get(), display_time, duration, timescale);
+            if (hr != S_OK)
+                throw std::runtime_error(
+                    "ScheduleVideoFrame failed (HRESULT " + std::to_string(hr) + ")");
+        },
+        nb::arg("frame"), nb::arg("display_time"),
+        nb::arg("duration"), nb::arg("timescale"),
+        "Schedule a pre-allocated output frame. No allocation, no copy.");
+
+    device.def_prop_ro("pool_available",
+        [](Device& self) -> size_t {
+            if (!self.output_callback_) return 0;
+            return self.output_callback_->pool_available();
+        },
+        "Number of output frames available in the pool.");
 
     device.def("disable_video_output",
         [](Device& self) {
@@ -272,6 +419,24 @@ void init_decklink_output(nb::module_& m, nb::class_<Device>& device) {
         nb::arg("display_time"), nb::arg("duration"), nb::arg("timescale"),
         "Schedule a video frame for playback.");
 
+    device.def("schedule_capture_frame",
+        [](Device& self, CaptureFrameRef& capture_frame,
+           int64_t display_time, int64_t duration, int64_t timescale) {
+            if (!self.output_)
+                throw std::runtime_error("Video output not enabled");
+            if (!capture_frame.frame)
+                throw std::runtime_error("CaptureFrameRef has no frame");
+            // IDeckLinkVideoInputFrame inherits IDeckLinkVideoFrame.
+            // Upcast directly — no QI needed.
+            IDeckLinkVideoFrame* vf = static_cast<IDeckLinkVideoFrame*>(capture_frame.frame.get());
+            HRESULT hr = self.output_->ScheduleVideoFrame(vf, display_time, duration, timescale);
+            if (hr != S_OK)
+                throw std::runtime_error("ScheduleVideoFrame failed (HRESULT " + std::to_string(hr) + ")");
+        },
+        nb::arg("capture_frame"),
+        nb::arg("display_time"), nb::arg("duration"), nb::arg("timescale"),
+        "Schedule a zero-copy captured frame for playback. No memcpy.");
+
     device.def("start_scheduled_playback",
         [](Device& self, int64_t start_time, int64_t timescale, double speed) {
             if (!self.output_)
@@ -366,4 +531,16 @@ void init_decklink_output(nb::module_& m, nb::class_<Device>& device) {
         },
         nb::arg("setting"),
         "Get an integer configuration value.");
+
+    device.def("write_config",
+        [](Device& self) {
+            IDeckLinkConfiguration* config = nullptr;
+            if (self.dl->QueryInterface(IID_IDeckLinkConfiguration, (void**)&config) != S_OK)
+                throw std::runtime_error("Device does not support configuration");
+            ComPtr<IDeckLinkConfiguration> guard(config);
+            HRESULT hr = config->WriteConfigurationToPreferences();
+            if (hr != S_OK)
+                throw std::runtime_error("WriteConfigurationToPreferences failed (HRESULT " + std::to_string(hr) + ")");
+        },
+        "Persist configuration changes to preferences.");
 }

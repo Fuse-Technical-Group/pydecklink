@@ -13,6 +13,14 @@
 #include <queue>
 #include <stdexcept>
 #include <string>
+#include <time.h>
+
+/// Return CLOCK_MONOTONIC_RAW time in microseconds.
+static int64_t monotonic_raw_us() {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
+    return static_cast<int64_t>(ts.tv_sec) * 1000000 + ts.tv_nsec / 1000;
+}
 
 /// Captured frame data, copied from the SDK's callback thread.
 struct CaptureFrame {
@@ -27,6 +35,8 @@ struct CaptureFrame {
     bool has_signal = true;
 };
 
+// CaptureFrameRef is defined in bind_input.h for cross-module use.
+
 /// Information about the currently detected input format.
 struct InputFormatInfo {
     _BMDDisplayMode mode = bmdModeUnknown;
@@ -38,9 +48,9 @@ struct InputFormatInfo {
 /// Copies frame data into a bounded thread-safe queue.
 class InputCallback : public IDeckLinkInputCallback {
 public:
-    InputCallback(IDeckLinkInput* input, size_t max_queue = 8)
+    InputCallback(IDeckLinkInput* input, size_t max_queue = 8, bool zero_copy = false)
         : ref_count_(1), input_(input), max_queue_(max_queue),
-          format_detection_enabled_(false) {}
+          format_detection_enabled_(false), zero_copy_(zero_copy) {}
 
     void set_format_detection(bool enabled) {
         format_detection_enabled_ = enabled;
@@ -104,45 +114,65 @@ public:
             IDeckLinkAudioInputPacket*) override {
         if (!videoFrame) return S_OK;
 
-        CaptureFrame cf;
-        cf.width = videoFrame->GetWidth();
-        cf.height = videoFrame->GetHeight();
-        cf.row_bytes = videoFrame->GetRowBytes();
-        cf.pixel_format = static_cast<_BMDPixelFormat>(videoFrame->GetPixelFormat());
-        cf.has_signal = !(videoFrame->GetFlags() & bmdFrameHasNoInputSource);
-
-        // Stream time.
-        videoFrame->GetStreamTime(&cf.stream_time, &cf.stream_duration, timescale_);
-
-        // Hardware reference timestamp.
-        BMDTimeValue hw_time = 0, hw_dur = 0;
+        int64_t arrived_us = monotonic_raw_us();
+        bool has_signal = !(videoFrame->GetFlags() & bmdFrameHasNoInputSource);
+        int64_t st = 0, sd = 0, hw_time = 0, hw_dur = 0;
+        videoFrame->GetStreamTime(&st, &sd, timescale_);
         videoFrame->GetHardwareReferenceTimestamp(timescale_, &hw_time, &hw_dur);
-        cf.hw_ref_timestamp = hw_time;
 
-        // Copy pixel data.
-        IDeckLinkVideoBuffer* buf = nullptr;
-        videoFrame->QueryInterface(IID_IDeckLinkVideoBuffer, (void**)&buf);
-        if (buf) {
-            buf->StartAccess(bmdBufferAccessRead);
-            void* bytes = nullptr;
-            buf->GetBytes(&bytes);
-            if (bytes) {
-                size_t total = static_cast<size_t>(cf.row_bytes) * cf.height;
-                cf.pixels.resize(total);
-                std::memcpy(cf.pixels.data(), bytes, total);
+        if (zero_copy_) {
+            // Zero-copy path: AddRef the SDK frame and enqueue.
+            CaptureFrameRef cfr;
+            videoFrame->AddRef();
+            cfr.frame = ComPtr<IDeckLinkVideoInputFrame>(videoFrame);
+            cfr.has_signal = has_signal;
+            cfr.stream_time = st;
+            cfr.stream_duration = sd;
+            cfr.hw_ref_timestamp = hw_time;
+            cfr.callback_arrived_us = arrived_us;
+
+            {
+                std::lock_guard<std::mutex> lock(ref_queue_mutex_);
+                if (ref_queue_.size() >= max_queue_)
+                    ref_queue_.pop();
+                ref_queue_.push(std::move(cfr));
             }
-            buf->EndAccess(bmdBufferAccessRead);
-            buf->Release();
-        }
+            ref_queue_cv_.notify_one();
+        } else {
+            // Copy path: memcpy pixel data into CaptureFrame.
+            CaptureFrame cf;
+            cf.width = videoFrame->GetWidth();
+            cf.height = videoFrame->GetHeight();
+            cf.row_bytes = videoFrame->GetRowBytes();
+            cf.pixel_format = static_cast<_BMDPixelFormat>(videoFrame->GetPixelFormat());
+            cf.has_signal = has_signal;
+            cf.stream_time = st;
+            cf.stream_duration = sd;
+            cf.hw_ref_timestamp = hw_time;
 
-        // Enqueue (drop oldest on overflow).
-        {
-            std::lock_guard<std::mutex> lock(queue_mutex_);
-            if (queue_.size() >= max_queue_)
-                queue_.pop();
-            queue_.push(std::move(cf));
+            IDeckLinkVideoBuffer* buf = nullptr;
+            videoFrame->QueryInterface(IID_IDeckLinkVideoBuffer, (void**)&buf);
+            if (buf) {
+                buf->StartAccess(bmdBufferAccessRead);
+                void* bytes = nullptr;
+                buf->GetBytes(&bytes);
+                if (bytes) {
+                    size_t total = static_cast<size_t>(cf.row_bytes) * cf.height;
+                    cf.pixels.resize(total);
+                    std::memcpy(cf.pixels.data(), bytes, total);
+                }
+                buf->EndAccess(bmdBufferAccessRead);
+                buf->Release();
+            }
+
+            {
+                std::lock_guard<std::mutex> lock(queue_mutex_);
+                if (queue_.size() >= max_queue_)
+                    queue_.pop();
+                queue_.push(std::move(cf));
+            }
+            queue_cv_.notify_one();
         }
-        queue_cv_.notify_one();
 
         return S_OK;
     }
@@ -155,6 +185,17 @@ public:
         }
         CaptureFrame f = std::move(queue_.front());
         queue_.pop();
+        return f;
+    }
+
+    std::optional<CaptureFrameRef> pop_ref(int timeout_ms) {
+        std::unique_lock<std::mutex> lock(ref_queue_mutex_);
+        if (!ref_queue_cv_.wait_for(lock, std::chrono::milliseconds(timeout_ms),
+                                    [this] { return !ref_queue_.empty(); })) {
+            return std::nullopt;
+        }
+        CaptureFrameRef f = std::move(ref_queue_.front());
+        ref_queue_.pop();
         return f;
     }
 
@@ -175,17 +216,25 @@ private:
     IDeckLinkInput* input_;  // Non-owning; Device owns this.
     size_t max_queue_;
     bool format_detection_enabled_;
+    bool zero_copy_;
     int64_t timescale_ = 10000000;  // Default 10MHz.
 
     std::mutex queue_mutex_;
     std::condition_variable queue_cv_;
     std::queue<CaptureFrame> queue_;
 
+    std::mutex ref_queue_mutex_;
+    std::condition_variable ref_queue_cv_;
+    std::queue<CaptureFrameRef> ref_queue_;
+
     mutable std::mutex format_mutex_;
     InputFormatInfo current_format_;
 };
 
 void init_decklink_input(nb::module_& m, nb::class_<Device>& device) {
+
+    m.def("clock_us", []() -> int64_t { return monotonic_raw_us(); },
+          "Return CLOCK_MONOTONIC_RAW time in microseconds.");
 
     // -- CaptureFrame --
     nb::class_<CaptureFrame>(m, "CaptureFrame")
@@ -209,6 +258,25 @@ void init_decklink_input(nb::module_& m, nb::class_<Device>& device) {
                    ", signal=" + (self.has_signal ? "True" : "False") + ")";
         });
 
+    // -- CaptureFrameRef (zero-copy) --
+    nb::class_<CaptureFrameRef>(m, "CaptureFrameRef")
+        .def_prop_ro("width", &CaptureFrameRef::width)
+        .def_prop_ro("height", &CaptureFrameRef::height)
+        .def_prop_ro("row_bytes", &CaptureFrameRef::row_bytes)
+        .def_prop_ro("pixel_format", &CaptureFrameRef::pixel_format)
+        .def_ro("has_signal", &CaptureFrameRef::has_signal)
+        .def_ro("hardware_reference_timestamp", &CaptureFrameRef::hw_ref_timestamp)
+        .def_ro("callback_arrived_us", &CaptureFrameRef::callback_arrived_us,
+                "CLOCK_MONOTONIC_RAW time (microseconds) when the callback fired.")
+        .def_prop_ro("stream_time", [](const CaptureFrameRef& self) {
+            return std::make_tuple(self.stream_time, self.stream_duration);
+        }, "Stream time as (time, duration) tuple.")
+        .def("__repr__", [](const CaptureFrameRef& self) {
+            return "CaptureFrameRef(" +
+                   std::to_string(self.width()) + "x" + std::to_string(self.height()) +
+                   ", signal=" + (self.has_signal ? "True" : "False") + ")";
+        });
+
     // -- InputFormatInfo --
     nb::class_<InputFormatInfo>(m, "InputFormatInfo")
         .def_ro("mode", &InputFormatInfo::mode)
@@ -221,7 +289,7 @@ void init_decklink_input(nb::module_& m, nb::class_<Device>& device) {
 
     device.def("enable_video_input",
         [](Device& self, _BMDDisplayMode mode, _BMDPixelFormat pixel_format,
-           _BMDVideoInputFlags flags) {
+           _BMDVideoInputFlags flags, bool zero_copy) {
             IDeckLinkInput* input = nullptr;
             if (self.dl->QueryInterface(IID_IDeckLinkInput, (void**)&input) != S_OK)
                 throw std::runtime_error("Device does not support input");
@@ -231,7 +299,7 @@ void init_decklink_input(nb::module_& m, nb::class_<Device>& device) {
                 throw std::runtime_error("EnableVideoInput failed (HRESULT " + std::to_string(hr) + ")");
             }
             self.input_ = ComPtr<IDeckLinkInput>(input);
-            self.input_callback_ = new InputCallback(input);
+            self.input_callback_ = new InputCallback(input, 8, zero_copy);
             self.input_callback_->set_current_format(mode, pixel_format, flags);
             bool format_detection = (flags & bmdVideoInputEnableFormatDetection) != 0;
             self.input_callback_->set_format_detection(format_detection);
@@ -239,6 +307,7 @@ void init_decklink_input(nb::module_& m, nb::class_<Device>& device) {
         },
         nb::arg("mode"), nb::arg("pixel_format"),
         nb::arg("flags") = bmdVideoInputFlagDefault,
+        nb::arg("zero_copy") = false,
         "Enable video input for the given display mode and pixel format.");
 
     device.def("disable_video_input",
@@ -285,6 +354,16 @@ void init_decklink_input(nb::module_& m, nb::class_<Device>& device) {
         },
         nb::arg("timeout_ms") = 1000,
         "Pop a captured frame from the queue, or None on timeout.");
+
+    device.def("pop_capture_frame_ref",
+        [](Device& self, int timeout_ms) -> std::optional<CaptureFrameRef> {
+            if (!self.input_callback_)
+                throw std::runtime_error("Video input not enabled");
+            nb::gil_scoped_release release;
+            return self.input_callback_->pop_ref(timeout_ms);
+        },
+        nb::arg("timeout_ms") = 1000,
+        "Pop a zero-copy captured frame reference, or None on timeout.");
 
     device.def_prop_ro("current_input_format",
         [](Device& self) -> std::optional<InputFormatInfo> {

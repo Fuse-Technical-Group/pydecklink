@@ -161,7 +161,67 @@ nb::class_<Device> init_decklink_device(nb::module_& m) {
             return "Device('" + self.display_name() + "')";
         })
         .def("__enter__", [](nb::object self) -> nb::object { return self; })
-        .def("__exit__", [](Device&, nb::args) {});
+        .def("__exit__", [](Device&, nb::args) {})
+        .def("get_attribute_int",
+            [](Device& self, _BMDDeckLinkAttributeID attrID) -> int64_t {
+                IDeckLinkProfileAttributes* attrs = nullptr;
+                if (self.dl->QueryInterface(IID_IDeckLinkProfileAttributes, (void**)&attrs) != S_OK)
+                    throw std::runtime_error("Device does not support profile attributes");
+                ComPtr<IDeckLinkProfileAttributes> guard(attrs);
+                int64_t value = 0;
+                HRESULT hr = attrs->GetInt(attrID, &value);
+                if (hr != S_OK)
+                    throw std::runtime_error("GetInt failed (HRESULT " + std::to_string(hr) + ")");
+                return value;
+            },
+            nb::arg("attr_id"),
+            "Get an integer profile attribute.")
+        .def("active_profile",
+            [](Device& self) -> _BMDProfileID {
+                IDeckLinkProfileAttributes* attrs = nullptr;
+                if (self.dl->QueryInterface(IID_IDeckLinkProfileAttributes, (void**)&attrs) != S_OK)
+                    throw std::runtime_error("Device does not support profile attributes");
+                ComPtr<IDeckLinkProfileAttributes> guard(attrs);
+                int64_t value = 0;
+                HRESULT hr = attrs->GetInt(BMDDeckLinkProfileID, &value);
+                if (hr != S_OK)
+                    throw std::runtime_error("Failed to read ProfileID (HRESULT " + std::to_string(hr) + ")");
+                return static_cast<_BMDProfileID>(value);
+            },
+            "Return the active profile ID for this device.")
+        .def("set_profile",
+            [](Device& self, _BMDProfileID profileID) {
+                IDeckLinkProfileManager* mgr = nullptr;
+                if (self.dl->QueryInterface(IID_IDeckLinkProfileManager, (void**)&mgr) != S_OK)
+                    throw std::runtime_error("Device does not support profile management");
+                ComPtr<IDeckLinkProfileManager> mgr_guard(mgr);
+
+                IDeckLinkProfile* profile = nullptr;
+                HRESULT hr = mgr->GetProfile(profileID, &profile);
+                if (hr != S_OK || !profile)
+                    throw std::runtime_error("Profile not available (HRESULT " + std::to_string(hr) + ")");
+                ComPtr<IDeckLinkProfile> prof_guard(profile);
+
+                hr = profile->SetActive();
+                if (hr != S_OK)
+                    throw std::runtime_error("SetActive failed (HRESULT " + std::to_string(hr) + ")");
+            },
+            nb::arg("profile_id"),
+            "Activate a connector profile. Affects all sub-devices on this card.")
+        .def("get_attribute_flag",
+            [](Device& self, _BMDDeckLinkAttributeID attrID) -> bool {
+                IDeckLinkProfileAttributes* attrs = nullptr;
+                if (self.dl->QueryInterface(IID_IDeckLinkProfileAttributes, (void**)&attrs) != S_OK)
+                    throw std::runtime_error("Device does not support profile attributes");
+                ComPtr<IDeckLinkProfileAttributes> guard(attrs);
+                bool value = false;
+                HRESULT hr = attrs->GetFlag(attrID, &value);
+                if (hr != S_OK)
+                    throw std::runtime_error("GetFlag failed (HRESULT " + std::to_string(hr) + ")");
+                return value;
+            },
+            nb::arg("attr_id"),
+            "Get a boolean profile attribute.");
 
     return device_cls;
 }
