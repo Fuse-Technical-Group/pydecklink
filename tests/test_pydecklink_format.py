@@ -73,6 +73,48 @@ class TestGetModeFps:
         assert abs(fps - 25.0) < 0.01
 
 
+class TestGetModeFrameDuration:
+    """get_mode_frame_duration returns (duration, timescale) tuples."""
+
+    def test_function_exists(self):
+        assert callable(pydecklink.get_mode_frame_duration)
+
+    def test_5994_mode(self):
+        duration, timescale = pydecklink.get_mode_frame_duration(
+            pydecklink.DisplayMode.Mode4K2160p5994,
+        )
+        assert duration == 1001
+        assert timescale == 60000
+
+    def test_25_mode(self):
+        duration, timescale = pydecklink.get_mode_frame_duration(
+            pydecklink.DisplayMode.HD1080p25,
+        )
+        assert duration == 1000
+        assert timescale == 25000
+
+    def test_pal(self):
+        duration, timescale = pydecklink.get_mode_frame_duration(
+            pydecklink.DisplayMode.PAL,
+        )
+        assert duration == 1000
+        assert timescale == 25000
+
+    def test_ntsc(self):
+        duration, timescale = pydecklink.get_mode_frame_duration(
+            pydecklink.DisplayMode.NTSC,
+        )
+        assert duration == 1001
+        assert timescale == 30000
+
+    def test_consistent_with_fps(self):
+        """timescale/duration should equal get_mode_fps."""
+        mode = pydecklink.DisplayMode.HD1080p5994
+        duration, timescale = pydecklink.get_mode_frame_duration(mode)
+        fps = pydecklink.get_mode_fps(mode)
+        assert abs(timescale / duration - fps) < 0.001
+
+
 class TestGetFrameBytes:
     """get_frame_bytes returns correct byte counts."""
 
