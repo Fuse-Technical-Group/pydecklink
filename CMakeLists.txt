@@ -7,11 +7,20 @@ find_package(nanobind CONFIG REQUIRED)
 # Vendored DeckLink SDK headers (gitignored — not redistributed).
 set(DECKLINK_SDK_DIR "${CMAKE_SOURCE_DIR}/vendor/Blackmagic DeckLink SDK 15.3/Linux/include")
 
-nanobind_add_module(_bindings STABLE_ABI
-  src/pydecklink_ext/bindings.cpp
-  "${DECKLINK_SDK_DIR}/DeckLinkAPIDispatch.cpp"
-)
-target_include_directories(_bindings PRIVATE "${DECKLINK_SDK_DIR}")
+set(_bindings_sources src/pydecklink_ext/bindings.cpp)
+
+if(EXISTS "${DECKLINK_SDK_DIR}/DeckLinkAPIDispatch.cpp")
+  list(APPEND _bindings_sources "${DECKLINK_SDK_DIR}/DeckLinkAPIDispatch.cpp")
+  set(HAVE_DECKLINK_SDK TRUE)
+else()
+  message(STATUS "DeckLink SDK not found — building without SDK dispatch")
+  set(HAVE_DECKLINK_SDK FALSE)
+endif()
+
+nanobind_add_module(_bindings STABLE_ABI ${_bindings_sources})
+if(HAVE_DECKLINK_SDK)
+  target_include_directories(_bindings PRIVATE "${DECKLINK_SDK_DIR}")
+endif()
 install(TARGETS _bindings LIBRARY DESTINATION pydecklink)
 
 nanobind_add_stub(
