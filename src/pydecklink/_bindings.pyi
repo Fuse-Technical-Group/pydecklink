@@ -838,14 +838,10 @@ class VideoBufferAllocator:
 
     @property
     def allocated_count(self) -> int:
-        """Number of buffers ever allocated."""
-
-    @property
-    def pool_available(self) -> int:
-        """Number of buffers in the recycle pool."""
+        """Number of buffers allocated so far."""
 
     def allocate(self) -> ManagedBuffer:
-        """Allocate or recycle a ManagedBuffer."""
+        """Allocate a new ManagedBuffer."""
 
     def __repr__(self) -> "std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >": ...
 
