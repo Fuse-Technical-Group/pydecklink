@@ -36,6 +36,12 @@ jobs:
           uv sync
           uv run python -c "import pydecklink; print('import OK')"
 
+      - name: Stub freshness
+        run: |
+          diff -u src/pydecklink/_bindings.pyi \
+            .venv/lib/python3.*/site-packages/pydecklink/_bindings.pyi \
+            || { echo "::error::Committed stub is stale. Run 'uv sync' and copy the generated _bindings.pyi into src/pydecklink/."; exit 1; }
+
       - name: Mypy
         run: uv run mypy
 
