@@ -12,7 +12,7 @@
 
 namespace nb = nanobind;
 
-// monotonic_raw_us() is provided by platform.h (included via bind_device.h).
+// steady_clock_us() is provided by platform.h (included via bind_device.h).
 
 /// Captured frame data, copied from the SDK's callback thread.
 struct CaptureFrame {
@@ -122,7 +122,7 @@ public:
             IDeckLinkAudioInputPacket*) override {
         if (!videoFrame) return S_OK;
 
-        int64_t arrived_us = monotonic_raw_us();
+        int64_t arrived_us = steady_clock_us();
         bool has_signal = !(videoFrame->GetFlags() & bmdFrameHasNoInputSource);
         int64_t st = 0, sd = 0, hw_time = 0, hw_dur = 0;
         videoFrame->GetStreamTime(&st, &sd, timescale_);

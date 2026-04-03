@@ -1,8 +1,10 @@
 #pragma once
 
+#include <chrono>
+
 // Platform compatibility layer for DeckLink SDK differences between
-// Linux/Mac (dlopen dispatch, const char* strings, POSIX clocks) and
-// Windows (COM CoCreateInstance, BSTR strings, QPC).
+// Linux/Mac (dlopen dispatch, const char* strings) and
+// Windows (COM CoCreateInstance, BSTR strings).
 
 #ifdef _WIN32
 
@@ -48,24 +50,11 @@ inline std::string DeckLinkStringToStd(BSTR bstr) {
     return result;
 }
 
-// Monotonic clock using QueryPerformanceCounter.
-inline int64_t monotonic_raw_us() {
-    static LARGE_INTEGER freq = []() {
-        LARGE_INTEGER f;
-        QueryPerformanceFrequency(&f);
-        return f;
-    }();
-    LARGE_INTEGER now;
-    QueryPerformanceCounter(&now);
-    return now.QuadPart * 1000000 / freq.QuadPart;
-}
-
 #else  // Linux / macOS
 
 #include "DeckLinkAPI.h"
 #include <cstdlib>
 #include <string>
-#include <time.h>
 
 // DeckLink type aliases on Linux/Mac.
 using dlstring_t = const char*;
@@ -82,16 +71,11 @@ inline std::string DeckLinkStringToStd(const char* str) {
     return result;
 }
 
-// Monotonic clock using CLOCK_MONOTONIC_RAW (Linux) or CLOCK_MONOTONIC (Mac).
-inline int64_t monotonic_raw_us() {
-#ifdef CLOCK_MONOTONIC_RAW
-    clockid_t clk = CLOCK_MONOTONIC_RAW;
-#else
-    clockid_t clk = CLOCK_MONOTONIC;
 #endif
-    struct timespec ts;
-    clock_gettime(clk, &ts);
-    return static_cast<int64_t>(ts.tv_sec) * 1000000 + ts.tv_nsec / 1000;
-}
 
-#endif
+// Monotonic clock in microseconds (platform-independent).
+inline int64_t steady_clock_us() {
+    using namespace std::chrono;
+    return duration_cast<microseconds>(
+        steady_clock::now().time_since_epoch()).count();
+}

@@ -9,7 +9,7 @@
 
 void init_decklink_input(nb::module_& m, nb::class_<Device>& device) {
 
-    m.def("clock_us", []() -> int64_t { return monotonic_raw_us(); },
+    m.def("clock_us", []() -> int64_t { return steady_clock_us(); },
           "Return CLOCK_MONOTONIC_RAW time in microseconds.");
 
     // -- CaptureFrame --
