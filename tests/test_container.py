@@ -25,7 +25,7 @@ import pytest
 if sys.platform == "win32":
     pytest.skip("Linux container tests", allow_module_level=True)
 
-import resource  # noqa: E402  # Unix-only; guarded above
+import resource  # Unix-only; guarded above
 
 pytestmark = pytest.mark.hardware
 
