@@ -18,9 +18,14 @@ is to move the setting into the Dockerfile.  These tests catch that.
 from __future__ import annotations
 
 import os
-import resource
+import sys
 
 import pytest
+
+if sys.platform == "win32":
+    pytest.skip("Linux container tests", allow_module_level=True)
+
+import resource  # noqa: E402  # Unix-only; guarded above
 
 pytestmark = pytest.mark.hardware
 
