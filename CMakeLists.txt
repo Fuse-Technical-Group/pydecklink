@@ -28,13 +28,21 @@ if(WIN32 AND EXISTS "${DECKLINK_SDK_DIR}/DeckLinkAPI.idl")
   # Windows: generate headers from IDL via midl, link COM stubs.
   set(HAVE_DECKLINK_SDK TRUE)
 
+  find_program(MIDL_EXECUTABLE midl
+    HINTS "$ENV{WindowsSdkVerBinPath}/x64"
+          "C:/Program Files (x86)/Windows Kits/10/bin/${CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION}/x64"
+  )
+  if(NOT MIDL_EXECUTABLE)
+    message(FATAL_ERROR "midl.exe not found — install the Windows SDK or run from a VS developer prompt")
+  endif()
+
   set(_midl_output_dir "${CMAKE_CURRENT_BINARY_DIR}/decklink_generated")
   file(MAKE_DIRECTORY "${_midl_output_dir}")
 
   add_custom_command(
     OUTPUT "${_midl_output_dir}/DeckLinkAPI.h"
            "${_midl_output_dir}/DeckLinkAPI_i.c"
-    COMMAND midl
+    COMMAND "${MIDL_EXECUTABLE}"
       /h "${_midl_output_dir}/DeckLinkAPI.h"
       /iid "${_midl_output_dir}/DeckLinkAPI_i.c"
       /env x64
