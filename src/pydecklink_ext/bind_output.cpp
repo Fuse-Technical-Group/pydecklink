@@ -24,7 +24,7 @@ void init_decklink_output(nb::module_& m, nb::class_<Device>& device) {
                    ", dropped=" + std::to_string(s.dropped) +
                    ", flushed=" + std::to_string(s.flushed) +
                    ", underrun=" + std::string(s.underrun ? "True" : "False") + ")";
-        });
+        }, nb::sig("def __repr__(self) -> str")); // avoid platform-specific C++ type in stub
 
     // -- MutableFrame --
     nb::class_<MutableFrame>(m, "MutableFrame")

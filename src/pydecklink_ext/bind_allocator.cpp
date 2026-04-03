@@ -29,7 +29,7 @@ void init_decklink_allocator(nb::module_& m, nb::class_<Device>& device) {
         }, "Writeable numpy uint8 view of the buffer.")
         .def("__repr__", [](const ManagedBuffer& self) {
             return "ManagedBuffer(size=" + std::to_string(self.size()) + ")";
-        });
+        }, nb::sig("def __repr__(self) -> str")); // avoid platform-specific C++ type in stub
 
     // -- VideoBufferAllocator --
     nb::class_<VideoBufferAllocator>(m, "VideoBufferAllocator")
@@ -81,7 +81,7 @@ void init_decklink_allocator(nb::module_& m, nb::class_<Device>& device) {
             return "VideoBufferAllocator(size=" +
                    std::to_string(self.buffer_size()) + ", allocated=" +
                    std::to_string(self.allocated_count()) + ")";
-        });
+        }, nb::sig("def __repr__(self) -> str")); // avoid platform-specific C++ type in stub
 
     // -- VideoBufferAllocatorProvider --
     nb::class_<VideoBufferAllocatorProvider>(m, "VideoBufferAllocatorProvider")
