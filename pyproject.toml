@@ -66,3 +66,7 @@ cmake.build-type = "Release"
 
 [tool.scikit-build.cmake.define]
 DECKLINK_SDK_DIR = {env = "DECKLINK_SDK_DIR", default = "vendor/Blackmagic DeckLink SDK 15.3/Linux/include"}
+
+[[tool.scikit-build.overrides]]
+if.platform-system = "win32"
+cmake.define.DECKLINK_SDK_DIR = {env = "DECKLINK_SDK_DIR", default = "vendor/Blackmagic DeckLink SDK 15.3/Win/include"}
