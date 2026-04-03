@@ -1,7 +1,6 @@
 #include "bind_output.h"
 #include "bind_input.h"
 #include "bind_device.h"
-#include "DeckLinkAPI.h"
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
 #include <nanobind/stl/tuple.h>
@@ -307,9 +306,9 @@ void init_decklink_output(nb::module_& m, nb::class_<Device>& device) {
     device.def_prop_ro("is_scheduled_playback_running",
         [](Device& self) -> bool {
             if (!self.output_) return false;
-            bool active = false;
+            dlbool_t active = false;
             self.output_->IsScheduledPlaybackRunning(&active);
-            return active;
+            return static_cast<bool>(active);
         },
         "True if scheduled playback is currently running.");
 
@@ -327,7 +326,7 @@ void init_decklink_output(nb::module_& m, nb::class_<Device>& device) {
             if (self.dl->QueryInterface(IID_IDeckLinkConfiguration, (void**)&config) != S_OK)
                 throw std::runtime_error("Device does not support configuration");
             ComPtr<IDeckLinkConfiguration> guard(config);
-            HRESULT hr = config->SetFlag(cfgID, value);
+            HRESULT hr = config->SetFlag(cfgID, static_cast<dlbool_t>(value));
             if (hr != S_OK)
                 throw std::runtime_error("SetFlag failed (HRESULT " + std::to_string(hr) + ")");
         },
@@ -340,11 +339,11 @@ void init_decklink_output(nb::module_& m, nb::class_<Device>& device) {
             if (self.dl->QueryInterface(IID_IDeckLinkConfiguration, (void**)&config) != S_OK)
                 throw std::runtime_error("Device does not support configuration");
             ComPtr<IDeckLinkConfiguration> guard(config);
-            bool value = false;
+            dlbool_t value = false;
             HRESULT hr = config->GetFlag(cfgID, &value);
             if (hr != S_OK)
                 throw std::runtime_error("GetFlag failed (HRESULT " + std::to_string(hr) + ")");
-            return value;
+            return static_cast<bool>(value);
         },
         nb::arg("flag"),
         "Get a boolean configuration flag.");

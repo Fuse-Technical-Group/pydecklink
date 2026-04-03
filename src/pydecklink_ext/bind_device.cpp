@@ -1,5 +1,4 @@
 #include "bind_device.h"
-#include "DeckLinkAPI.h"
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/tuple.h>
 #include <nanobind/stl/vector.h>
@@ -33,19 +32,15 @@ Device::Device(int index) {
 }
 
 std::string Device::model_name() const {
-    const char* str = nullptr;
+    dlstring_t str = nullptr;
     if (dl->GetModelName(&str) != S_OK || !str) return "";
-    std::string result(str);
-    free(const_cast<char*>(str));
-    return result;
+    return DeckLinkStringToStd(str);
 }
 
 std::string Device::display_name() const {
-    const char* str = nullptr;
+    dlstring_t str = nullptr;
     if (dl->GetDisplayName(&str) != S_OK || !str) return "";
-    std::string result(str);
-    free(const_cast<char*>(str));
-    return result;
+    return DeckLinkStringToStd(str);
 }
 
 bool Device::supports_capture() const {
@@ -72,7 +67,7 @@ bool Device::supports_input_format_detection() const {
     IDeckLinkProfileAttributes* attrs = nullptr;
     if (dl->QueryInterface(IID_IDeckLinkProfileAttributes, (void**)&attrs) != S_OK)
         return false;
-    bool flag = false;
+    dlbool_t flag = false;
     attrs->GetFlag(BMDDeckLinkSupportsInputFormatDetection, &flag);
     attrs->Release();
     return flag;
@@ -82,7 +77,7 @@ bool Device::supports_hdr() const {
     IDeckLinkProfileAttributes* attrs = nullptr;
     if (dl->QueryInterface(IID_IDeckLinkProfileAttributes, (void**)&attrs) != S_OK)
         return false;
-    bool flag = false;
+    dlbool_t flag = false;
     attrs->GetFlag(BMDDeckLinkSupportsHDRMetadata, &flag);
     attrs->Release();
     return flag;
@@ -115,10 +110,9 @@ static DisplayModeInfo extract_display_mode_info(IDeckLinkDisplayMode* dm) {
     info.frame_rate = std::make_tuple(static_cast<int64_t>(duration),
                                       static_cast<int64_t>(timescale));
 
-    const char* str = nullptr;
+    dlstring_t str = nullptr;
     if (dm->GetName(&str) == S_OK && str) {
-        info.name = str;
-        free(const_cast<char*>(str));
+        info.name = DeckLinkStringToStd(str);
     }
     return info;
 }
@@ -169,16 +163,12 @@ nb::class_<Device> init_decklink_device(nb::module_& m) {
         while (iter->Next(&dl) == S_OK) {
             DeviceInfo info;
             info.index = idx++;
-            const char* str = nullptr;
-            if (dl->GetModelName(&str) == S_OK && str) {
-                info.model_name = str;
-                free(const_cast<char*>(str));
-            }
+            dlstring_t str = nullptr;
+            if (dl->GetModelName(&str) == S_OK && str)
+                info.model_name = DeckLinkStringToStd(str);
             str = nullptr;
-            if (dl->GetDisplayName(&str) == S_OK && str) {
-                info.display_name = str;
-                free(const_cast<char*>(str));
-            }
+            if (dl->GetDisplayName(&str) == S_OK && str)
+                info.display_name = DeckLinkStringToStd(str);
             dl->Release();
             result.push_back(std::move(info));
         }
@@ -251,11 +241,11 @@ nb::class_<Device> init_decklink_device(nb::module_& m) {
                 if (self.dl->QueryInterface(IID_IDeckLinkProfileAttributes, (void**)&attrs) != S_OK)
                     throw std::runtime_error("Device does not support profile attributes");
                 ComPtr<IDeckLinkProfileAttributes> guard(attrs);
-                bool value = false;
+                dlbool_t value = false;
                 HRESULT hr = attrs->GetFlag(attrID, &value);
                 if (hr != S_OK)
                     throw std::runtime_error("GetFlag failed (HRESULT " + std::to_string(hr) + ")");
-                return value;
+                return static_cast<bool>(value);
             },
             nb::arg("attr_id"),
             "Get a boolean profile attribute.");
@@ -332,13 +322,13 @@ nb::class_<Device> init_decklink_device(nb::module_& m) {
             ComPtr<IDeckLinkOutput> guard(output);
 
             BMDDisplayMode actual_mode = bmdModeUnknown;
-            bool supported = false;
+            dlbool_t supported = false;
             HRESULT hr = output->DoesSupportVideoMode(
                 connection, mode, pixel_format, conversion_mode, flags,
                 &actual_mode, &supported);
             if (hr != S_OK)
                 throw std::runtime_error("DoesSupportVideoMode failed (HRESULT " + std::to_string(hr) + ")");
-            return supported;
+            return static_cast<bool>(supported);
         },
         nb::arg("connection"),
         nb::arg("mode"),
