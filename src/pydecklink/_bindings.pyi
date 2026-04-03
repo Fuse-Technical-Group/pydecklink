@@ -711,7 +711,7 @@ class OutputStatus:
     @underrun.setter
     def underrun(self, arg: bool, /) -> None: ...
 
-    def __repr__(self) -> "std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >": ...
+    def __repr__(self) -> "std::basic_string<char,std::char_traits<char>,std::allocator<char> >": ...
 
 class MutableFrame:
     @property
@@ -760,7 +760,7 @@ class CaptureFrame:
     @property
     def has_signal(self) -> bool: ...
 
-    def __repr__(self) -> "std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >": ...
+    def __repr__(self) -> "std::basic_string<char,std::char_traits<char>,std::allocator<char> >": ...
 
 class CaptureFrameRef:
     @property
@@ -795,7 +795,7 @@ class CaptureFrameRef:
     def stream_time(self) -> tuple[int, int]:
         """Stream time as (time, duration) tuple."""
 
-    def __repr__(self) -> "std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >": ...
+    def __repr__(self) -> "std::basic_string<char,std::char_traits<char>,std::allocator<char> >": ...
 
 class InputFormatInfo:
     @property
@@ -804,7 +804,7 @@ class InputFormatInfo:
     @property
     def pixel_format(self) -> PixelFormat: ...
 
-    def __repr__(self) -> "std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >": ...
+    def __repr__(self) -> "std::basic_string<char,std::char_traits<char>,std::allocator<char> >": ...
 
 class ManagedBuffer:
     @property
@@ -815,7 +815,7 @@ class ManagedBuffer:
     def data(self) -> Annotated[NDArray[numpy.uint8], dict(shape=(None,))]:
         """Writeable numpy uint8 view of the buffer."""
 
-    def __repr__(self) -> "std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >": ...
+    def __repr__(self) -> "std::basic_string<char,std::char_traits<char>,std::allocator<char> >": ...
 
 class VideoBufferAllocator:
     def __init__(self, size: int, alloc: Callable | None = None, free: Callable | None = None) -> None:
@@ -843,7 +843,7 @@ class VideoBufferAllocator:
     def allocate(self) -> ManagedBuffer:
         """Allocate a new ManagedBuffer."""
 
-    def __repr__(self) -> "std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >": ...
+    def __repr__(self) -> "std::basic_string<char,std::char_traits<char>,std::allocator<char> >": ...
 
 class VideoBufferAllocatorProvider:
     def __init__(self, alloc: Callable | None = None, free: Callable | None = None) -> None:
