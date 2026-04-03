@@ -731,7 +731,7 @@ class MutableFrame:
         """Release buffer access (called automatically on frame use)."""
 
 def clock_us() -> int:
-    """Return CLOCK_MONOTONIC_RAW time in microseconds."""
+    """Return monotonic time in microseconds."""
 
 class CaptureFrame:
     @property
