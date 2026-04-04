@@ -61,19 +61,6 @@
 * **allocator:** add custom video buffer allocator for GPU DMA ([b73f935](https://github.com/Fuse-Technical-Group/pyntv2/commit/b73f935024b74556680e3973ff649c9d4953d51b))
 * **allocator:** custom video buffer allocator for GPU DMA ([ed5a00b](https://github.com/Fuse-Technical-Group/pyntv2/commit/ed5a00b13e8933677b37f0e9b562bcb684d3efec))
 
-## [Unreleased]
-
-### Added
-
-* **allocator:** custom video buffer allocator infrastructure for GPU DMA
-* **allocator:** VideoBufferAllocator, VideoBufferAllocatorProvider, ManagedBuffer
-* **device:** enable_video_input_with_allocator() for custom DMA buffers
-* **device:** create_frame_pool_pinned() for allocator-backed output frames
-
-### Changed
-
-* **build:** move OutputCallback and InputCallback to headers for cross-module access
-
 ## [0.1.15](https://github.com/Fuse-Technical-Group/pyntv2/compare/v0.1.14...v0.1.15) (2026-03-25)
 
 
