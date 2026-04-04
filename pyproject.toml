@@ -74,4 +74,3 @@ cmake.define.DECKLINK_SDK_DIR = {env = "DECKLINK_SDK_DIR", default = "vendor/Bla
 [[tool.scikit-build.overrides]]
 if.platform-system = "darwin"
 cmake.define.DECKLINK_SDK_DIR = {env = "DECKLINK_SDK_DIR", default = "vendor/Blackmagic DeckLink SDK 15.3/Mac/include"}
-
