@@ -8,6 +8,7 @@
 
 #ifdef _WIN32
 
+#include <Python.h>  // PyErr_WarnEx for COM apartment check
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>
@@ -22,10 +23,20 @@ using dlbool_t = BOOL;
 
 // On Windows, DeckLink uses COM.  The iterator is obtained via
 // CoCreateInstance rather than the dlopen-based dispatch on Linux.
+// DeckLink SDK callbacks arrive on internal threads, so MTA
+// (COINIT_MULTITHREADED) is required.  If the calling thread was
+// already initialized as STA by a GUI framework, CoInitializeEx
+// returns RPC_E_CHANGED_MODE — warn rather than silently proceed,
+// because downstream SDK calls may fail in hard-to-diagnose ways.
 inline IDeckLinkIterator* CreateDeckLinkIteratorInstance() {
     IDeckLinkIterator* iter = nullptr;
-    // CoInitializeEx is idempotent when called with the same flags.
-    CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    HRESULT co_hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    if (co_hr == RPC_E_CHANGED_MODE) {
+        PyErr_WarnEx(PyExc_RuntimeWarning,
+            "COM already initialized as STA on this thread. "
+            "pydecklink requires MTA (COINIT_MULTITHREADED). "
+            "DeckLink operations may fail.", 1);
+    }
     HRESULT hr = CoCreateInstance(
         CLSID_CDeckLinkIterator, nullptr, CLSCTX_ALL,
         IID_IDeckLinkIterator, reinterpret_cast<void**>(&iter));
