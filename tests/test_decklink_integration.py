@@ -69,7 +69,7 @@ def input_device():
 def loopback_pair(output_device, input_device):
     """Configure a playout → capture loopback pair.
 
-    Device 0 (SDI 1) outputs; device 2 (SDI 2) captures. Returns (output_dev, input_dev).
+    Device 0 (SDI 1) outputs; device 2 (SDI 2) captures.
     Tears down on exit.
     """
     output_device.enable_video_output(MODE)
