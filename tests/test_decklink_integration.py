@@ -4,7 +4,7 @@ Run with: pytest -m hardware tests/test_decklink_integration.py
 
 Requires:
 - At least two DeckLink sub-devices (or two cards).
-- Device 0 output connected to device 1 input via SDI cable (loopback).
+- Device 0 (SDI 1) output connected to device 2 (SDI 2) input via SDI cable (loopback).
 
 Tests verify the full path: host → DeckLink output → SDI cable →
 DeckLink input → host.
@@ -60,8 +60,8 @@ def output_device():
 
 @pytest.fixture()
 def input_device():
-    """Open DeckLink device 1 for input."""
-    dev = pydecklink.Device(index=1)
+    """Open DeckLink device 2 (SDI 2) for input."""
+    dev = pydecklink.Device(index=2)
     yield dev
 
 
@@ -69,7 +69,7 @@ def input_device():
 def loopback_pair(output_device, input_device):
     """Configure a playout → capture loopback pair.
 
-    Device 0 outputs; device 1 captures. Returns (output_dev, input_dev).
+    Device 0 (SDI 1) outputs; device 2 (SDI 2) captures. Returns (output_dev, input_dev).
     Tears down on exit.
     """
     output_device.enable_video_output(MODE)
