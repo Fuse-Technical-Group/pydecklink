@@ -2,24 +2,17 @@
 
 #include <nanobind/nanobind.h>
 #include "bind_device.h"
-#include "DeckLinkAPI.h"
 #include <atomic>
 #include <condition_variable>
 #include <cstring>
 #include <mutex>
 #include <optional>
 #include <queue>
-#include <time.h>
 #include <vector>
 
 namespace nb = nanobind;
 
-/// Return CLOCK_MONOTONIC_RAW time in microseconds.
-inline int64_t monotonic_raw_us() {
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
-    return static_cast<int64_t>(ts.tv_sec) * 1000000 + ts.tv_nsec / 1000;
-}
+// steady_clock_us() is provided by platform.h (included via bind_device.h).
 
 /// Captured frame data, copied from the SDK's callback thread.
 struct CaptureFrame {
@@ -129,7 +122,7 @@ public:
             IDeckLinkAudioInputPacket*) override {
         if (!videoFrame) return S_OK;
 
-        int64_t arrived_us = monotonic_raw_us();
+        int64_t arrived_us = steady_clock_us();
         bool has_signal = !(videoFrame->GetFlags() & bmdFrameHasNoInputSource);
         int64_t st = 0, sd = 0, hw_time = 0, hw_dur = 0;
         videoFrame->GetStreamTime(&st, &sd, timescale_);

@@ -2,7 +2,6 @@
 
 #include <nanobind/nanobind.h>
 #include "bind_device.h"
-#include "DeckLinkAPI.h"
 #include <atomic>
 #include <condition_variable>
 #include <mutex>

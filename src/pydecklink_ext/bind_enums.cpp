@@ -1,5 +1,5 @@
 #include "bind_enums.h"
-#include "DeckLinkAPI.h"
+#include "platform.h"
 
 void init_decklink_enums(nb::module_& m) {
 

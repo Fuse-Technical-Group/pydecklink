@@ -33,6 +33,16 @@ class TestOutputStatusExists:
         assert status.underrun is False
 
 
+class TestOutputStatusRepr:
+    """OutputStatus.__repr__ returns a valid string."""
+
+    def test_repr(self):
+        status = pydecklink.OutputStatus()
+        r = repr(status)
+        assert isinstance(r, str)
+        assert "OutputStatus" in r
+
+
 class TestMutableFrameExists:
     """MutableFrame class is importable."""
 

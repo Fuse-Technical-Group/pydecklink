@@ -11,6 +11,7 @@ build/
 *.so
 .venv/
 
+
 # Vendored SDKs — track DeckLink headers (redistributable per
 # Blackmagic's license). Exclude the rest of the SDK (samples,
 # binaries, docs) and any other vendored content.
@@ -20,3 +21,9 @@ vendor/Blackmagic DeckLink SDK 15.3/*
 !vendor/Blackmagic DeckLink SDK 15.3/Linux/
 vendor/Blackmagic DeckLink SDK 15.3/Linux/*
 !vendor/Blackmagic DeckLink SDK 15.3/Linux/include/
+!vendor/Blackmagic DeckLink SDK 15.3/Mac/
+vendor/Blackmagic DeckLink SDK 15.3/Mac/*
+!vendor/Blackmagic DeckLink SDK 15.3/Mac/include/
+!vendor/Blackmagic DeckLink SDK 15.3/Win/
+vendor/Blackmagic DeckLink SDK 15.3/Win/*
+!vendor/Blackmagic DeckLink SDK 15.3/Win/include/
