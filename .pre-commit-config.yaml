@@ -1,0 +1,21 @@
+ci:
+  autofix_prs: true
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: end-of-file-fixer
+        exclude: ^vendor/
+      - id: trailing-whitespace
+        exclude: ^vendor/
+      - id: check-toml
+      - id: check-yaml
+      - id: check-merge-conflict
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.9
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
