@@ -11,9 +11,6 @@ on:
 permissions:
   contents: write
 
-env:
-  AJANTV2_TAG: ntv2_17_5_0
-
 jobs:
   build:
     strategy:
@@ -30,14 +27,14 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Install system deps (Linux)
         if: matrix.platform == 'linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            build-essential cmake ninja-build libudev-dev pkg-config
+            build-essential cmake ninja-build pkg-config
 
       - name: Install system deps (macOS)
         if: matrix.platform == 'macos'
@@ -47,48 +44,9 @@ jobs:
         if: matrix.platform == 'windows'
         uses: ilammy/msvc-dev-cmd@v1
 
-      - name: Build libajantv2 (Unix)
-        if: matrix.platform != 'windows'
-        run: |
-          git clone --depth 1 --branch ${{ env.AJANTV2_TAG }} \
-            https://github.com/aja-video/libajantv2.git /tmp/libajantv2
-          cmake -S /tmp/libajantv2 -B /tmp/libajantv2/build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_INSTALL_PREFIX=/usr/local \
-            -DAJANTV2_DISABLE_DEMOS=ON \
-            -DAJANTV2_DISABLE_DRIVER=ON \
-            -DAJANTV2_DISABLE_TESTS=ON \
-            -DAJANTV2_DISABLE_TOOLS=ON \
-            -DAJANTV2_DISABLE_PLUGIN_LOAD=ON
-          cmake --build /tmp/libajantv2/build
-          sudo cmake --install /tmp/libajantv2/build
+      - uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
 
-      - name: Build libajantv2 (Windows)
-        if: matrix.platform == 'windows'
-        run: |
-          git clone --depth 1 --branch ${{ env.AJANTV2_TAG }} `
-            https://github.com/aja-video/libajantv2.git $env:RUNNER_TEMP\libajantv2
-          cmake -S $env:RUNNER_TEMP\libajantv2 -B $env:RUNNER_TEMP\libajantv2\build `
-            -DCMAKE_BUILD_TYPE=Release `
-            -DCMAKE_INSTALL_PREFIX=$env:RUNNER_TEMP\ajantv2-install `
-            -DAJANTV2_DISABLE_DEMOS=ON `
-            -DAJANTV2_DISABLE_DRIVER=ON `
-            -DAJANTV2_DISABLE_TESTS=ON `
-            -DAJANTV2_DISABLE_TOOLS=ON `
-            -DAJANTV2_DISABLE_PLUGIN_LOAD=ON
-          cmake --build $env:RUNNER_TEMP\libajantv2\build --config Release
-          cmake --install $env:RUNNER_TEMP\libajantv2\build --config Release
-
-      - uses: astral-sh/setup-uv@v5
-
-      - name: Build wheel (Unix)
-        if: matrix.platform != 'windows'
-        run: uv build --wheel
-
-      - name: Build wheel (Windows)
-        if: matrix.platform == 'windows'
-        env:
-          CMAKE_PREFIX_PATH: ${{ runner.temp }}\ajantv2-install
+      - name: Build wheel
         run: uv build --wheel
 
       - uses: actions/upload-artifact@v4
