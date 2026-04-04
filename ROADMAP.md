@@ -30,9 +30,6 @@ Derived from [SPEC.md](SPEC.md). Sections are in build-dependency order.
     C++ formatting for `src/pydecklink_ext/`.
   Add `pre-commit run --all-files` to `ci-linux` so CI enforces the
   same hooks. Consider `pre-commit.ci` for automatic PR fixups.
-- **stale-build-wheels**: `build-wheels.yml` still references
-  libajantv2 (removed in `refactor/extract-pyntv2`). Update or
-  remove the workflow.
 
 ## Future
 
