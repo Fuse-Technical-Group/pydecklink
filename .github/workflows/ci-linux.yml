@@ -46,15 +46,7 @@ jobs:
         run: uv run mypy
 
       - name: Unit tests
-        run: >-
-          uv run pytest
-          tests/test_pydecklink_import.py
-          tests/test_pydecklink_enums.py
-          tests/test_pydecklink_device.py
-          tests/test_pydecklink_format.py
-          tests/test_pydecklink_output.py
-          tests/test_pydecklink_input.py
-          -x --tb=short --noconftest
+        run: uv run pytest tests/ -x --tb=short --noconftest
 
   build:
     if: always()
