@@ -10,6 +10,14 @@ Derived from [SPEC.md](SPEC.md). Sections are in build-dependency order.
   (**custom-allocator**, **gpu-output-pool**) is complete; this
   workstream adds the CUDA-specific backend.
 
+## macOS Support
+
+- **macos-build**: Add macOS path to `platform.h` and CMakeLists.txt.
+  Mac SDK headers are already vendored. macOS uses CoreFoundation-based
+  COM (`CFPlugIn`) rather than `dlopen` dispatch (Linux) or Windows COM.
+  Extend `platform.h` with macOS type aliases and
+  `CreateDeckLinkIteratorInstance`. Add CI workflow for macOS.
+
 ## Future
 
 - **hdr-metadata**: `IDeckLinkVideoFrameMutableMetadataExtensions`
@@ -18,5 +26,3 @@ Derived from [SPEC.md](SPEC.md). Sections are in build-dependency order.
 - **audio-streams**: Audio capture/playout via
   `ScheduleAudioSamples` / `IDeckLinkAudioInputPacket`.
 - **ancillary-data**: Timecode, closed captions.
-- **macos-support**: macOS COM model differs (CoreFoundation-based).
-  Platform-conditional dispatch code.

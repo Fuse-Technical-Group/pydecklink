@@ -36,21 +36,32 @@ reproducibility.
 
 ### SDK integration
 
-- **Headers** — vendored in `vendor/` at a pinned version (15.3).
-  Header-only on Linux.
-- **Dispatch source** (`DeckLinkAPIDispatch.cpp`) — compiled into the
-  extension. Uses `dlopen` to load `libDeckLinkAPI.so` at runtime.
-  CMake conditionally includes it when the vendor directory exists,
-  allowing CI to build without the SDK.
-- **Runtime library** (`libDeckLinkAPI.so`) — host-installed via
-  Desktop Video. No link-time dependency; `dlopen` at import time.
+SDK headers are vendored in `vendor/` at a pinned version (15.3).
+The build system detects the platform and uses the appropriate SDK
+artefacts:
+
+| | Linux | Windows |
+|---|---|---|
+| SDK artefacts | C++ headers + dispatch source | IDL files → MIDL-generated headers + COM stubs |
+| Runtime library | `libDeckLinkAPI.so` via `dlopen` | COM interfaces via `CoCreateInstance` |
+| Build toolchain | C++ compiler, CMake | MSVC, Windows SDK (MIDL), CMake |
+
+A platform abstraction layer (`platform.h`) provides type aliases
+(`dlstring_t`, `dlbool_t`) and helpers (`DeckLinkStringToStd`,
+`CreateDeckLinkIteratorInstance`) that hide platform differences
+from all binding code.
+
+CMake conditionally includes SDK sources when present, allowing CI
+to build without the SDK on any platform.
 
 ### Constraints
 
 - SDK header version should match installed Desktop Video version.
-- Container runs as `ubuntu:1000` with `--userns=keep-id`. Host
-  DeckLink device nodes (`/dev/blackmagic/*`) passed via `--device`.
-- `libDeckLinkAPI.so` bind-mounted from host into container.
+- Linux container runs as `ubuntu:1000` with `--userns=keep-id`.
+  Host DeckLink device nodes (`/dev/blackmagic/*`) passed via
+  `--device`. `libDeckLinkAPI.so` bind-mounted from host.
+- Windows requires Visual Studio with the Desktop development with
+  C++ workload (MSVC + Windows SDK for MIDL).
 
 ## 3. Binding Technology
 
@@ -424,8 +435,9 @@ and `IDeckLinkVideoBuffer` for user-controlled DMA buffer allocation.
 - **Ancillary data.** Timecode, closed captions — deferred.
 - **HDR metadata.** The SDK supports it via frame metadata extensions.
   Deferred to Phase 2 (bmd-signal-gen integration needs it).
-- **Windows / macOS.** Linux first. macOS is a future goal (the SDK
-  supports it, but COM differs).
+- **macOS.** macOS COM model differs (CoreFoundation-based).
+  Platform-conditional dispatch code needed in `platform.h`.
+  Mac SDK headers are vendored; build support is next.
 - **Deck control.** `IDeckLinkDeckControl` (tape transport) is not
   bound.
 - **Video conversion.** No color space conversion, scaling. The SDK
