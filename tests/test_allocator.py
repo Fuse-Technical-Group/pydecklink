@@ -66,6 +66,27 @@ class TestVideoBufferAllocatorExists:
         assert alloc.allocated_count == 2
 
 
+class TestVideoBufferAllocatorRepr:
+    """VideoBufferAllocator.__repr__ returns a valid string."""
+
+    def test_repr(self):
+        alloc = pydecklink.VideoBufferAllocator(size=4096)
+        r = repr(alloc)
+        assert isinstance(r, str)
+        assert "VideoBufferAllocator" in r
+
+
+class TestManagedBufferRepr:
+    """ManagedBuffer.__repr__ returns a valid string."""
+
+    def test_repr(self):
+        alloc = pydecklink.VideoBufferAllocator(size=256)
+        buf = alloc.allocate()
+        r = repr(buf)
+        assert isinstance(r, str)
+        assert "ManagedBuffer" in r
+
+
 class TestVideoBufferAllocatorProviderExists:
     """VideoBufferAllocatorProvider class is importable."""
 
