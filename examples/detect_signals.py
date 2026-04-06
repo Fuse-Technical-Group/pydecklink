@@ -72,11 +72,20 @@ def _profile_info(dev: pydecklink.Device) -> str:
     return f"{profile} (duplex={duplex})"
 
 
-def probe_input(index: int, name: str) -> None:
-    """Enable format detection on a device, capture one frame, report status."""
+def _sdi_sort_key(label: str) -> tuple[int, int]:
+    """Sort key for SDI labels: known ports first, ordered by lowest port number."""
+    if label == "?":
+        return (1, 0)
+    digits = "".join(c if c.isdigit() else " " for c in label).split()
+    return (0, int(digits[0]) if digits else 9999)
+
+
+def probe_input(index: int, name: str) -> str:
+    """Enable format detection on a device, capture one frame, return a status line."""
     dev = pydecklink.Device(index=index)
     label = _physical_label(dev)
     profile = _profile_info(dev)
+    suffix = f"[decklink #{index}] {name}  profile={profile}"
 
     dev.enable_video_input(
         mode=pydecklink.DisplayMode.HD1080p25,
@@ -97,24 +106,22 @@ def probe_input(index: int, name: str) -> None:
                     break
 
         if frame is None or not frame.has_signal:
-            print(f"  [{index}] {name} ({label}): no signal  profile={profile}")
-            return
-
-        if fmt is not None and fmt.mode != pydecklink.DisplayMode.Unknown:
-            mode_name = pydecklink.DisplayMode(fmt.mode).name
-            pix_name = pydecklink.PixelFormat(fmt.pixel_format).name
+            body = "no signal"
         else:
-            mode_name = "unknown"
-            pix_name = "unknown"
-
-        print(
-            f"  [{index}] {name} ({label}): {frame.width}x{frame.height}"
-            f"  mode={mode_name}  pixel_format={pix_name}"
-            f"  profile={profile}"
-        )
+            if fmt is not None and fmt.mode != pydecklink.DisplayMode.Unknown:
+                mode_name = pydecklink.DisplayMode(fmt.mode).name
+                pix_name = pydecklink.PixelFormat(fmt.pixel_format).name
+            else:
+                mode_name = "unknown"
+                pix_name = "unknown"
+            body = (
+                f"{frame.width}x{frame.height}  mode={mode_name}  pixel_format={pix_name}"
+            )
     finally:
         dev.stop_streams()
         dev.disable_video_input()
+
+    return f"  {label:<8}  {body}  {suffix}"
 
 
 def main() -> None:
@@ -124,11 +131,21 @@ def main() -> None:
         sys.exit(1)
 
     print(f"Found {len(devices)} DeckLink device(s):\n")
+
+    rows: list[tuple[str, str]] = []
     for info in devices:
+        dev = pydecklink.Device(index=info.index)
+        label = _physical_label(dev)
+        del dev
         try:
-            probe_input(info.index, info.display_name)
+            line = probe_input(info.index, info.display_name)
         except RuntimeError as exc:
-            print(f"  [{info.index}] {info.display_name}: skipped ({exc})")
+            line = f"  {label:<8}  skipped ({exc})  [decklink #{info.index}] {info.display_name}"
+        rows.append((label, line))
+
+    rows.sort(key=lambda r: _sdi_sort_key(r[0]))
+    for _, line in rows:
+        print(line)
 
 
 if __name__ == "__main__":
