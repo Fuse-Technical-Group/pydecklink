@@ -44,7 +44,6 @@
     "source=${localEnv:HOME}/.claude/.credentials.json,target=/home/ubuntu/.claude/.credentials.json,type=bind",
     "source=${localEnv:HOME}/.claude/settings.json,target=/home/ubuntu/.claude/settings.json,type=bind",
     "source=${localEnv:HOME}/.claude/CLAUDE.md,target=/home/ubuntu/.claude/CLAUDE.md,type=bind",
-    "source=${localEnv:HOME}/.claude/ORCHESTRATOR.md,target=/home/ubuntu/.claude/ORCHESTRATOR.md,type=bind",
     "source=${localEnv:HOME}/.claude/commands,target=/home/ubuntu/.claude/commands,type=bind",
     // SSH agent forwarding for git signing/commits
     "source=${localEnv:SSH_AUTH_SOCK},target=/tmp/ssh-agent.sock,type=bind",

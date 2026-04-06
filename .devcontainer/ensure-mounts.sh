@@ -20,7 +20,6 @@ ensure_file() {
 ensure_file "${HOME}/.claude/.credentials.json"
 ensure_file "${HOME}/.claude/settings.json"
 ensure_file "${HOME}/.claude/CLAUDE.md"
-ensure_file "${HOME}/.claude/ORCHESTRATOR.md"
 ensure_dir "${HOME}/.claude/commands"
 
 # Git / GitHub CLI config
