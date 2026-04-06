@@ -16,6 +16,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import contextlib
 import queue
 import signal
 import sys
@@ -89,7 +90,6 @@ def main() -> None:
     height = pydecklink.get_mode_height(mode)
     fps = pydecklink.get_mode_fps(mode)
     frame_bytes = pydecklink.get_frame_bytes(mode, pixel_format)
-    row_bytes = frame_bytes // height
 
     # Native timescale from the SDK mode table.
     frame_duration, frame_timescale = pydecklink.get_mode_frame_duration(mode)
@@ -100,7 +100,8 @@ def main() -> None:
     preroll_count = 3
 
     print(f"Format: {width}x{height} @ {fps:.2f} fps, {frame_bytes} bytes/frame")
-    print(f"Pre-roll: {preroll_count} frames ({preroll_count * frame_duration / frame_timescale * 1000:.0f} ms)")
+    preroll_ms = preroll_count * frame_duration / frame_timescale * 1000
+    print(f"Pre-roll: {preroll_count} frames ({preroll_ms:.0f} ms)")
 
     # -- Configure output ---------------------------------------------------
     out_dev.enable_video_output(mode)
@@ -117,12 +118,17 @@ def main() -> None:
         if frame is None or not frame.has_signal:
             continue
         out_dev.schedule_capture_frame(
-            frame, scheduled * frame_duration, frame_duration, frame_timescale,
+            frame,
+            scheduled * frame_duration,
+            frame_duration,
+            frame_timescale,
         )
         scheduled += 1
 
     out_dev.start_scheduled_playback(
-        start_time=0, timescale=frame_timescale, speed=1.0,
+        start_time=0,
+        timescale=frame_timescale,
+        speed=1.0,
     )
     print(" done.")
 
@@ -143,10 +149,8 @@ def main() -> None:
         while not stop.is_set():
             f = cap_dev.pop_capture_frame_ref(timeout_ms=100)
             if f is not None and f.has_signal:
-                try:
+                with contextlib.suppress(queue.Full):
                     frame_queue.put(f, timeout=0.1)
-                except queue.Full:
-                    pass
 
     def writer() -> None:
         nonlocal scheduled
@@ -158,7 +162,10 @@ def main() -> None:
             except queue.Empty:
                 continue
             out_dev.schedule_capture_frame(
-                f, scheduled * frame_duration, frame_duration, frame_timescale,
+                f,
+                scheduled * frame_duration,
+                frame_duration,
+                frame_timescale,
             )
             scheduled += 1
             frames += 1

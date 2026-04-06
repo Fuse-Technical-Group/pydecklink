@@ -33,7 +33,7 @@ uv pip install -e ".[dev]"
 
 ### Windows
 
-Building on Windows requires Visual Studio 
+Building on Windows requires Visual Studio
 with the **Desktop development with C++** workload (includes MSVC and
 the Windows SDK). CMake automatically locates `midl.exe` from the
 Windows SDK to compile the vendored DeckLink IDL files into C++ headers
