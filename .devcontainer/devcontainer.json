@@ -54,6 +54,10 @@
     "source=${localEnv:HOME}/.config/gh,target=/home/ubuntu/.config/gh,type=bind,readonly"
   ],
 
+  // Stub host paths so bind mounts don't fail when optional config
+  // (Claude auth, gh login, SSH agent) isn't present on the host.
+  "initializeCommand": "bash .devcontainer/ensure-mounts.sh",
+
   // Rebuild ld.so cache so the linker finds bind-mounted Desktop Video libs.
   "postCreateCommand": "sudo ldconfig",
 
