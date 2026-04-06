@@ -425,6 +425,95 @@ and `IDeckLinkVideoBuffer` for user-controlled DMA buffer allocation.
   pixel_format, allocator)` — output pool backed by
   allocator-managed buffers via `CreateVideoFrameWithBuffer`.
 
+### 5.11 Device Status and Reference Input
+
+*Status: not started*
+
+Wraps `IDeckLinkStatus` so Python can observe runtime hardware state
+that the existing `IDeckLinkProfileAttributes` surface (static
+capabilities) does not cover. The motivating use case is detecting
+whether the analog tri-level / black-burst reference input is locked
+and to what video mode — needed for any tool that wants to report
+genlock health alongside SDI signal status (e.g.
+`examples/detect_signals.py`).
+
+Generic accessors mirror the existing attribute surface:
+
+- `device.get_status_flag(status_id) → bool`
+- `device.get_status_int(status_id) → int`
+- `StatusID` enum bound from `BMDDeckLinkStatusID`.
+
+Narrow convenience for the reference input:
+
+- `device.reference_status → ReferenceStatus` — snapshot of current
+  reference-signal state. Raises `RuntimeError` if the device's
+  `HasReferenceInput` attribute is false (no physical REF BNC).
+- `ReferenceStatus.locked → bool` — from
+  `bmdDeckLinkStatusReferenceSignalLocked`.
+- `ReferenceStatus.mode → DisplayMode | None` — `BMDDisplayMode` from
+  `bmdDeckLinkStatusReferenceSignalMode`, mapped to the existing
+  `DisplayMode` enum. `None` when not locked or mode is
+  `bmdModeUnknown`.
+- `ReferenceStatus.flags → int` — raw
+  `bmdDeckLinkStatusReferenceSignalFlags` (e.g. dual-link).
+
+Push notifications mirror the SDK's `IDeckLinkNotificationCallback`:
+
+- `device.subscribe_status_changes() → StatusChangeQueue` — registers
+  a C++ callback against `IDeckLinkNotification::Subscribe(bmdStatusChanged)`
+  and enqueues `(status_id, value)` events into a bounded queue.
+- `StatusChangeQueue.pop(timeout_ms=1000) → StatusChange | None`
+- `StatusChangeQueue.close()` — unsubscribes and drains.
+- `StatusChange.id → StatusID`
+- `StatusChange.kind → "flag" | "int"`
+- `StatusChange.flag_value → bool` (if `kind == "flag"`)
+- `StatusChange.int_value → int` (if `kind == "int"`)
+
+The synchronous getter and the notification queue are independent:
+consumers may use either or both.
+
+#### Why mirror the SDK's push shape
+
+The SDK is push-driven for status changes
+(`IDeckLinkNotificationCallback`). The capture path is
+poll-from-Python because acquiring the GIL on the SDK's frame-rate
+thread would stall the SDK; that argument does not apply to status
+events, which fire on the order of seconds. Matching the SDK's
+native shape avoids the latency floor of polling and lets a UI react
+to a genlock drop without a polling loop. The synchronous getter is
+retained for one-shot diagnostics where setting up a subscription is
+overkill.
+
+#### Why generic + narrow
+
+The generic `get_status_flag` / `get_status_int` accessors mirror the
+existing `get_attribute_int` / `get_attribute_flag` pattern, give
+Python access to the rest of `IDeckLinkStatus` (PCIe link width, busy
+state, current input video mode, fan/temperature where supported)
+without further binding work, and keep `ReferenceStatus` as a
+narrowly-typed convenience on the most common path.
+
+#### Why per-`IDeckLink`, not per-physical-card
+
+`IDeckLinkStatus` is queried per `IDeckLink` interface. On
+multi-sub-device cards (e.g. DeckLink 8K Pro with four sub-devices)
+all sub-devices belonging to the same physical card report identical
+reference-signal status, because they share one REF BNC. The binding
+does not de-duplicate this — that is consumer policy. Consumers that
+want one row per physical card can group sub-devices by
+`get_attribute_int(AttributeID.TopologicalID)`, which the SDK
+guarantees is constant across sub-devices of the same card while
+`PersistentID` varies.
+
+#### Capability gating
+
+`device.reference_status` checks `HasReferenceInput` before issuing
+the underlying `GetFlag` call and raises `RuntimeError` with a
+descriptive message when the device has no reference port. The
+generic `get_status_flag` / `get_status_int` accessors do not gate;
+they surface the SDK's `HRESULT` failure as `RuntimeError`, matching
+how `get_attribute_int` already behaves.
+
 ## 9. Explicit Non-Goals (Phase 1)
 
 - **GPU RDMA (Phase 1).** Phase 1 uses CPU memory. The allocator
@@ -440,5 +529,10 @@ and `IDeckLinkVideoBuffer` for user-controlled DMA buffer allocation.
   Mac SDK headers are vendored; build support is next.
 - **Deck control.** `IDeckLinkDeckControl` (tape transport) is not
   bound.
+- **Reference signal generation.** Capture/playback DeckLinks have
+  no reference-output role — the REF BNC is input-only (genlock /
+  tri-level sync in). Reference-generator products (Mini Sync
+  Generator, Sync Generator 4K) are out of scope; only reference
+  *input* status is exposed (§5.11).
 - **Video conversion.** No color space conversion, scaling. The SDK
   has some hardware conversion modes; exposing them is deferred.
