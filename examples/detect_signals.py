@@ -115,7 +115,8 @@ def probe_input(index: int, name: str) -> str:
                 mode_name = "unknown"
                 pix_name = "unknown"
             body = (
-                f"{frame.width}x{frame.height}  mode={mode_name}  pixel_format={pix_name}"
+                f"{frame.width}x{frame.height}  "
+                f"mode={mode_name}  pixel_format={pix_name}"
             )
     finally:
         dev.stop_streams()
@@ -140,7 +141,10 @@ def main() -> None:
         try:
             line = probe_input(info.index, info.display_name)
         except RuntimeError as exc:
-            line = f"  {label:<8}  skipped ({exc})  [decklink #{info.index}] {info.display_name}"
+            line = (
+                f"  {label:<8}  skipped ({exc})  "
+                f"[decklink #{info.index}] {info.display_name}"
+            )
         rows.append((label, line))
 
     rows.sort(key=lambda r: _sdi_sort_key(r[0]))
