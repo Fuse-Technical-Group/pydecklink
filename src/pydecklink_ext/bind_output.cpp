@@ -223,7 +223,7 @@ void init_decklink_output(nb::module_& m, nb::class_<Device>& device) {
             ComPtr<IDeckLinkVideoBuffer> buf;
             raw_frame->QueryInterface(IID_IDeckLinkVideoBuffer, (void**)buf.put());
             if (!buf) throw std::runtime_error("Frame has no video buffer");
-        
+
             buf->StartAccess(bmdBufferAccessWrite);
             void* dest = nullptr;
             buf->GetBytes(&dest);
