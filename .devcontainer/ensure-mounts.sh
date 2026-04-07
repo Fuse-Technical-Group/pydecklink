@@ -26,14 +26,21 @@ ensure_dir "${HOME}/.claude/commands"
 ensure_file "${HOME}/.gitconfig"
 ensure_dir "${HOME}/.config/gh"
 
-# SSH agent socket — if SSH_AUTH_SOCK is unset or points to a
-# non-existent path, create a placeholder so the bind mount succeeds.
-# The socket won't function, but the container will start.
-if [ -z "${SSH_AUTH_SOCK:-}" ] || [ ! -e "${SSH_AUTH_SOCK}" ]; then
-    fallback="/tmp/ssh-agent-placeholder.sock"
-    if [ ! -e "$fallback" ]; then
-        touch "$fallback"
-    fi
-    export SSH_AUTH_SOCK="$fallback"
-    echo "Warning: SSH_AUTH_SOCK not set or missing; using placeholder. SSH agent forwarding will not work." >&2
+# SSH agent socket — devcontainer.json bind-mounts a fixed host path
+# (`/tmp/ssh-agent-pydecklink-${USER}.sock`) regardless of agent state.
+# We can't export SSH_AUTH_SOCK back to the parent devcontainer CLI
+# (this script runs in a child process), so we instead make the fixed
+# host path resolve to either the live agent socket (via symlink) or
+# a dead placeholder file. The container engine follows host-side
+# symlinks at mount time, so the symlink path forwards the live socket
+# transparently. The placeholder is a regular file: bind mount succeeds,
+# `ssh` inside the container fails cleanly with "Bad file descriptor"
+# instead of aborting container startup.
+ssh_link="/tmp/ssh-agent-pydecklink-${USER}.sock"
+rm -f "$ssh_link"
+if [ -n "${SSH_AUTH_SOCK:-}" ] && [ -S "${SSH_AUTH_SOCK}" ]; then
+    ln -s "${SSH_AUTH_SOCK}" "$ssh_link"
+else
+    touch "$ssh_link"
+    echo "Warning: SSH_AUTH_SOCK not set or not a socket; SSH agent forwarding disabled inside container." >&2
 fi

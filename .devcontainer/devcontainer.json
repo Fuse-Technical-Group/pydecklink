@@ -45,8 +45,13 @@
     "source=${localEnv:HOME}/.claude/settings.json,target=/home/ubuntu/.claude/settings.json,type=bind",
     "source=${localEnv:HOME}/.claude/CLAUDE.md,target=/home/ubuntu/.claude/CLAUDE.md,type=bind",
     "source=${localEnv:HOME}/.claude/commands,target=/home/ubuntu/.claude/commands,type=bind",
-    // SSH agent forwarding for git signing/commits
-    "source=${localEnv:SSH_AUTH_SOCK},target=/tmp/ssh-agent.sock,type=bind",
+    // SSH agent forwarding for git signing/commits. The source path is
+    // a fixed host-side indirection managed by .devcontainer/ensure-mounts.sh:
+    // a symlink to the real $SSH_AUTH_SOCK when an agent exists, or a
+    // placeholder file when it doesn't. This lets initializeCommand handle
+    // the fallback without needing to re-export SSH_AUTH_SOCK into the
+    // parent devcontainer CLI's env.
+    "source=/tmp/ssh-agent-pydecklink-${localEnv:USER}.sock,target=/tmp/ssh-agent.sock,type=bind",
     // Git config for commit signing and user identity
     "source=${localEnv:HOME}/.gitconfig,target=/home/ubuntu/.gitconfig,type=bind,readonly",
     // GitHub CLI auth (uses host login, read-only to avoid token conflicts)
