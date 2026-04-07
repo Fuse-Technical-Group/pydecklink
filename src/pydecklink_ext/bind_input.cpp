@@ -42,8 +42,8 @@ void init_decklink_input(nb::module_& m, nb::class_<Device>& device) {
             auto& cfr = nb::cast<CaptureFrameRef&>(self);
             if (!cfr.frame)
                 throw std::runtime_error("CaptureFrameRef has no frame");
-            IDeckLinkVideoBuffer* buf = nullptr;
-            cfr.frame->QueryInterface(IID_IDeckLinkVideoBuffer, (void**)&buf);
+            ComPtr<IDeckLinkVideoBuffer> buf;
+            cfr.frame->QueryInterface(IID_IDeckLinkVideoBuffer, (void**)buf.put());
             if (!buf)
                 throw std::runtime_error("Frame has no video buffer");
             buf->StartAccess(bmdBufferAccessRead);
@@ -51,12 +51,10 @@ void init_decklink_input(nb::module_& m, nb::class_<Device>& device) {
             buf->GetBytes(&bytes);
             if (!bytes) {
                 buf->EndAccess(bmdBufferAccessRead);
-                buf->Release();
                 throw std::runtime_error("Failed to get frame buffer bytes");
             }
             size_t total = static_cast<size_t>(cfr.row_bytes()) * cfr.height();
             buf->EndAccess(bmdBufferAccessRead);
-            buf->Release();
             // The CaptureFrameRef (self) keeps the SDK frame alive via AddRef.
             return nb::ndarray<nb::numpy, uint8_t, nb::ndim<1>>(
                 bytes, {total}, self);
@@ -92,20 +90,18 @@ void init_decklink_input(nb::module_& m, nb::class_<Device>& device) {
     device.def("enable_video_input",
         [](Device& self, _BMDDisplayMode mode, _BMDPixelFormat pixel_format,
            _BMDVideoInputFlags flags, bool zero_copy) {
-            IDeckLinkInput* input = nullptr;
-            if (self.dl->QueryInterface(IID_IDeckLinkInput, (void**)&input) != S_OK)
+            ComPtr<IDeckLinkInput> input;
+            if (self.dl->QueryInterface(IID_IDeckLinkInput, (void**)input.put()) != S_OK)
                 throw std::runtime_error("Device does not support input");
             HRESULT hr = input->EnableVideoInput(mode, pixel_format, flags);
-            if (hr != S_OK) {
-                input->Release();
+            if (hr != S_OK)
                 throw std::runtime_error("EnableVideoInput failed (HRESULT " + std::to_string(hr) + ")");
-            }
-            self.input_ = ComPtr<IDeckLinkInput>(input);
-            self.input_callback_ = new InputCallback(input, 8, zero_copy);
+            self.input_ = std::move(input);
+            self.input_callback_ = new InputCallback(self.input_.get(), 8, zero_copy);
             self.input_callback_->set_current_format(mode, pixel_format, flags);
             bool format_detection = (flags & bmdVideoInputEnableFormatDetection) != 0;
             self.input_callback_->set_format_detection(format_detection);
-            input->SetCallback(self.input_callback_);
+            self.input_->SetCallback(self.input_callback_);
         },
         nb::arg("mode"), nb::arg("pixel_format"),
         nb::arg("flags") = bmdVideoInputFlagDefault,

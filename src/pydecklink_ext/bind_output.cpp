@@ -46,18 +46,16 @@ void init_decklink_output(nb::module_& m, nb::class_<Device>& device) {
 
     device.def("enable_video_output",
         [](Device& self, _BMDDisplayMode mode, uint32_t flags) {
-            IDeckLinkOutput* output = nullptr;
-            if (self.dl->QueryInterface(IID_IDeckLinkOutput, (void**)&output) != S_OK)
+            ComPtr<IDeckLinkOutput> output;
+            if (self.dl->QueryInterface(IID_IDeckLinkOutput, (void**)output.put()) != S_OK)
                 throw std::runtime_error("Device does not support output");
             HRESULT hr = output->EnableVideoOutput(mode, static_cast<BMDVideoOutputFlags>(flags));
-            if (hr != S_OK) {
-                output->Release();
+            if (hr != S_OK)
                 throw std::runtime_error("EnableVideoOutput failed (HRESULT " + std::to_string(hr) + ")");
-            }
             // Store output interface and create callback.
-            self.output_ = ComPtr<IDeckLinkOutput>(output);
+            self.output_ = std::move(output);
             self.output_callback_ = new OutputCallback();
-            output->SetScheduledFrameCompletionCallback(self.output_callback_);
+            self.output_->SetScheduledFrameCompletionCallback(self.output_callback_);
         },
         nb::arg("mode"), nb::arg("flags") = static_cast<uint32_t>(bmdVideoOutputFlagDefault),
         "Enable video output for the given display mode.");
@@ -97,13 +95,11 @@ void init_decklink_output(nb::module_& m, nb::class_<Device>& device) {
             auto* raw = self.output_callback_->acquire(timeout_ms);
             if (!raw)
                 throw std::runtime_error("Timed out waiting for output frame from pool");
-            // Build a MutableFrame without AddRef — pool owns the frame.
+            // AddRef — pool owns the frame, MutableFrame gets its own ref.
             raw->AddRef();
             MutableFrame mf;
             mf.frame = ComPtr<IDeckLinkMutableVideoFrame>(raw);
-            IDeckLinkVideoBuffer* buf = nullptr;
-            raw->QueryInterface(IID_IDeckLinkVideoBuffer, (void**)&buf);
-            mf.buffer = ComPtr<IDeckLinkVideoBuffer>(buf);
+            raw->QueryInterface(IID_IDeckLinkVideoBuffer, (void**)mf.buffer.put());
             return mf;
         },
         nb::arg("timeout_ms") = 1000,
@@ -155,18 +151,13 @@ void init_decklink_output(nb::module_& m, nb::class_<Device>& device) {
            _BMDPixelFormat pixel_format) -> MutableFrame {
             if (!self.output_)
                 throw std::runtime_error("Video output not enabled");
-            IDeckLinkMutableVideoFrame* raw_frame = nullptr;
+            MutableFrame mf;
             HRESULT hr = self.output_->CreateVideoFrame(
                 width, height, row_bytes, pixel_format,
-                bmdFrameFlagDefault, &raw_frame);
-            if (hr != S_OK || !raw_frame)
+                bmdFrameFlagDefault, mf.frame.put());
+            if (hr != S_OK || !mf.frame)
                 throw std::runtime_error("CreateVideoFrame failed (HRESULT " + std::to_string(hr) + ")");
-            // Get the video buffer interface.
-            IDeckLinkVideoBuffer* buf = nullptr;
-            raw_frame->QueryInterface(IID_IDeckLinkVideoBuffer, (void**)&buf);
-            MutableFrame mf;
-            mf.frame = ComPtr<IDeckLinkMutableVideoFrame>(raw_frame);
-            mf.buffer = ComPtr<IDeckLinkVideoBuffer>(buf);
+            mf.frame->QueryInterface(IID_IDeckLinkVideoBuffer, (void**)mf.buffer.put());
             return mf;
         },
         nb::arg("width"), nb::arg("height"), nb::arg("row_bytes"),
@@ -180,18 +171,16 @@ void init_decklink_output(nb::module_& m, nb::class_<Device>& device) {
             if (!self.output_)
                 throw std::runtime_error("Video output not enabled");
             // Create a frame.
-            IDeckLinkMutableVideoFrame* raw_frame = nullptr;
+            ComPtr<IDeckLinkMutableVideoFrame> frame;
             HRESULT hr = self.output_->CreateVideoFrame(
                 width, height, row_bytes, pixel_format,
-                bmdFrameFlagDefault, &raw_frame);
-            if (hr != S_OK || !raw_frame)
+                bmdFrameFlagDefault, frame.put());
+            if (hr != S_OK || !frame)
                 throw std::runtime_error("CreateVideoFrame failed");
-            ComPtr<IDeckLinkMutableVideoFrame> frame(raw_frame);
             // Copy data into frame buffer.
-            IDeckLinkVideoBuffer* buf = nullptr;
-            raw_frame->QueryInterface(IID_IDeckLinkVideoBuffer, (void**)&buf);
+            ComPtr<IDeckLinkVideoBuffer> buf;
+            frame->QueryInterface(IID_IDeckLinkVideoBuffer, (void**)buf.put());
             if (!buf) throw std::runtime_error("Frame has no video buffer");
-            ComPtr<IDeckLinkVideoBuffer> buf_guard(buf);
             buf->StartAccess(bmdBufferAccessWrite);
             void* dest = nullptr;
             buf->GetBytes(&dest);
@@ -208,7 +197,7 @@ void init_decklink_output(nb::module_& m, nb::class_<Device>& device) {
             std::memcpy(dest, buffer.data(), expected);
             buf->EndAccess(bmdBufferAccessWrite);
             // Display synchronously.
-            hr = self.output_->DisplayVideoFrameSync(raw_frame);
+            hr = self.output_->DisplayVideoFrameSync(frame.get());
             if (hr != S_OK)
                 throw std::runtime_error("DisplayVideoFrameSync failed (HRESULT " + std::to_string(hr) + ")");
         },
@@ -321,10 +310,9 @@ void init_decklink_output(nb::module_& m, nb::class_<Device>& device) {
     // -- Configuration methods on Device --
     device.def("set_config_flag",
         [](Device& self, _BMDDeckLinkConfigurationID cfgID, bool value) {
-            IDeckLinkConfiguration* config = nullptr;
-            if (self.dl->QueryInterface(IID_IDeckLinkConfiguration, (void**)&config) != S_OK)
+            ComPtr<IDeckLinkConfiguration> config;
+            if (self.dl->QueryInterface(IID_IDeckLinkConfiguration, (void**)config.put()) != S_OK)
                 throw std::runtime_error("Device does not support configuration");
-            ComPtr<IDeckLinkConfiguration> guard(config);
             HRESULT hr = config->SetFlag(cfgID, static_cast<dlbool_t>(value));
             if (hr != S_OK)
                 throw std::runtime_error("SetFlag failed (HRESULT " + std::to_string(hr) + ")");
@@ -334,10 +322,9 @@ void init_decklink_output(nb::module_& m, nb::class_<Device>& device) {
 
     device.def("get_config_flag",
         [](Device& self, _BMDDeckLinkConfigurationID cfgID) -> bool {
-            IDeckLinkConfiguration* config = nullptr;
-            if (self.dl->QueryInterface(IID_IDeckLinkConfiguration, (void**)&config) != S_OK)
+            ComPtr<IDeckLinkConfiguration> config;
+            if (self.dl->QueryInterface(IID_IDeckLinkConfiguration, (void**)config.put()) != S_OK)
                 throw std::runtime_error("Device does not support configuration");
-            ComPtr<IDeckLinkConfiguration> guard(config);
             dlbool_t value = false;
             HRESULT hr = config->GetFlag(cfgID, &value);
             if (hr != S_OK)
@@ -349,10 +336,9 @@ void init_decklink_output(nb::module_& m, nb::class_<Device>& device) {
 
     device.def("set_config_int",
         [](Device& self, _BMDDeckLinkConfigurationID cfgID, int64_t value) {
-            IDeckLinkConfiguration* config = nullptr;
-            if (self.dl->QueryInterface(IID_IDeckLinkConfiguration, (void**)&config) != S_OK)
+            ComPtr<IDeckLinkConfiguration> config;
+            if (self.dl->QueryInterface(IID_IDeckLinkConfiguration, (void**)config.put()) != S_OK)
                 throw std::runtime_error("Device does not support configuration");
-            ComPtr<IDeckLinkConfiguration> guard(config);
             HRESULT hr = config->SetInt(cfgID, value);
             if (hr != S_OK)
                 throw std::runtime_error("SetInt failed (HRESULT " + std::to_string(hr) + ")");
@@ -362,10 +348,9 @@ void init_decklink_output(nb::module_& m, nb::class_<Device>& device) {
 
     device.def("get_config_int",
         [](Device& self, _BMDDeckLinkConfigurationID cfgID) -> int64_t {
-            IDeckLinkConfiguration* config = nullptr;
-            if (self.dl->QueryInterface(IID_IDeckLinkConfiguration, (void**)&config) != S_OK)
+            ComPtr<IDeckLinkConfiguration> config;
+            if (self.dl->QueryInterface(IID_IDeckLinkConfiguration, (void**)config.put()) != S_OK)
                 throw std::runtime_error("Device does not support configuration");
-            ComPtr<IDeckLinkConfiguration> guard(config);
             int64_t value = 0;
             HRESULT hr = config->GetInt(cfgID, &value);
             if (hr != S_OK)
@@ -377,10 +362,9 @@ void init_decklink_output(nb::module_& m, nb::class_<Device>& device) {
 
     device.def("write_config",
         [](Device& self) {
-            IDeckLinkConfiguration* config = nullptr;
-            if (self.dl->QueryInterface(IID_IDeckLinkConfiguration, (void**)&config) != S_OK)
+            ComPtr<IDeckLinkConfiguration> config;
+            if (self.dl->QueryInterface(IID_IDeckLinkConfiguration, (void**)config.put()) != S_OK)
                 throw std::runtime_error("Device does not support configuration");
-            ComPtr<IDeckLinkConfiguration> guard(config);
             HRESULT hr = config->WriteConfigurationToPreferences();
             if (hr != S_OK)
                 throw std::runtime_error("WriteConfigurationToPreferences failed (HRESULT " + std::to_string(hr) + ")");

@@ -16,14 +16,14 @@ Device::Device(int index) {
             "DeckLink driver not installed. "
             "Install Desktop Video from blackmagicdesign.com.");
     ComPtr<IDeckLinkIterator> guard(iter);
-    IDeckLink* p = nullptr;
     int i = 0;
-    while (guard->Next(&p) == S_OK) {
+    for (;;) {
+        ComPtr<IDeckLink> p;
+        if (guard->Next(p.put()) != S_OK) break;
         if (i == index) {
-            dl = ComPtr<IDeckLink>(p);
+            dl = std::move(p);
             return;
         }
-        p->Release();
         ++i;
     }
     throw std::out_of_range(
@@ -44,42 +44,38 @@ std::string Device::display_name() const {
 }
 
 bool Device::supports_capture() const {
-    IDeckLinkProfileAttributes* attrs = nullptr;
-    if (dl->QueryInterface(IID_IDeckLinkProfileAttributes, (void**)&attrs) != S_OK)
+    ComPtr<IDeckLinkProfileAttributes> attrs;
+    if (dl->QueryInterface(IID_IDeckLinkProfileAttributes, (void**)attrs.put()) != S_OK)
         return false;
     int64_t io = 0;
     attrs->GetInt(BMDDeckLinkVideoIOSupport, &io);
-    attrs->Release();
     return (io & bmdDeviceSupportsCapture) != 0;
 }
 
 bool Device::supports_playback() const {
-    IDeckLinkProfileAttributes* attrs = nullptr;
-    if (dl->QueryInterface(IID_IDeckLinkProfileAttributes, (void**)&attrs) != S_OK)
+    ComPtr<IDeckLinkProfileAttributes> attrs;
+    if (dl->QueryInterface(IID_IDeckLinkProfileAttributes, (void**)attrs.put()) != S_OK)
         return false;
     int64_t io = 0;
     attrs->GetInt(BMDDeckLinkVideoIOSupport, &io);
-    attrs->Release();
     return (io & bmdDeviceSupportsPlayback) != 0;
 }
 
 bool Device::supports_input_format_detection() const {
-    IDeckLinkProfileAttributes* attrs = nullptr;
-    if (dl->QueryInterface(IID_IDeckLinkProfileAttributes, (void**)&attrs) != S_OK)
+    ComPtr<IDeckLinkProfileAttributes> attrs;
+    if (dl->QueryInterface(IID_IDeckLinkProfileAttributes, (void**)attrs.put()) != S_OK)
         return false;
     dlbool_t flag = false;
     attrs->GetFlag(BMDDeckLinkSupportsInputFormatDetection, &flag);
-    attrs->Release();
     return flag;
 }
 
 bool Device::supports_hdr() const {
-    IDeckLinkProfileAttributes* attrs = nullptr;
-    if (dl->QueryInterface(IID_IDeckLinkProfileAttributes, (void**)&attrs) != S_OK)
+    ComPtr<IDeckLinkProfileAttributes> attrs;
+    if (dl->QueryInterface(IID_IDeckLinkProfileAttributes, (void**)attrs.put()) != S_OK)
         return false;
     dlbool_t flag = false;
     attrs->GetFlag(BMDDeckLinkSupportsHDRMetadata, &flag);
-    attrs->Release();
     return flag;
 }
 
@@ -146,9 +142,9 @@ nb::class_<Device> init_decklink_device(nb::module_& m) {
     m.def("device_count", []() -> int {
         auto iter = require_iterator();
         int count = 0;
-        IDeckLink* dl = nullptr;
-        while (iter->Next(&dl) == S_OK) {
-            dl->Release();
+        for (;;) {
+            ComPtr<IDeckLink> dl;
+            if (iter->Next(dl.put()) != S_OK) break;
             ++count;
         }
         return count;
@@ -158,9 +154,10 @@ nb::class_<Device> init_decklink_device(nb::module_& m) {
     m.def("list_devices", []() -> std::vector<DeviceInfo> {
         auto iter = require_iterator();
         std::vector<DeviceInfo> result;
-        IDeckLink* dl = nullptr;
         int idx = 0;
-        while (iter->Next(&dl) == S_OK) {
+        for (;;) {
+            ComPtr<IDeckLink> dl;
+            if (iter->Next(dl.put()) != S_OK) break;
             DeviceInfo info;
             info.index = idx++;
             dlstring_t str = nullptr;
@@ -169,7 +166,6 @@ nb::class_<Device> init_decklink_device(nb::module_& m) {
             str = nullptr;
             if (dl->GetDisplayName(&str) == S_OK && str)
                 info.display_name = DeckLinkStringToStd(str);
-            dl->Release();
             result.push_back(std::move(info));
         }
         return result;
@@ -191,10 +187,9 @@ nb::class_<Device> init_decklink_device(nb::module_& m) {
         .def("__exit__", [](Device&, nb::args) {})
         .def("get_attribute_int",
             [](Device& self, _BMDDeckLinkAttributeID attrID) -> int64_t {
-                IDeckLinkProfileAttributes* attrs = nullptr;
-                if (self.dl->QueryInterface(IID_IDeckLinkProfileAttributes, (void**)&attrs) != S_OK)
+                ComPtr<IDeckLinkProfileAttributes> attrs;
+                if (self.dl->QueryInterface(IID_IDeckLinkProfileAttributes, (void**)attrs.put()) != S_OK)
                     throw std::runtime_error("Device does not support profile attributes");
-                ComPtr<IDeckLinkProfileAttributes> guard(attrs);
                 int64_t value = 0;
                 HRESULT hr = attrs->GetInt(attrID, &value);
                 if (hr != S_OK)
@@ -205,10 +200,9 @@ nb::class_<Device> init_decklink_device(nb::module_& m) {
             "Get an integer profile attribute.")
         .def("active_profile",
             [](Device& self) -> _BMDProfileID {
-                IDeckLinkProfileAttributes* attrs = nullptr;
-                if (self.dl->QueryInterface(IID_IDeckLinkProfileAttributes, (void**)&attrs) != S_OK)
+                ComPtr<IDeckLinkProfileAttributes> attrs;
+                if (self.dl->QueryInterface(IID_IDeckLinkProfileAttributes, (void**)attrs.put()) != S_OK)
                     throw std::runtime_error("Device does not support profile attributes");
-                ComPtr<IDeckLinkProfileAttributes> guard(attrs);
                 int64_t value = 0;
                 HRESULT hr = attrs->GetInt(BMDDeckLinkProfileID, &value);
                 if (hr != S_OK)
@@ -218,16 +212,14 @@ nb::class_<Device> init_decklink_device(nb::module_& m) {
             "Return the active profile ID for this device.")
         .def("set_profile",
             [](Device& self, _BMDProfileID profileID) {
-                IDeckLinkProfileManager* mgr = nullptr;
-                if (self.dl->QueryInterface(IID_IDeckLinkProfileManager, (void**)&mgr) != S_OK)
+                ComPtr<IDeckLinkProfileManager> mgr;
+                if (self.dl->QueryInterface(IID_IDeckLinkProfileManager, (void**)mgr.put()) != S_OK)
                     throw std::runtime_error("Device does not support profile management");
-                ComPtr<IDeckLinkProfileManager> mgr_guard(mgr);
 
-                IDeckLinkProfile* profile = nullptr;
-                HRESULT hr = mgr->GetProfile(profileID, &profile);
+                ComPtr<IDeckLinkProfile> profile;
+                HRESULT hr = mgr->GetProfile(profileID, profile.put());
                 if (hr != S_OK || !profile)
                     throw std::runtime_error("Profile not available (HRESULT " + std::to_string(hr) + ")");
-                ComPtr<IDeckLinkProfile> prof_guard(profile);
 
                 hr = profile->SetActive();
                 if (hr != S_OK)
@@ -237,10 +229,9 @@ nb::class_<Device> init_decklink_device(nb::module_& m) {
             "Activate a connector profile. Affects all sub-devices on this card.")
         .def("get_attribute_flag",
             [](Device& self, _BMDDeckLinkAttributeID attrID) -> bool {
-                IDeckLinkProfileAttributes* attrs = nullptr;
-                if (self.dl->QueryInterface(IID_IDeckLinkProfileAttributes, (void**)&attrs) != S_OK)
+                ComPtr<IDeckLinkProfileAttributes> attrs;
+                if (self.dl->QueryInterface(IID_IDeckLinkProfileAttributes, (void**)attrs.put()) != S_OK)
                     throw std::runtime_error("Device does not support profile attributes");
-                ComPtr<IDeckLinkProfileAttributes> guard(attrs);
                 dlbool_t value = false;
                 HRESULT hr = attrs->GetFlag(attrID, &value);
                 if (hr != S_OK)
@@ -271,39 +262,35 @@ nb::class_<Device> init_decklink_device(nb::module_& m) {
 
     device_cls.def("get_display_mode",
         [](Device& self, _BMDDisplayMode mode) -> DisplayModeInfo {
-            IDeckLinkOutput* output = nullptr;
-            if (self.dl->QueryInterface(IID_IDeckLinkOutput, (void**)&output) != S_OK)
+            ComPtr<IDeckLinkOutput> output;
+            if (self.dl->QueryInterface(IID_IDeckLinkOutput, (void**)output.put()) != S_OK)
                 throw std::runtime_error("Device does not support output");
-            ComPtr<IDeckLinkOutput> guard(output);
 
-            IDeckLinkDisplayMode* dm = nullptr;
-            HRESULT hr = output->GetDisplayMode(mode, &dm);
+            ComPtr<IDeckLinkDisplayMode> dm;
+            HRESULT hr = output->GetDisplayMode(mode, dm.put());
             if (hr != S_OK || !dm)
                 throw std::runtime_error("GetDisplayMode failed (HRESULT " + std::to_string(hr) + ")");
-            ComPtr<IDeckLinkDisplayMode> dm_guard(dm);
-            return extract_display_mode_info(dm);
+            return extract_display_mode_info(dm.get());
         },
         nb::arg("mode"),
         "Get display mode properties for a given BMDDisplayMode.");
 
     device_cls.def("list_output_modes",
         [](Device& self) -> std::vector<DisplayModeInfo> {
-            IDeckLinkOutput* output = nullptr;
-            if (self.dl->QueryInterface(IID_IDeckLinkOutput, (void**)&output) != S_OK)
+            ComPtr<IDeckLinkOutput> output;
+            if (self.dl->QueryInterface(IID_IDeckLinkOutput, (void**)output.put()) != S_OK)
                 throw std::runtime_error("Device does not support output");
-            ComPtr<IDeckLinkOutput> guard(output);
 
-            IDeckLinkDisplayModeIterator* iter = nullptr;
-            HRESULT hr = output->GetDisplayModeIterator(&iter);
+            ComPtr<IDeckLinkDisplayModeIterator> iter;
+            HRESULT hr = output->GetDisplayModeIterator(iter.put());
             if (hr != S_OK || !iter)
                 throw std::runtime_error("GetDisplayModeIterator failed (HRESULT " + std::to_string(hr) + ")");
-            ComPtr<IDeckLinkDisplayModeIterator> iter_guard(iter);
 
             std::vector<DisplayModeInfo> result;
-            IDeckLinkDisplayMode* dm = nullptr;
-            while (iter->Next(&dm) == S_OK) {
-                result.push_back(extract_display_mode_info(dm));
-                dm->Release();
+            for (;;) {
+                ComPtr<IDeckLinkDisplayMode> dm;
+                if (iter->Next(dm.put()) != S_OK) break;
+                result.push_back(extract_display_mode_info(dm.get()));
             }
             return result;
         },
@@ -316,10 +303,9 @@ nb::class_<Device> init_decklink_device(nb::module_& m) {
            _BMDPixelFormat pixel_format,
            _BMDVideoOutputConversionMode conversion_mode,
            _BMDSupportedVideoModeFlags flags) -> bool {
-            IDeckLinkOutput* output = nullptr;
-            if (self.dl->QueryInterface(IID_IDeckLinkOutput, (void**)&output) != S_OK)
+            ComPtr<IDeckLinkOutput> output;
+            if (self.dl->QueryInterface(IID_IDeckLinkOutput, (void**)output.put()) != S_OK)
                 throw std::runtime_error("Device does not support output");
-            ComPtr<IDeckLinkOutput> guard(output);
 
             BMDDisplayMode actual_mode = bmdModeUnknown;
             dlbool_t supported = false;
