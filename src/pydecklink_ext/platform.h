@@ -61,20 +61,54 @@ inline std::string DeckLinkStringToStd(BSTR bstr) {
     return result;
 }
 
-#else  // Linux / macOS
+#elif defined(__APPLE__)  // macOS
+
+#include <CoreFoundation/CoreFoundation.h>
+#include "DeckLinkAPI.h"
+#include <string>
+
+// DeckLink type aliases on macOS — the SDK uses CFStringRef.
+using dlstring_t = CFStringRef;
+using dlbool_t = bool;
+
+// On macOS, CreateDeckLinkIteratorInstance is provided by
+// DeckLinkAPIDispatch.cpp — no wrapper needed.
+
+// On macOS, DeckLink strings are CFStringRef.  Convert to std::string
+// and release the CF object.
+inline std::string DeckLinkStringToStd(CFStringRef cfstr) {
+    if (!cfstr) return "";
+    // Fast path: try direct pointer access (works for ASCII/UTF-8 backing).
+    if (const char* cstr = CFStringGetCStringPtr(cfstr, kCFStringEncodingUTF8)) {
+        std::string result(cstr);
+        CFRelease(cfstr);
+        return result;
+    }
+    // Slow path: copy into buffer.
+    CFIndex len = CFStringGetLength(cfstr);
+    CFIndex bufSize = 0;
+    CFStringGetBytes(cfstr, CFRangeMake(0, len), kCFStringEncodingUTF8, '?', false, nullptr, 0, &bufSize);
+    std::string result(static_cast<size_t>(bufSize), '\0');
+    CFStringGetBytes(cfstr, CFRangeMake(0, len), kCFStringEncodingUTF8, '?', false,
+                     reinterpret_cast<UInt8*>(&result[0]), bufSize, nullptr);
+    CFRelease(cfstr);
+    return result;
+}
+
+#else  // Linux
 
 #include "DeckLinkAPI.h"
 #include <cstdlib>
 #include <string>
 
-// DeckLink type aliases on Linux/Mac.
+// DeckLink type aliases on Linux.
 using dlstring_t = const char*;
 using dlbool_t = bool;
 
-// On Linux/Mac, CreateDeckLinkIteratorInstance is provided by
+// On Linux, CreateDeckLinkIteratorInstance is provided by
 // DeckLinkAPIDispatch.cpp — no wrapper needed.
 
-// On Linux/Mac, DeckLink strings are const char* allocated with malloc.
+// On Linux, DeckLink strings are const char* allocated with malloc.
 inline std::string DeckLinkStringToStd(const char* str) {
     if (!str) return "";
     std::string result(str);
