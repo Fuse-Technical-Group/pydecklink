@@ -93,10 +93,7 @@ public:
         auto* buf = new ManagedBuffer(buffer_size_, mem, free_fn_);
         *allocatedBuffer = buf;
 
-        {
-            std::lock_guard<std::mutex> lock(mutex_);
-            ++allocated_count_;
-        }
+        ++allocated_count_;
 
         return S_OK;
     }
@@ -104,7 +101,6 @@ public:
     size_t buffer_size() const { return buffer_size_; }
 
     size_t allocated_count() const {
-        std::lock_guard<std::mutex> lock(mutex_);
         return allocated_count_;
     }
 
@@ -123,8 +119,7 @@ private:
     size_t buffer_size_;
     AllocFn alloc_fn_;
     FreeFn free_fn_;
-    mutable std::mutex mutex_;
-    size_t allocated_count_ = 0;
+    std::atomic<size_t> allocated_count_ = 0;
 
     static void* default_alloc(size_t size) { return std::malloc(size); }
     static void default_free(void* ptr, size_t) { std::free(ptr); }
