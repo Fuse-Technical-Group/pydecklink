@@ -255,7 +255,7 @@ void init_decklink_output(nb::module_& m, nb::class_<Device>& device) {
             if (hr != S_OK)
                 throw std::runtime_error("ScheduleVideoFrame failed (HRESULT " + std::to_string(hr) + ")");
             // Release our reference; SDK holds one via AddRef in ScheduleVideoFrame.
-            frame.release();
+            frame.detach();
         },
         nb::arg("buffer"), nb::arg("width"), nb::arg("height"),
         nb::arg("row_bytes"), nb::arg("pixel_format"),
