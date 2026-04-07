@@ -223,18 +223,18 @@ void init_decklink_output(nb::module_& m, nb::class_<Device>& device) {
            int64_t display_time, int64_t duration, int64_t timescale) {
             if (!self.output_)
                 throw std::runtime_error("Video output not enabled");
-            IDeckLinkMutableVideoFrame* raw_frame = nullptr;
+            ComPtr<IDeckLinkMutableVideoFrame> raw_frame;
             HRESULT hr = self.output_->CreateVideoFrame(
                 width, height, row_bytes, pixel_format,
-                bmdFrameFlagDefault, &raw_frame);
+                bmdFrameFlagDefault, raw_frame.put());
             if (hr != S_OK || !raw_frame)
                 throw std::runtime_error("CreateVideoFrame failed");
-            ComPtr<IDeckLinkMutableVideoFrame> frame(raw_frame);
+
             // Copy data.
-            IDeckLinkVideoBuffer* buf = nullptr;
-            raw_frame->QueryInterface(IID_IDeckLinkVideoBuffer, (void**)&buf);
+            ComPtr<IDeckLinkVideoBuffer> buf;
+            raw_frame->QueryInterface(IID_IDeckLinkVideoBuffer, (void**)buf.put());
             if (!buf) throw std::runtime_error("Frame has no video buffer");
-            ComPtr<IDeckLinkVideoBuffer> buf_guard(buf);
+        
             buf->StartAccess(bmdBufferAccessWrite);
             void* dest = nullptr;
             buf->GetBytes(&dest);
@@ -251,11 +251,9 @@ void init_decklink_output(nb::module_& m, nb::class_<Device>& device) {
             std::memcpy(dest, buffer.data(), expected);
             buf->EndAccess(bmdBufferAccessWrite);
             // Schedule. The frame is moved to the SDK's ownership via AddRef.
-            hr = self.output_->ScheduleVideoFrame(raw_frame, display_time, duration, timescale);
+            hr = self.output_->ScheduleVideoFrame(raw_frame.get(), display_time, duration, timescale);
             if (hr != S_OK)
                 throw std::runtime_error("ScheduleVideoFrame failed (HRESULT " + std::to_string(hr) + ")");
-            // Release our reference; SDK holds one via AddRef in ScheduleVideoFrame.
-            frame.detach();
         },
         nb::arg("buffer"), nb::arg("width"), nb::arg("height"),
         nb::arg("row_bytes"), nb::arg("pixel_format"),
