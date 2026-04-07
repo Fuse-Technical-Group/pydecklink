@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.1.20](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.1.19...v0.1.20) (2026-04-07)
+
+
+### Added
+
+* add macOS build support ([5f45302](https://github.com/Fuse-Technical-Group/pydecklink/commit/5f453029e212f11c46429bea860bf20b08c6933e))
+* **ci:** add macOS CI workflow for building and testing ([4fbb1cf](https://github.com/Fuse-Technical-Group/pydecklink/commit/4fbb1cfa95d90a55437bff86889b138f75aba55e))
+* **mac:** add macOS specific DeckLink SDK support and type handling ([15595a1](https://github.com/Fuse-Technical-Group/pydecklink/commit/15595a1949e0856a844d4f0bedb6a0afd09d8ddd))
+
+
+### Fixed
+
+* **build:** add macOS SDK directory configuration for DeckLink ([243cc94](https://github.com/Fuse-Technical-Group/pydecklink/commit/243cc940bed60f6ff2a041f6d8c8b7e927a6809c))
+* resolve pre-commit hook violations in existing files ([e293b77](https://github.com/Fuse-Technical-Group/pydecklink/commit/e293b775ecf0686e7e53c88245f7d6600653e93d))
+
 ## [0.1.19](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.1.18...v0.1.19) (2026-04-04)
 
 
