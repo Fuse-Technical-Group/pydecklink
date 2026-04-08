@@ -75,8 +75,14 @@ def test_schedule_frame_does_not_leak_per_call():
         # Pre-roll a few frames before starting playback.
         for i in range(PREROLL):
             dev.schedule_frame(
-                buf, width, height, row_bytes, PIXEL_FORMAT,
-                i * frame_duration, frame_duration, timescale,
+                buf,
+                width,
+                height,
+                row_bytes,
+                PIXEL_FORMAT,
+                i * frame_duration,
+                frame_duration,
+                timescale,
             )
         dev.start_scheduled_playback(0, timescale, 1.0)
 
@@ -89,8 +95,14 @@ def test_schedule_frame_does_not_leak_per_call():
         for i in range(PREROLL, PREROLL + ITERATIONS):
             time.sleep(period)
             dev.schedule_frame(
-                buf, width, height, row_bytes, PIXEL_FORMAT,
-                i * frame_duration, frame_duration, timescale,
+                buf,
+                width,
+                height,
+                row_bytes,
+                PIXEL_FORMAT,
+                i * frame_duration,
+                frame_duration,
+                timescale,
             )
 
         delta = proc.memory_info().rss - baseline
