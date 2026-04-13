@@ -11,10 +11,10 @@ requires-python = ">=3.12"
 dependencies = ["numpy>=1.26"]
 
 [project.optional-dependencies]
-test = ["pytest>=8", "psutil>=5.9"]
+test = ["pytest>=8"]
 
 [dependency-groups]
-dev = ["pytest>=8", "mypy>=1.13", "psutil>=5.9"]
+dev = ["pytest>=8", "mypy>=1.13"]
 
 [tool.pytest.ini_options]
 markers = [

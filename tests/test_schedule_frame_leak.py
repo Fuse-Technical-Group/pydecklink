@@ -16,19 +16,12 @@ renamed to ``detach()`` to match its actual semantics.
 
 Detection strategy
 ------------------
-The leak only manifests when scheduled playback is *running*: without
-playback the SDK queues frames internally and growth looks identical
-between branches. With playback paced at frame rate, completed frames
-should be dropped by the SDK — and any host-side over-reference shows
-up as 4 MiB/iter RSS growth, plus eventual ``CreateVideoFrame failed``
-once the SDK's allocator can't satisfy a new frame.
-
-Observed on main (pre-fix): ~3.2 MiB/iter, crashes within ~30 iters.
-Observed on fix/mem-leak:    bounded growth, completes all iterations.
-
-The threshold below is set well above fix-branch noise (~325 KiB/iter
-asymptotic from DMA warm-up) and well below the buggy branch's
-~3.2 MiB/iter, so it cleanly distinguishes the two.
+``TrackedFramePtr`` wraps each frame created by ``schedule_frame`` and
+maintains an atomic counter (``g_host_frame_refs``).  The counter
+increments after ``CreateVideoFrame`` succeeds and decrements in the
+destructor only when the inner ``ComPtr`` still holds a live pointer
+(i.e. ``Release()`` will fire).  After all calls return, the counter
+must be zero — any non-zero value means a host-side ref was leaked.
 """
 
 from __future__ import annotations
@@ -37,10 +30,10 @@ import contextlib
 import time
 
 import numpy as np
-import psutil
 import pytest
 
 import pydecklink
+from pydecklink._bindings import _host_frame_refs
 
 _HAS_SDK = getattr(pydecklink, "HAS_SDK", False)
 
@@ -53,10 +46,6 @@ MODE = pydecklink.DisplayMode.HD1080p25 if _HAS_SDK else None
 PIXEL_FORMAT = pydecklink.PixelFormat.Format8BitYUV if _HAS_SDK else None
 ITERATIONS = 100
 PREROLL = 4
-# Per-iter RSS budget. Buggy branch leaks ~3.2 MiB/iter (one full frame).
-# Fixed branch settles around ~325 KiB/iter from one-time DMA buffer
-# warm-up. 1.0 MiB/iter is comfortably between the two.
-PER_ITER_BUDGET_BYTES = 1024 * 1024
 
 
 def test_schedule_frame_does_not_leak_per_call():
@@ -86,9 +75,6 @@ def test_schedule_frame_does_not_leak_per_call():
             )
         dev.start_scheduled_playback(0, timescale, 1.0)
 
-        proc = psutil.Process()
-        baseline = proc.memory_info().rss
-
         # Pace at slightly under frame rate so the SDK has time to
         # complete (and release) frames between schedules.
         period = 0.9 / fps
@@ -105,11 +91,11 @@ def test_schedule_frame_does_not_leak_per_call():
                 timescale,
             )
 
-        delta = proc.memory_info().rss - baseline
-        per_iter = delta / ITERATIONS
-        assert per_iter < PER_ITER_BUDGET_BYTES, (
-            f"schedule_frame leaked: RSS grew {delta} bytes over {ITERATIONS} "
-            f"calls = {per_iter:.0f} B/call (budget {PER_ITER_BUDGET_BYTES})"
+        # Every host-side frame ref should have been released by the
+        # ComPtr destructor at schedule_frame scope exit.
+        leaked_refs = _host_frame_refs()
+        assert leaked_refs == 0, (
+            f"schedule_frame leaked {leaked_refs} host-side frame refs"
         )
     finally:
         with contextlib.suppress(RuntimeError):
