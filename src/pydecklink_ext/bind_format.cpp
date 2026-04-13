@@ -1,5 +1,5 @@
 #include "bind_format.h"
-#include "DeckLinkAPI.h"
+#include "platform.h"
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/tuple.h>
 #include <stdexcept>

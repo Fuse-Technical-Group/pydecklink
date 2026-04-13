@@ -1,17 +1,17 @@
 #include "bind_input.h"
 #include "bind_device.h"
-#include "DeckLinkAPI.h"
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
 #include <nanobind/stl/optional.h>
+#include <nanobind/stl/string.h>
 #include <nanobind/stl/tuple.h>
 #include <stdexcept>
 #include <string>
 
 void init_decklink_input(nb::module_& m, nb::class_<Device>& device) {
 
-    m.def("clock_us", []() -> int64_t { return monotonic_raw_us(); },
-          "Return CLOCK_MONOTONIC_RAW time in microseconds.");
+    m.def("clock_us", []() -> int64_t { return steady_clock_us(); },
+          "Return monotonic time in microseconds.");
 
     // -- CaptureFrame --
     nb::class_<CaptureFrame>(m, "CaptureFrame")
@@ -34,7 +34,7 @@ void init_decklink_input(nb::module_& m, nb::class_<Device>& device) {
             return "CaptureFrame(" +
                    std::to_string(self.width) + "x" + std::to_string(self.height) +
                    ", signal=" + (self.has_signal ? "True" : "False") + ")";
-        });
+        }, nb::sig("def __repr__(self) -> str")); // avoid platform-specific C++ type in stub
 
     // -- CaptureFrameRef (zero-copy) --
     nb::class_<CaptureFrameRef>(m, "CaptureFrameRef")
@@ -77,7 +77,7 @@ void init_decklink_input(nb::module_& m, nb::class_<Device>& device) {
             return "CaptureFrameRef(" +
                    std::to_string(self.width()) + "x" + std::to_string(self.height()) +
                    ", signal=" + (self.has_signal ? "True" : "False") + ")";
-        });
+        }, nb::sig("def __repr__(self) -> str")); // avoid platform-specific C++ type in stub
 
     // -- InputFormatInfo --
     nb::class_<InputFormatInfo>(m, "InputFormatInfo")
@@ -85,7 +85,7 @@ void init_decklink_input(nb::module_& m, nb::class_<Device>& device) {
         .def_ro("pixel_format", &InputFormatInfo::pixel_format)
         .def("__repr__", [](const InputFormatInfo& self) {
             return "InputFormatInfo(mode=" + std::to_string(static_cast<uint32_t>(self.mode)) + ")";
-        });
+        }, nb::sig("def __repr__(self) -> str")); // avoid platform-specific C++ type in stub
 
     // -- Device input methods (added to existing Device class) --
 

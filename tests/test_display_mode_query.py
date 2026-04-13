@@ -60,6 +60,8 @@ class TestDisplayModeInfo:
 
 
 def _has_decklink():
+    if not getattr(pydecklink, "HAS_SDK", False):
+        return False
     try:
         return pydecklink.device_count() > 0
     except RuntimeError:

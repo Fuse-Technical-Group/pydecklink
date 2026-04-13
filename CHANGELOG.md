@@ -1,5 +1,42 @@
 # Changelog
 
+## [0.1.19](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.1.18...v0.1.19) (2026-04-04)
+
+
+### Added
+
+* add cache to uv action to speed up ([57732b7](https://github.com/Fuse-Technical-Group/pydecklink/commit/57732b79189f8ef4ff14ba83d642adc746d5df39))
+* add windows / mac version of blackmagic sdk ([fd6d83c](https://github.com/Fuse-Technical-Group/pydecklink/commit/fd6d83c2bab22b4922313c765f0e8418fef10cf1))
+* add Windows CI workflow and resolve midl.exe via find_program ([9a5f785](https://github.com/Fuse-Technical-Group/pydecklink/commit/9a5f785445a63880dbb87b6ee033f3567116df04))
+* add Windows platform support for DeckLink SDK builds ([6b7066c](https://github.com/Fuse-Technical-Group/pydecklink/commit/6b7066c031f154a4bea44699c45be6fa1b311bb6))
+* add Windows SDK directory override for scikit-build ([63bc698](https://github.com/Fuse-Technical-Group/pydecklink/commit/63bc69824e833327d11c00450a8e0d5e7f36d0b7))
+* add windows support ([80c5ce5](https://github.com/Fuse-Technical-Group/pydecklink/commit/80c5ce5ed738bd00381c548cadf77ecf54b713d1))
+* enable manual triggering of Windows CI workflow ([460ecd8](https://github.com/Fuse-Technical-Group/pydecklink/commit/460ecd85d92f91779578c3beb8803ea6cb1d2a87))
+* **examples:** add detect_signals script ([023dd1c](https://github.com/Fuse-Technical-Group/pydecklink/commit/023dd1c0d1e088965ad7deb1b34ac44ebb6b5436))
+* **examples:** add detect_signals script ([3078ec7](https://github.com/Fuse-Technical-Group/pydecklink/commit/3078ec7f0139d07ef71aa7aff6e7f2557723710a))
+* replace monotonic_raw_us with steady_clock_us for time measurement ([5a3a4c4](https://github.com/Fuse-Technical-Group/pydecklink/commit/5a3a4c4d591d40802a2f4226c41a1e157d4420b2))
+* skip Linux container tests on Windows platform ([08657cf](https://github.com/Fuse-Technical-Group/pydecklink/commit/08657cf185445027b1b6fb262490cf19d58738ab))
+* **types:** commit nanobind-generated stub for Pylance ([512dca1](https://github.com/Fuse-Technical-Group/pydecklink/commit/512dca116cc7fa90fe9cff742a12862c8652e36d))
+* **types:** commit nanobind-generated stub for Pylance ([ecb0500](https://github.com/Fuse-Technical-Group/pydecklink/commit/ecb0500dae9d87f4da72821bc66467e4201fc589))
+* **win:** warn on COM STA/MTA apartment conflict ([1631575](https://github.com/Fuse-Technical-Group/pydecklink/commit/16315752f1f248d388fd594acde6968a42806081))
+
+
+### Fixed
+
+* **bindings:** add missing nanobind string type caster include ([4835fcc](https://github.com/Fuse-Technical-Group/pydecklink/commit/4835fccec9e38bedcba81bdc6b382f6f40f0ad30))
+* **ci:** run all unit tests in ci-linux, matching ci-windows ([e8101ef](https://github.com/Fuse-Technical-Group/pydecklink/commit/e8101ef83ff9ed73a69a64520044cc8224d9dcc1))
+* clock_us docs ([baa0775](https://github.com/Fuse-Technical-Group/pydecklink/commit/baa0775139aa65d23764b49abb3531681680eee0))
+* **gitignore:** restore whitelist pattern for vendored SDK headers ([413f7ca](https://github.com/Fuse-Technical-Group/pydecklink/commit/413f7cafc271365581803c950423de2898f1f276))
+* **lint:** exclude generated stub from ruff rules ([2dc5018](https://github.com/Fuse-Technical-Group/pydecklink/commit/2dc5018a43b2de54ae29c314ae9490faa41d0dc9))
+* **mypy:** suppress nanobind stubgen errors in generated stub ([f789d08](https://github.com/Fuse-Technical-Group/pydecklink/commit/f789d0842d19ba493b50936de2eb9ac033910f74))
+* post-extraction cleanup for devcontainer and hardware tests ([eef5c16](https://github.com/Fuse-Technical-Group/pydecklink/commit/eef5c160088c2fcd90fc625683fff9982af65f1d))
+* ruff errors ([6de48cf](https://github.com/Fuse-Technical-Group/pydecklink/commit/6de48cf42cd80e7cbe7e5f5cf3b1471f9f6581c3))
+* **test:** guard _has_decklink() for no-SDK builds ([fae2554](https://github.com/Fuse-Technical-Group/pydecklink/commit/fae25540aafa526863f278072b826354741ad3d1))
+* **test:** use device 0 and 2 for SDI loopback pair ([ea6ffc5](https://github.com/Fuse-Technical-Group/pydecklink/commit/ea6ffc538722d05feca6fd407bdb18e0e082a6c2))
+* **test:** wrap long docstring line to pass ruff E501 ([ced9a12](https://github.com/Fuse-Technical-Group/pydecklink/commit/ced9a1220e292280b096a1ed08aa12a89772d42d))
+* **types:** regenerate stub from clean main and exclude from ruff format ([0ee4299](https://github.com/Fuse-Technical-Group/pydecklink/commit/0ee4299ecdbd81ec43f0ae35cd2dcd4a849cf995))
+* use nb::sig to define platform independent signature meaning _bindings.pyi is same on any platform ([dd52821](https://github.com/Fuse-Technical-Group/pydecklink/commit/dd52821bed011b77f8f6be95ea9338ced0721519))
+
 ## [0.1.18](https://github.com/Fuse-Technical-Group/pyntv2/compare/v0.1.17...v0.1.18) (2026-03-25)
 
 
@@ -23,19 +60,6 @@
 
 * **allocator:** add custom video buffer allocator for GPU DMA ([b73f935](https://github.com/Fuse-Technical-Group/pyntv2/commit/b73f935024b74556680e3973ff649c9d4953d51b))
 * **allocator:** custom video buffer allocator for GPU DMA ([ed5a00b](https://github.com/Fuse-Technical-Group/pyntv2/commit/ed5a00b13e8933677b37f0e9b562bcb684d3efec))
-
-## [Unreleased]
-
-### Added
-
-* **allocator:** custom video buffer allocator infrastructure for GPU DMA
-* **allocator:** VideoBufferAllocator, VideoBufferAllocatorProvider, ManagedBuffer
-* **device:** enable_video_input_with_allocator() for custom DMA buffers
-* **device:** create_frame_pool_pinned() for allocator-backed output frames
-
-### Changed
-
-* **build:** move OutputCallback and InputCallback to headers for cross-module access
 
 ## [0.1.15](https://github.com/Fuse-Technical-Group/pyntv2/compare/v0.1.14...v0.1.15) (2026-03-25)
 

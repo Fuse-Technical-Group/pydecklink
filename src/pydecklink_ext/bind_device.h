@@ -1,7 +1,7 @@
 #pragma once
 
 #include <nanobind/nanobind.h>
-#include "DeckLinkAPI.h"
+#include "platform.h"
 #include <string>
 
 namespace nb = nanobind;

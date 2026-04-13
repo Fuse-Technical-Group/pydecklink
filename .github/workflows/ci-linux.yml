@@ -12,11 +12,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
 
-      - name: Ruff lint
-        run: uv tool run ruff check src/ tests/
+      - name: Install pre-commit
+        run: uv tool install pre-commit
 
-      - name: Ruff format
-        run: uv tool run ruff format --check src/ tests/
+      - name: Run pre-commit hooks
+        run: pre-commit run --all-files
 
   compile:
     runs-on: ubuntu-latest
@@ -36,19 +36,17 @@ jobs:
           uv sync
           uv run python -c "import pydecklink; print('import OK')"
 
+      - name: Stub freshness
+        run: |
+          diff -u src/pydecklink/_bindings.pyi \
+            .venv/lib/python3.*/site-packages/pydecklink/_bindings.pyi \
+            || { echo "::error::Committed stub is stale. Run 'uv sync' and copy the generated _bindings.pyi into src/pydecklink/."; exit 1; }
+
       - name: Mypy
         run: uv run mypy
 
       - name: Unit tests
-        run: >-
-          uv run pytest
-          tests/test_pydecklink_import.py
-          tests/test_pydecklink_enums.py
-          tests/test_pydecklink_device.py
-          tests/test_pydecklink_format.py
-          tests/test_pydecklink_output.py
-          tests/test_pydecklink_input.py
-          -x --tb=short --noconftest
+        run: uv run pytest tests/ -x --tb=short --noconftest
 
   build:
     if: always()

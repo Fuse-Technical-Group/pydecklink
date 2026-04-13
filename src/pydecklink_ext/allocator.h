@@ -187,7 +187,8 @@ public:
         return static_cast<VideoBufferAllocator*>(alloc);
     }
 
-    ~VideoBufferAllocatorProvider() override {
+    // COM interfaces on windows have no virtual destructor so can't use override here.
+    ~VideoBufferAllocatorProvider() {
         for (auto* a : allocators_)
             a->Release();
     }
