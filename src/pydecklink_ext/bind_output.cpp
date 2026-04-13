@@ -11,10 +11,6 @@
 
 void init_decklink_output(nb::module_& m, nb::class_<Device>& device) {
 
-    m.def("_host_frame_refs", []() {
-        return g_host_frame_refs.load(std::memory_order_relaxed);
-    }, "Live host-side IDeckLinkMutableVideoFrame refs held by schedule_frame.");
-
     // -- OutputStatus --
     nb::class_<OutputStatus>(m, "OutputStatus")
         .def(nb::init<>())
