@@ -40,11 +40,11 @@ SDK headers are vendored in `vendor/` at a pinned version (15.3).
 The build system detects the platform and uses the appropriate SDK
 artefacts:
 
-| | Linux | Windows |
-|---|---|---|
-| SDK artefacts | C++ headers + dispatch source | IDL files → MIDL-generated headers + COM stubs |
-| Runtime library | `libDeckLinkAPI.so` via `dlopen` | COM interfaces via `CoCreateInstance` |
-| Build toolchain | C++ compiler, CMake | MSVC, Windows SDK (MIDL), CMake |
+| | Linux | macOS | Windows |
+|---|---|---|---|
+| SDK artefacts | C++ headers + dispatch source | C++ headers + dispatch source | IDL files → MIDL-generated headers + COM stubs |
+| Runtime library | `libDeckLinkAPI.so` via `dlopen` | CoreFoundation `CFPlugIn` | COM interfaces via `CoCreateInstance` |
+| Build toolchain | C++ compiler, CMake | Xcode / Apple Clang, CMake | MSVC, Windows SDK (MIDL), CMake |
 
 A platform abstraction layer (`platform.h`) provides type aliases
 (`dlstring_t`, `dlbool_t`) and helpers (`DeckLinkStringToStd`,
