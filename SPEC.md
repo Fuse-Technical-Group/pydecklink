@@ -105,7 +105,7 @@ frame pool avoids per-frame allocation. Together these reduce the
 per-frame CPU overhead to ~4.7ms at 4K 59.94 10-bit YUV, leaving
 ~10ms for processing.
 
-### Custom buffer allocators (Phase 2 infrastructure)
+### Custom buffer allocators
 
 The SDK v15.3 provides `IDeckLinkVideoBufferAllocator` and
 `IDeckLinkVideoBufferAllocatorProvider` to control how DMA buffers
@@ -114,9 +114,9 @@ and `VideoBufferAllocatorProvider`, backed by `ManagedBuffer`
 (an `IDeckLinkVideoBuffer` implementation).
 
 By default, allocators use malloc/free. Users can supply custom
-allocation functions (e.g. CUDA `cudaHostAlloc`) at construction
-time. The allocator provider caches allocators by buffer size so
-the SDK reuses them across format changes.
+Python callables for alloc/free at construction time. The allocator
+provider caches allocators by buffer size so the SDK reuses them
+across format changes.
 
 **Capture path**: `enable_video_input_with_allocator()` calls
 `IDeckLinkInput::EnableVideoInputWithAllocatorProvider`, directing
@@ -127,8 +127,83 @@ the DeckLink DMA engine to write into user-allocated buffers.
 `ManagedBuffer` from the allocator. These frames enter the existing
 output pool and are recycled via `ScheduledFrameCompleted`.
 
-This infrastructure is allocator-agnostic. CUDA pinned memory
-is a configuration choice, not a code change.
+This infrastructure is allocator-agnostic. CUDA pinned memory,
+HIP pinned memory, or any other page-locked allocator is a
+configuration choice, not a code change.
+
+#### Buffer recycling
+
+The SDK treats capture buffers as disposable: allocate via
+`AllocateVideoBuffer`, DMA-fill, deliver via callback, `Release`
+when done. With malloc this is nanoseconds. With GPU pinned
+allocators (`cudaHostAlloc`, `hipHostMalloc`, `zeMemAllocHost`)
+it is fatal — these are kernel page-table operations (~1ms each)
+that cannot sustain frame-rate alloc/free cycles.
+
+The allocator maintains a free-list. When a `ManagedBuffer`'s COM
+refcount drops to zero — from SDK `Release` of a delivered capture
+buffer or Python GC of a `ComPtr<ManagedBuffer>` — the buffer
+returns to its parent allocator's free-list instead of calling the
+free function. The next `AllocateVideoBuffer` call returns a
+recycled buffer. The free function runs only when the allocator
+itself is destroyed and drains the free-list.
+
+Each `ManagedBuffer` holds a `ComPtr<VideoBufferAllocator>` to its
+parent. Without this back-reference a buffer outliving its
+allocator would return to a freed free-list.
+
+Capture buffers cycle at frame rate. Output-pool buffers held by
+`IDeckLinkMutableVideoFrame` (AddRef'd in `CreateVideoFrameWithBuffer`)
+visit the free-list only when the pool is destroyed; frame-level
+reuse during sustained playback happens via `ScheduledFrameCompleted`,
+not the buffer free-list.
+
+### GPU pinned memory integration §spec:gpu-pinned-memory
+
+GPU pinned memory (`cudaHostAlloc`, `hipHostMalloc`,
+`zeMemAllocHost`) produces page-locked system RAM mapped into both
+CPU and GPU address spaces. Any PCIe device — including DeckLink —
+can DMA to/from it. The GPU runtime has no awareness of third-party
+DMA; coherency is the application's responsibility.
+
+#### Why pydecklink is allocator-agnostic
+
+Every GPU framework follows "allocator allocates, allocator frees":
+
+| Framework | Allocate | Free |
+|---|---|---|
+| CUDA | `cudaHostAlloc` | `cudaFreeHost` |
+| HIP (AMD) | `hipHostMalloc` | `hipHostFree` |
+| Intel Level Zero | `zeMemAllocHost` | `zeMemFree` |
+
+The `alloc(size) → ptr` / `free(ptr, size)` callable interface
+accommodates all of them. pydecklink never imports a GPU toolkit.
+
+CUDA and HIP also offer a "register existing memory" path
+(`cudaHostRegister` / `hipHostRegister`) that pins malloc'd
+buffers after allocation. Intel Level Zero has no equivalent.
+The register path is a consumer-side pattern that requires no
+pydecklink changes — see `examples/cuda_pinned_capture.py`.
+
+#### Synchronization contract
+
+DeckLink DMA and GPU copies must not overlap on the same buffer:
+
+- Do not `cudaMemcpyAsync` from a buffer while DeckLink is
+  writing to it. Wait for the frame callback.
+- Do not let DeckLink reuse a buffer while a GPU copy is in
+  flight. Hold the `CaptureFrameRef` until the CUDA stream
+  completes.
+- Triple-buffer pattern: DeckLink writes buffer N, GPU copies
+  buffer N-1, GPU processes buffer N-2.
+
+#### cudaHostAlloc flags
+
+`cudaHostAllocWriteCombined` bypasses CPU cache — optimal for
+frames the CPU does not read (GPU-only processing).
+`cudaHostAllocDefault` uses normal caching — required if the CPU
+also inspects frame data (metadata extraction, overlay compositing).
+HIP provides `hipHostMallocWriteCombined` with identical semantics.
 
 ### Why C++ callback queues
 
@@ -518,17 +593,15 @@ how `get_attribute_int` already behaves.
 
 ## 9. Explicit Non-Goals (Phase 1)
 
-- **GPU RDMA (Phase 1).** Phase 1 uses CPU memory. The allocator
-  infrastructure supports CUDA pinned memory; wiring `cudaHostAlloc`
-  as the allocation function is a Phase 2 configuration step.
+- **GPU RDMA.** The allocator infrastructure and buffer recycling
+  design support GPU pinned memory (§spec:gpu-pinned-memory).
+  Wiring a specific GPU allocator is a consumer configuration step,
+  not a pydecklink code change.
 - **Audio.** Deferred. The SDK supports audio scheduling; the binding
   does not expose it yet.
 - **Ancillary data.** Timecode, closed captions — deferred.
 - **HDR metadata.** The SDK supports it via frame metadata extensions.
   Deferred to Phase 2 (bmd-signal-gen integration needs it).
-- **macOS.** macOS COM model differs (CoreFoundation-based).
-  Platform-conditional dispatch code needed in `platform.h`.
-  Mac SDK headers are vendored; build support is next.
 - **Deck control.** `IDeckLinkDeckControl` (tape transport) is not
   bound.
 - **Reference signal generation.** Capture/playback DeckLinks have
