@@ -11,10 +11,6 @@
 
 void init_decklink_output(nb::module_& m, nb::class_<Device>& device) {
 
-    m.def("_host_frame_refs", []() {
-        return g_host_frame_refs.load(std::memory_order_relaxed);
-    }, "Live host-side IDeckLinkMutableVideoFrame refs held by schedule_frame.");
-
     // -- OutputStatus --
     nb::class_<OutputStatus>(m, "OutputStatus")
         .def(nb::init<>())
@@ -216,13 +212,12 @@ void init_decklink_output(nb::module_& m, nb::class_<Device>& device) {
            int64_t display_time, int64_t duration, int64_t timescale) {
             if (!self.output_)
                 throw std::runtime_error("Video output not enabled");
-            TrackedFramePtr raw_frame;
+            ComPtr<IDeckLinkMutableVideoFrame> raw_frame;
             HRESULT hr = self.output_->CreateVideoFrame(
                 width, height, row_bytes, pixel_format,
                 bmdFrameFlagDefault, raw_frame.put());
             if (hr != S_OK || !raw_frame)
                 throw std::runtime_error("CreateVideoFrame failed");
-            raw_frame.mark_created();
 
             // Copy data.
             ComPtr<IDeckLinkVideoBuffer> buf;

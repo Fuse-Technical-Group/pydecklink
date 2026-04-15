@@ -730,9 +730,6 @@ class MutableFrame:
     def end_access(self) -> None:
         """Release buffer access (called automatically on frame use)."""
 
-def _host_frame_refs() -> int:
-    """Live host-side IDeckLinkMutableVideoFrame refs held by schedule_frame."""
-
 def clock_us() -> int:
     """Return monotonic time in microseconds."""
 

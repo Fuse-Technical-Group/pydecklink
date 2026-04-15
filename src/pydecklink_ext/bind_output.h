@@ -12,47 +12,6 @@
 
 namespace nb = nanobind;
 
-/// Global counter: host-side refs to IDeckLinkMutableVideoFrame objects
-/// created by schedule_frame.  Incremented after CreateVideoFrame;
-/// decremented in the destructor only when Release() will fire (ptr
-/// still non-null).  A non-zero value after playback stops means a ref
-/// was leaked.
-inline std::atomic<int64_t> g_host_frame_refs{0};
-
-/// RAII wrapper around ComPtr<IDeckLinkMutableVideoFrame> that maintains
-/// g_host_frame_refs.  Call mark_created() once after CreateVideoFrame
-/// succeeds.  The destructor decrements only if the inner pointer is
-/// still live (i.e. Release() will actually fire).
-class TrackedFramePtr {
-public:
-    TrackedFramePtr() = default;
-    ~TrackedFramePtr() {
-        if (inner_) g_host_frame_refs.fetch_sub(1, std::memory_order_relaxed);
-    }
-    TrackedFramePtr(const TrackedFramePtr&) = delete;
-    TrackedFramePtr& operator=(const TrackedFramePtr&) = delete;
-    TrackedFramePtr(TrackedFramePtr&& o) noexcept : inner_(std::move(o.inner_)) {}
-    TrackedFramePtr& operator=(TrackedFramePtr&& o) noexcept {
-        if (this != &o) {
-            if (inner_) g_host_frame_refs.fetch_sub(1, std::memory_order_relaxed);
-            inner_ = std::move(o.inner_);
-        }
-        return *this;
-    }
-
-    IDeckLinkMutableVideoFrame* get() const { return inner_.get(); }
-    IDeckLinkMutableVideoFrame** put() { return inner_.put(); }
-    IDeckLinkMutableVideoFrame* operator->() const { return inner_.get(); }
-    explicit operator bool() const { return bool(inner_); }
-
-    void mark_created() {
-        if (inner_) g_host_frame_refs.fetch_add(1, std::memory_order_relaxed);
-    }
-
-private:
-    ComPtr<IDeckLinkMutableVideoFrame> inner_;
-};
-
 /// Tracks scheduled frame completion statistics.
 struct OutputStatus {
     uint32_t completed = 0;
