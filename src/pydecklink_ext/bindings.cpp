@@ -1,5 +1,4 @@
 #include <nanobind/nanobind.h>
-#include <atomic>
 
 namespace nb = nanobind;
 
@@ -14,17 +13,6 @@ namespace nb = nanobind;
 
 NB_MODULE(_bindings, m) {
     m.doc() = "pydecklink: Python bindings for Blackmagic DeckLink SDK";
-
-    // Always available — returns 0 when built without the SDK.
-#ifdef HAVE_DECKLINK_SDK
-    m.def("_host_frame_refs", []() {
-        return g_host_frame_refs.load(std::memory_order_relaxed);
-    }, "Live host-side IDeckLinkMutableVideoFrame refs held by schedule_frame.");
-#else
-    m.def("_host_frame_refs", []() { return int64_t(0); },
-          "Live host-side IDeckLinkMutableVideoFrame refs held by schedule_frame.");
-#endif
-
 #ifdef HAVE_DECKLINK_SDK
     m.attr("HAS_SDK") = true;
     init_decklink_enums(m);
