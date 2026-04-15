@@ -15,9 +15,9 @@ NB_MODULE(_bindings, m) {
     m.doc() = "pydecklink: Python bindings for Blackmagic DeckLink SDK";
 #ifdef HAVE_DECKLINK_SDK
     m.attr("HAS_SDK") = true;
-    m.def("_comptr_live", []() {
-        return g_comptr_live.load(std::memory_order_relaxed);
-    }, "Live ComPtr instances holding a non-null COM pointer.");
+    m.def("_host_frame_refs", []() {
+        return g_host_frame_refs.load(std::memory_order_relaxed);
+    }, "Live host-side IDeckLinkMutableVideoFrame refs held by schedule_frame.");
     init_decklink_enums(m);
     auto device_cls = init_decklink_device(m);
     init_decklink_format(m);

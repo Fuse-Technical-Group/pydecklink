@@ -16,13 +16,12 @@ renamed to ``detach()`` to match its actual semantics.
 
 Detection strategy
 ------------------
-``ComPtr`` maintains a global atomic counter (``g_comptr_live``) of all
-live instances holding a non-null COM pointer.  The counter increments
-on acquisition (constructor or deferred via ``put()``) and decrements
-on release (destructor, move-assignment, or ``put()`` overwrite).
-Between ``schedule_frame`` calls, all scope-local ``ComPtr`` objects
-are destroyed, so the counter must return to its baseline — any drift
-means a ref was leaked.
+``TrackedFramePtr`` wraps each frame created by ``schedule_frame`` and
+maintains an atomic counter (``g_host_frame_refs``).  The counter
+increments after ``CreateVideoFrame`` succeeds and decrements in the
+destructor only when the inner ``ComPtr`` still holds a live pointer
+(i.e. ``Release()`` will fire).  After all calls return, the counter
+must be zero — any non-zero value means a host-side ref was leaked.
 """
 
 from __future__ import annotations
@@ -34,7 +33,7 @@ import numpy as np
 import pytest
 
 import pydecklink
-from pydecklink._bindings import _comptr_live
+from pydecklink._bindings import _host_frame_refs
 
 _HAS_SDK = getattr(pydecklink, "HAS_SDK", False)
 
@@ -76,10 +75,6 @@ def test_schedule_frame_does_not_leak_per_call():
             )
         dev.start_scheduled_playback(0, timescale, 1.0)
 
-        # Snapshot after pre-roll — all scope-local ComPtrs from
-        # pre-roll calls are already destroyed.
-        baseline = _comptr_live()
-
         # Pace at slightly under frame rate so the SDK has time to
         # complete (and release) frames between schedules.
         period = 0.9 / fps
@@ -96,11 +91,11 @@ def test_schedule_frame_does_not_leak_per_call():
                 timescale,
             )
 
-        # All scope-local ComPtrs from schedule_frame should be
-        # destroyed.  Any counter drift means a ref was leaked.
-        leaked = _comptr_live() - baseline
-        assert leaked == 0, (
-            f"schedule_frame leaked {leaked} ComPtr refs over {ITERATIONS} calls"
+        # Every host-side frame ref should have been released by the
+        # ComPtr destructor at schedule_frame scope exit.
+        leaked_refs = _host_frame_refs()
+        assert leaked_refs == 0, (
+            f"schedule_frame leaked {leaked_refs} host-side frame refs"
         )
     finally:
         with contextlib.suppress(RuntimeError):
