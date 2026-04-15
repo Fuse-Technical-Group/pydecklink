@@ -158,8 +158,8 @@ public:
             cf.stream_duration = sd;
             cf.hw_ref_timestamp = hw_time;
 
-            IDeckLinkVideoBuffer* buf = nullptr;
-            videoFrame->QueryInterface(IID_IDeckLinkVideoBuffer, (void**)&buf);
+            ComPtr<IDeckLinkVideoBuffer> buf;
+            videoFrame->QueryInterface(IID_IDeckLinkVideoBuffer, (void**)buf.put());
             if (buf) {
                 buf->StartAccess(bmdBufferAccessRead);
                 void* bytes = nullptr;
@@ -170,7 +170,6 @@ public:
                     std::memcpy(cf.pixels.data(), bytes, total);
                 }
                 buf->EndAccess(bmdBufferAccessRead);
-                buf->Release();
             }
 
             {

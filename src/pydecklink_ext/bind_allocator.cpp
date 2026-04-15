@@ -140,23 +140,21 @@ void init_decklink_allocator(nb::module_& m, nb::class_<Device>& device) {
         [](Device& self, _BMDDisplayMode mode, _BMDPixelFormat pixel_format,
            _BMDVideoInputFlags flags, VideoBufferAllocatorProvider& provider,
            bool zero_copy) {
-            IDeckLinkInput* input = nullptr;
-            if (self.dl->QueryInterface(IID_IDeckLinkInput, (void**)&input) != S_OK)
+            ComPtr<IDeckLinkInput> input;
+            if (self.dl->QueryInterface(IID_IDeckLinkInput, (void**)input.put()) != S_OK)
                 throw std::runtime_error("Device does not support input");
             HRESULT hr = input->EnableVideoInputWithAllocatorProvider(
                 mode, pixel_format, flags, &provider);
-            if (hr != S_OK) {
-                input->Release();
+            if (hr != S_OK)
                 throw std::runtime_error(
                     "EnableVideoInputWithAllocatorProvider failed (HRESULT " +
                     std::to_string(hr) + ")");
-            }
-            self.input_ = ComPtr<IDeckLinkInput>(input);
-            self.input_callback_ = new InputCallback(input, 8, zero_copy);
+            self.input_ = std::move(input);
+            self.input_callback_ = new InputCallback(self.input_.get(), 8, zero_copy);
             self.input_callback_->set_current_format(mode, pixel_format, flags);
             bool format_detection = (flags & bmdVideoInputEnableFormatDetection) != 0;
             self.input_callback_->set_format_detection(format_detection);
-            input->SetCallback(self.input_callback_);
+            self.input_->SetCallback(self.input_callback_);
         },
         nb::arg("mode"), nb::arg("pixel_format"),
         nb::arg("flags"), nb::arg("allocator_provider"),
@@ -179,20 +177,20 @@ void init_decklink_allocator(nb::module_& m, nb::class_<Device>& device) {
             // ManagedBuffer backing stores from the allocator.
             for (int i = 0; i < count; ++i) {
                 ManagedBuffer* buf = allocator.allocate_managed();
-                IDeckLinkMutableVideoFrame* raw = nullptr;
+                ComPtr<IDeckLinkMutableVideoFrame> frame;
                 HRESULT hr = self.output_->CreateVideoFrameWithBuffer(
                     width, height, row_bytes, pixel_format,
                     bmdFrameFlagDefault,
                     static_cast<IDeckLinkVideoBuffer*>(buf),
-                    &raw);
-                if (hr != S_OK || !raw) {
+                    frame.put());
+                if (hr != S_OK || !frame) {
                     buf->Release();
                     throw std::runtime_error(
                         "CreateVideoFrameWithBuffer failed for pool frame " +
                         std::to_string(i) + " (HRESULT " + std::to_string(hr) + ")");
                 }
                 // The OutputCallback pool takes ownership.
-                self.output_callback_->add_pinned_frame(raw);
+                self.output_callback_->add_pinned_frame(frame.detach());
                 // buf is held alive by the frame (the SDK retains the
                 // IDeckLinkVideoBuffer reference).
             }

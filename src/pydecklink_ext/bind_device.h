@@ -28,7 +28,7 @@ public:
     T** put() { return &ptr_; }
     T* operator->() const { return ptr_; }
     explicit operator bool() const { return ptr_ != nullptr; }
-    T* release() { T* p = ptr_; ptr_ = nullptr; return p; }
+    T* detach() { T* p = ptr_; ptr_ = nullptr; return p; }
 private:
     T* ptr_;
 };

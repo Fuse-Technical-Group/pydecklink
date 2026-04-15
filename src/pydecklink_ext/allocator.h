@@ -93,10 +93,7 @@ public:
         auto* buf = new ManagedBuffer(buffer_size_, mem, free_fn_);
         *allocatedBuffer = buf;
 
-        {
-            std::lock_guard<std::mutex> lock(mutex_);
-            ++allocated_count_;
-        }
+        ++allocated_count_;
 
         return S_OK;
     }
@@ -104,7 +101,6 @@ public:
     size_t buffer_size() const { return buffer_size_; }
 
     size_t allocated_count() const {
-        std::lock_guard<std::mutex> lock(mutex_);
         return allocated_count_;
     }
 
@@ -123,8 +119,7 @@ private:
     size_t buffer_size_;
     AllocFn alloc_fn_;
     FreeFn free_fn_;
-    mutable std::mutex mutex_;
-    size_t allocated_count_ = 0;
+    std::atomic<size_t> allocated_count_ = 0;
 
     static void* default_alloc(size_t size) { return std::malloc(size); }
     static void default_free(void* ptr, size_t) { std::free(ptr); }
@@ -159,19 +154,19 @@ public:
         std::lock_guard<std::mutex> lock(mutex_);
 
         // Check cache for existing allocator with this buffer size.
-        for (auto& cached : allocators_) {
+        for (ComPtr<VideoBufferAllocator>& cached : allocators_) {
             if (cached->buffer_size() == bufferSize) {
                 cached->AddRef();
-                *allocator = cached;
+                *allocator = cached.get();
                 return S_OK;
             }
         }
 
         // Create new allocator.
-        auto* alloc = new VideoBufferAllocator(bufferSize, alloc_fn_, free_fn_);
-        allocators_.push_back(alloc);
+        auto& alloc = allocators_.emplace_back(new VideoBufferAllocator(bufferSize, alloc_fn_, free_fn_));
+
         alloc->AddRef(); // One ref for the cache, one for the caller.
-        *allocator = alloc;
+        *allocator = alloc.get();
         return S_OK;
     }
 
@@ -187,16 +182,10 @@ public:
         return static_cast<VideoBufferAllocator*>(alloc);
     }
 
-    // COM interfaces on windows have no virtual destructor so can't use override here.
-    ~VideoBufferAllocatorProvider() {
-        for (auto* a : allocators_)
-            a->Release();
-    }
-
 private:
     std::atomic<ULONG> ref_count_;
     AllocFn alloc_fn_;
     FreeFn free_fn_;
     std::mutex mutex_;
-    std::vector<VideoBufferAllocator*> allocators_;  // Cached allocators (owned via ref count).
+    std::vector<ComPtr<VideoBufferAllocator>> allocators_;  // Cached allocators (owned via ref count).
 };

@@ -90,15 +90,15 @@ public:
         while (!available_.empty()) available_.pop();
 
         for (int i = 0; i < count; ++i) {
-            IDeckLinkMutableVideoFrame* raw = nullptr;
+            ComPtr<IDeckLinkMutableVideoFrame> frame;
             HRESULT hr = output->CreateVideoFrame(
                 width, height, row_bytes, pixel_format,
-                bmdFrameFlagDefault, &raw);
-            if (hr != S_OK || !raw)
+                bmdFrameFlagDefault, frame.put());
+            if (hr != S_OK || !frame)
                 throw std::runtime_error(
                     "CreateVideoFrame failed for pool frame " + std::to_string(i));
-            all_frames_.emplace_back(raw);
-            available_.push(raw);
+            available_.push(frame.get());
+            all_frames_.push_back(std::move(frame));
         }
         pool_enabled_ = true;
     }
