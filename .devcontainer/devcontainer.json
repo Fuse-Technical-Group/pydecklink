@@ -38,6 +38,8 @@
     // Both must be at host paths so the symlinks resolve.
     "source=/var/lib/blackmagic/lib,target=/var/lib/blackmagic/lib,type=bind,readonly",
     "source=/var/lib/blackmagic/bin,target=/var/lib/blackmagic/bin,type=bind,readonly",
+    // Named volume for container-local Claude state (history, cache, etc.)
+    "source=claude-config-${devcontainerId},target=/home/ubuntu/.claude,type=volume",
     // Bind mount Claude auth and settings from host (read-only credentials, read-write settings)
     "source=${localEnv:HOME}/.claude/.credentials.json,target=/home/ubuntu/.claude/.credentials.json,type=bind",
     "source=${localEnv:HOME}/.claude/settings.json,target=/home/ubuntu/.claude/settings.json,type=bind",
