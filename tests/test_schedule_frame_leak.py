@@ -59,6 +59,9 @@ PER_ITER_BUDGET_BYTES = 1024 * 1024
 
 
 def test_schedule_frame_does_not_leak_per_call():
+    assert MODE
+    assert PIXEL_FORMAT
+
     width = pydecklink.get_mode_width(MODE)
     height = pydecklink.get_mode_height(MODE)
     row_bytes = width * 2  # 8-bit YUV
