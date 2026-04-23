@@ -98,14 +98,12 @@ class TestSignalDetection:
         out_dev, in_dev = loopback_pair
 
         # Schedule a few frames to establish a signal.
-        pattern = np.full(FRAME_BYTES, 0x80, dtype=np.uint8)
+        out_dev.create_frame_pool(8, WIDTH, HEIGHT, ROW_BYTES, PIXEL_FORMAT)
         for i in range(5):
-            out_dev.schedule_frame(
-                pattern,
-                WIDTH,
-                HEIGHT,
-                ROW_BYTES,
-                PIXEL_FORMAT,
+            mf = out_dev.acquire_output_frame(timeout_ms=1000)
+            mf.data[:] = 0x80  # Valid YCbCr neutral gray.
+            out_dev.schedule_output_frame(
+                mf,
                 display_time=i * FRAME_DURATION,
                 duration=FRAME_DURATION,
                 timescale=TIMESCALE,
@@ -141,22 +139,22 @@ class TestLoopbackIntegrity:
         """
         out_dev, in_dev = loopback_pair
 
-        # Fill with 0x80 (valid YCbCr neutral gray).
-        pattern = np.full(FRAME_BYTES, 0x80, dtype=np.uint8)
-
         # Schedule enough frames for the pipeline to stabilize.
         preroll = 8
-        for i in range(preroll):
-            out_dev.schedule_frame(
-                pattern,
-                WIDTH,
-                HEIGHT,
-                ROW_BYTES,
-                PIXEL_FORMAT,
-                display_time=i * FRAME_DURATION,
+        out_dev.create_frame_pool(preroll + 5, WIDTH, HEIGHT, ROW_BYTES, PIXEL_FORMAT)
+
+        def schedule_pattern(display_time: int) -> None:
+            mf = out_dev.acquire_output_frame(timeout_ms=1000)
+            mf.data[:] = 0x80  # Valid YCbCr neutral gray.
+            out_dev.schedule_output_frame(
+                mf,
+                display_time=display_time,
                 duration=FRAME_DURATION,
                 timescale=TIMESCALE,
             )
+
+        for i in range(preroll):
+            schedule_pattern(i * FRAME_DURATION)
         out_dev.start_scheduled_playback(start_time=0, timescale=TIMESCALE)
 
         # Drain a few frames to let the pipeline settle.
@@ -166,16 +164,7 @@ class TestLoopbackIntegrity:
         # Continue scheduling so output doesn't underrun.
         display_time = preroll * FRAME_DURATION
         for _ in range(5):
-            out_dev.schedule_frame(
-                pattern,
-                WIDTH,
-                HEIGHT,
-                ROW_BYTES,
-                PIXEL_FORMAT,
-                display_time=display_time,
-                duration=FRAME_DURATION,
-                timescale=TIMESCALE,
-            )
+            schedule_pattern(display_time)
             display_time += FRAME_DURATION
 
         # Capture a settled frame.
@@ -198,14 +187,7 @@ class TestPassthroughStreaming:
     """Run N frames through playout → capture, assert zero drops."""
 
     def test_sustained_streaming_no_drops(self, loopback_pair):
-        """Stream frames for a sustained period. Verify no drops or late frames.
-
-        Uses the pool-based output API (create_frame_pool +
-        acquire_output_frame + schedule_output_frame). schedule_frame
-        allocates a fresh IDeckLinkVideoFrame per call and the SDK has
-        a bounded internal capacity, so it is unsuitable for sustained
-        streaming — see its docstring.
-        """
+        """Stream frames for a sustained period. Verify no drops or late frames."""
         out_dev, in_dev = loopback_pair
 
         target_frames = 50  # ~2 seconds at 25 fps

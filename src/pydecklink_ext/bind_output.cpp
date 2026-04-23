@@ -205,52 +205,6 @@ void init_decklink_output(nb::module_& m, nb::class_<Device>& device) {
         nb::arg("row_bytes"), nb::arg("pixel_format"),
         "Display a frame synchronously (blocking). Copies buffer into a new frame.");
 
-    device.def("schedule_frame",
-        [](Device& self, nb::ndarray<uint8_t, nb::ndim<1>> buffer,
-           int32_t width, int32_t height, int32_t row_bytes,
-           _BMDPixelFormat pixel_format,
-           int64_t display_time, int64_t duration, int64_t timescale) {
-            if (!self.output_)
-                throw std::runtime_error("Video output not enabled");
-            ComPtr<IDeckLinkMutableVideoFrame> raw_frame;
-            HRESULT hr = self.output_->CreateVideoFrame(
-                width, height, row_bytes, pixel_format,
-                bmdFrameFlagDefault, raw_frame.put());
-            if (hr != S_OK || !raw_frame)
-                throw std::runtime_error("CreateVideoFrame failed");
-
-            // Copy data.
-            ComPtr<IDeckLinkVideoBuffer> buf;
-            raw_frame->QueryInterface(IID_IDeckLinkVideoBuffer, (void**)buf.put());
-            if (!buf) throw std::runtime_error("Frame has no video buffer");
-
-            buf->StartAccess(bmdBufferAccessWrite);
-            void* dest = nullptr;
-            buf->GetBytes(&dest);
-            if (!dest) {
-                buf->EndAccess(bmdBufferAccessWrite);
-                throw std::runtime_error("Failed to get frame buffer bytes");
-            }
-            size_t expected = static_cast<size_t>(row_bytes) * height;
-            size_t provided = buffer.size();
-            if (provided < expected)
-                throw std::invalid_argument(
-                    "Buffer too small: need " + std::to_string(expected) +
-                    " bytes, got " + std::to_string(provided));
-            std::memcpy(dest, buffer.data(), expected);
-            buf->EndAccess(bmdBufferAccessWrite);
-            // Schedule. The frame is moved to the SDK's ownership via AddRef.
-            hr = self.output_->ScheduleVideoFrame(raw_frame.get(), display_time, duration, timescale);
-            if (hr != S_OK)
-                throw std::runtime_error("ScheduleVideoFrame failed (HRESULT " + std::to_string(hr) + ")");
-        },
-        nb::arg("buffer"), nb::arg("width"), nb::arg("height"),
-        nb::arg("row_bytes"), nb::arg("pixel_format"),
-        nb::arg("display_time"), nb::arg("duration"), nb::arg("timescale"),
-        "Schedule a video frame for playback. "
-        "Allocates a new frame per call — for sustained streaming, "
-        "use create_frame_pool + acquire_output_frame + schedule_output_frame.");
-
     device.def("schedule_capture_frame",
         [](Device& self, CaptureFrameRef& capture_frame,
            int64_t display_time, int64_t duration, int64_t timescale) {
