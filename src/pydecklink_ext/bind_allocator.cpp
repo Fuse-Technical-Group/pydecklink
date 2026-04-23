@@ -190,7 +190,7 @@ void init_decklink_allocator(nb::module_& m, nb::class_<Device>& device) {
                         std::to_string(i) + " (HRESULT " + std::to_string(hr) + ")");
                 }
                 // The OutputCallback pool takes ownership.
-                self.output_callback_->add_pinned_frame(frame.detach());
+                self.output_callback_->add_pinned_frame(std::move(frame));
                 // buf is held alive by the frame (the SDK retains the
                 // IDeckLinkVideoBuffer reference).
             }
