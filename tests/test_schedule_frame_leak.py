@@ -36,7 +36,6 @@ from __future__ import annotations
 import contextlib
 import time
 
-import numpy as np
 import psutil
 import pytest
 
@@ -67,23 +66,26 @@ def test_schedule_frame_does_not_leak_per_call():
     timescale = 10_000_000
     frame_duration = round(timescale / fps)
 
+    pool_size = PREROLL + 5
+
     dev = pydecklink.Device(index=0)
     dev.enable_video_output(MODE)
     try:
-        buf = np.zeros(row_bytes * height, dtype=np.uint8)
+        dev.create_frame_pool(pool_size, width, height, row_bytes, PIXEL_FORMAT)
+
+        def schedule_pattern(display_time: int) -> None:
+            mf = dev.acquire_output_frame(timeout_ms=1000)
+            mf.data[:] = 0
+            dev.schedule_output_frame(
+                mf,
+                display_time=display_time,
+                duration=frame_duration,
+                timescale=timescale,
+            )
 
         # Pre-roll a few frames before starting playback.
         for i in range(PREROLL):
-            dev.schedule_frame(
-                buf,
-                width,
-                height,
-                row_bytes,
-                PIXEL_FORMAT,
-                i * frame_duration,
-                frame_duration,
-                timescale,
-            )
+            schedule_pattern(i * frame_duration)
         dev.start_scheduled_playback(0, timescale, 1.0)
 
         proc = psutil.Process()
@@ -94,16 +96,7 @@ def test_schedule_frame_does_not_leak_per_call():
         period = 0.9 / fps
         for i in range(PREROLL, PREROLL + ITERATIONS):
             time.sleep(period)
-            dev.schedule_frame(
-                buf,
-                width,
-                height,
-                row_bytes,
-                PIXEL_FORMAT,
-                i * frame_duration,
-                frame_duration,
-                timescale,
-            )
+            schedule_pattern(i * frame_duration)
 
         delta = proc.memory_info().rss - baseline
         per_iter = delta / ITERATIONS

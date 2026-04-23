@@ -198,54 +198,71 @@ class TestPassthroughStreaming:
     """Run N frames through playout → capture, assert zero drops."""
 
     def test_sustained_streaming_no_drops(self, loopback_pair):
-        """Stream frames for a sustained period. Verify no drops or late frames."""
+        """Stream frames for a sustained period. Verify no drops or late frames.
+
+        Uses the pool-based output API (create_frame_pool +
+        acquire_output_frame + schedule_output_frame). schedule_frame
+        allocates a fresh IDeckLinkVideoFrame per call and the SDK has
+        a bounded internal capacity, so it is unsuitable for sustained
+        streaming — see its docstring.
+        """
         out_dev, in_dev = loopback_pair
 
-        pattern = np.full(FRAME_BYTES, 0x80, dtype=np.uint8)
         target_frames = 50  # ~2 seconds at 25 fps
-        preroll = 5
+        # Pool sized for preroll plus a few frames in flight. Preroll is
+        # deeper than minimum so SDI sync has time to lock before the
+        # output underruns: 15 frames = 600 ms at 25 fps.
+        preroll = 15
+        pool_size = preroll + 5
 
-        # Pre-roll output.
-        for i in range(preroll):
-            out_dev.schedule_frame(
-                pattern,
-                WIDTH,
-                HEIGHT,
-                ROW_BYTES,
-                PIXEL_FORMAT,
-                display_time=i * FRAME_DURATION,
+        out_dev.create_frame_pool(pool_size, WIDTH, HEIGHT, ROW_BYTES, PIXEL_FORMAT)
+
+        def schedule_pattern(display_time: int) -> None:
+            mf = out_dev.acquire_output_frame(timeout_ms=1000)
+            mf.data[:] = 0x80  # Valid YCbCr neutral gray.
+            out_dev.schedule_output_frame(
+                mf,
+                display_time=display_time,
                 duration=FRAME_DURATION,
                 timescale=TIMESCALE,
             )
+
+        # Pre-roll output.
+        for i in range(preroll):
+            schedule_pattern(i * FRAME_DURATION)
         out_dev.start_scheduled_playback(start_time=0, timescale=TIMESCALE)
         display_time = preroll * FRAME_DURATION
 
-        captured = 0
-        no_signal_count = 0
+        # The input stream was started in the fixture before output had
+        # any data, so the input queue may be backed up with no-signal
+        # frames. Drain them without scheduling more output — the
+        # pre-roll above keeps the output fed during this drain.
+        signal_acquired = False
+        for _ in range(200):
+            frame = in_dev.pop_capture_frame(timeout_ms=1000)
+            if frame is not None and frame.has_signal:
+                signal_acquired = True
+                break
+
+        assert signal_acquired, "Input never acquired SDI signal from output"
+
+        captured = 1  # The acquisition frame above counts.
+        consecutive_no_signal = 0
 
         for _ in range(target_frames + 20):  # Allow extra attempts.
             frame = in_dev.pop_capture_frame(timeout_ms=1000)
             if frame is None:
                 continue
             if not frame.has_signal:
-                no_signal_count += 1
-                if no_signal_count > 5:
+                consecutive_no_signal += 1
+                if consecutive_no_signal > 5:
                     pytest.fail("Lost signal during streaming")
                 continue
+            consecutive_no_signal = 0
 
             captured += 1
 
-            # Keep output fed.
-            out_dev.schedule_frame(
-                pattern,
-                WIDTH,
-                HEIGHT,
-                ROW_BYTES,
-                PIXEL_FORMAT,
-                display_time=display_time,
-                duration=FRAME_DURATION,
-                timescale=TIMESCALE,
-            )
+            schedule_pattern(display_time)
             display_time += FRAME_DURATION
 
             if captured >= target_frames:
