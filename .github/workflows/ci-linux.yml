@@ -45,8 +45,8 @@ jobs:
       - name: Mypy
         run: uv run mypy
 
-      - name: Unit tests
-        run: uv run pytest tests/ -x --tb=short --noconftest
+      - name: Unit tests with nanobind leak check
+        uses: ./.github/actions/pytest-leak-check
 
   build:
     if: always()

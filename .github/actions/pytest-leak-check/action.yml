@@ -1,0 +1,33 @@
+name: Pytest with nanobind leak check
+description: >
+  Run pytest and fail if nanobind reports leaked instances at interpreter
+  shutdown. Uses bash on all platforms (Git Bash on Windows runners) so
+  pipefail and grep work identically everywhere.
+
+inputs:
+  tests:
+    description: Test path or selector passed to pytest.
+    required: false
+    default: tests/
+  pytest-args:
+    description: Extra arguments forwarded to pytest.
+    required: false
+    default: -x --tb=short --noconftest
+
+runs:
+  using: composite
+  steps:
+    - name: Unit tests
+      shell: bash
+      run: |
+        uv run pytest ${{ inputs.tests }} ${{ inputs.pytest-args }} 2>&1 \
+          | tee pytest-output.log
+
+    - name: Nanobind leak check
+      shell: bash
+      run: |
+        if grep -q "nanobind: leaked" pytest-output.log; then
+          echo "::error::nanobind reported leaks at interpreter shutdown"
+          grep "nanobind:" pytest-output.log
+          exit 1
+        fi
