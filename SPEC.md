@@ -259,12 +259,12 @@ Two output modes: synchronous (simple, blocking) and scheduled
 #### Scheduled (for sustained streaming)
 
 - `device.enable_video_output(mode, flags=0)`
-- `device.schedule_frame(buffer, display_time, duration, timescale)`
+- `device.schedule_output_frame(mutable_frame, display_time,
+  duration, timescale)` — schedules a pre-allocated pool frame
+  (see frame pool below).
 - `device.schedule_capture_frame(capture_frame_ref, display_time,
   duration, timescale)` — zero-copy: passes the SDK input frame
   directly to `ScheduleVideoFrame`.
-- `device.schedule_output_frame(mutable_frame, display_time,
-  duration, timescale)` — schedules a pre-allocated pool frame.
 - `device.start_scheduled_playback(start_time, timescale, speed=1.0)`
 - `device.stop_scheduled_playback()`
 - `device.is_scheduled_playback_running → bool`
@@ -293,9 +293,11 @@ internally and exposed via:
 - `MutableFrame.data → numpy.ndarray` — writeable buffer via
   `IDeckLinkVideoBuffer`.
 
-For the common case (schedule a numpy buffer), `schedule_frame` and
-`display_frame_sync` accept a numpy array directly and handle frame
-creation internally.
+For the common case (display a single numpy buffer synchronously),
+`display_frame_sync` accepts a numpy array directly and handles frame
+creation internally. Scheduled playback uses the pool API
+(`create_frame_pool` + `acquire_output_frame` +
+`schedule_output_frame`).
 
 ### 5.7 Configuration
 

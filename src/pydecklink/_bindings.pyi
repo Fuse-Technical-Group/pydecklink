@@ -567,11 +567,6 @@ class Device:
         Display a frame synchronously (blocking). Copies buffer into a new frame.
         """
 
-    def schedule_frame(self, buffer: Annotated[NDArray[numpy.uint8], dict(shape=(None,))], width: int, height: int, row_bytes: int, pixel_format: PixelFormat, display_time: int, duration: int, timescale: int) -> None:
-        """
-        Schedule a video frame for playback. Allocates a new frame per call — for sustained streaming, use create_frame_pool + acquire_output_frame + schedule_output_frame.
-        """
-
     def schedule_capture_frame(self, capture_frame: CaptureFrameRef, display_time: int, duration: int, timescale: int) -> None:
         """Schedule a zero-copy captured frame for playback. No memcpy."""
 
