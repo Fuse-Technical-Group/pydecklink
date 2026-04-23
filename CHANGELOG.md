@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.2.0](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.1.19...v0.2.0) (2026-04-23)
+
+
+### ⚠ BREAKING CHANGES
+
+* **output:** `schedule_frame` has been removed. Use the pool API for scheduled playback instead.
+
+### Added
+
+* **output:** remove schedule_frame, use pool API for scheduled playback ([7af7860](https://github.com/Fuse-Technical-Group/pydecklink/commit/7af7860))
+
 ## [0.1.19](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.1.18...v0.1.19) (2026-04-04)
 
 
