@@ -41,9 +41,7 @@ void init_decklink_allocator(nb::module_& m, nb::class_<Device>& device) {
                  AllocFn a = nullptr;
                  FreeFn f = nullptr;
                  if (alloc_fn) {
-                     // Prevent GC of the Python callable.
                      nb::object alloc_ref = nb::borrow(*alloc_fn);
-                     alloc_ref.inc_ref();
                      a = [alloc_ref](size_t sz) -> void* {
                          nb::gil_scoped_acquire gil;
                          nb::object result = alloc_ref(sz);
@@ -52,7 +50,6 @@ void init_decklink_allocator(nb::module_& m, nb::class_<Device>& device) {
                  }
                  if (free_fn) {
                      nb::object free_ref = nb::borrow(*free_fn);
-                     free_ref.inc_ref();
                      f = [free_ref](void* ptr, size_t sz) {
                          nb::gil_scoped_acquire gil;
                          free_ref(reinterpret_cast<uintptr_t>(ptr), sz);
@@ -94,7 +91,6 @@ void init_decklink_allocator(nb::module_& m, nb::class_<Device>& device) {
                  FreeFn f = nullptr;
                  if (alloc_fn) {
                      nb::object alloc_ref = nb::borrow(*alloc_fn);
-                     alloc_ref.inc_ref();
                      a = [alloc_ref](size_t sz) -> void* {
                          nb::gil_scoped_acquire gil;
                          nb::object result = alloc_ref(sz);
@@ -103,7 +99,6 @@ void init_decklink_allocator(nb::module_& m, nb::class_<Device>& device) {
                  }
                  if (free_fn) {
                      nb::object free_ref = nb::borrow(*free_fn);
-                     free_ref.inc_ref();
                      f = [free_ref](void* ptr, size_t sz) {
                          nb::gil_scoped_acquire gil;
                          free_ref(reinterpret_cast<uintptr_t>(ptr), sz);
