@@ -54,8 +54,8 @@ void init_decklink_output(nb::module_& m, nb::class_<Device>& device) {
                 throw std::runtime_error("EnableVideoOutput failed (HRESULT " + std::to_string(hr) + ")");
             // Store output interface and create callback.
             self.output_ = std::move(output);
-            self.output_callback_ = new OutputCallback();
-            self.output_->SetScheduledFrameCompletionCallback(self.output_callback_);
+            self.output_callback_ = ComPtr<OutputCallback>(new OutputCallback());
+            self.output_->SetScheduledFrameCompletionCallback(self.output_callback_.get());
         },
         nb::arg("mode"), nb::arg("flags") = static_cast<uint32_t>(bmdVideoOutputFlagDefault),
         "Enable video output for the given display mode.");
@@ -138,10 +138,7 @@ void init_decklink_output(nb::module_& m, nb::class_<Device>& device) {
                 throw std::runtime_error("Video output not enabled");
             self.output_->SetScheduledFrameCompletionCallback(nullptr);
             self.output_->DisableVideoOutput();
-            if (self.output_callback_) {
-                self.output_callback_->Release();
-                self.output_callback_ = nullptr;
-            }
+            self.output_callback_ = ComPtr<OutputCallback>();
             self.output_ = ComPtr<IDeckLinkOutput>();
         },
         "Disable video output.");
