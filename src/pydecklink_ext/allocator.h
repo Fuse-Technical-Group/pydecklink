@@ -104,6 +104,8 @@ public:
         return allocated_count_;
     }
 
+    ULONG refcount() const { return ref_count_.load(); }
+
     /// Allocate a ManagedBuffer and return it (for Python use).
     ManagedBuffer* allocate_managed() {
         IDeckLinkVideoBuffer* buf = nullptr;

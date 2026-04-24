@@ -13,49 +13,63 @@
 
 namespace nb = nanobind;
 
+namespace {
+
+// Wrap an optional Python callable as an AllocFn / FreeFn. The std::function
+// owns the nb::object; when the std::function is destroyed the captured
+// nb::object's destructor drops the Python ref.
+AllocFn make_alloc_fn(std::optional<nb::callable>& alloc_fn) {
+    if (!alloc_fn) return nullptr;
+    nb::object alloc_ref = nb::borrow(*alloc_fn);
+    return [alloc_ref](size_t sz) -> void* {
+        nb::gil_scoped_acquire gil;
+        nb::object result = alloc_ref(sz);
+        return reinterpret_cast<void*>(nb::cast<uintptr_t>(result));
+    };
+}
+
+FreeFn make_free_fn(std::optional<nb::callable>& free_fn) {
+    if (!free_fn) return nullptr;
+    nb::object free_ref = nb::borrow(*free_fn);
+    return [free_ref](void* ptr, size_t sz) {
+        nb::gil_scoped_acquire gil;
+        free_ref(reinterpret_cast<uintptr_t>(ptr), sz);
+    };
+}
+
+}  // namespace
+
 void init_decklink_allocator(nb::module_& m, nb::class_<Device>& device) {
 
     // -- ManagedBuffer --
-    nb::class_<ManagedBuffer>(m, "ManagedBuffer")
-        .def_prop_ro("size", &ManagedBuffer::size,
+    nb::class_<ComPtr<ManagedBuffer>>(m, "ManagedBuffer")
+        .def_prop_ro("size",
+                     [](ComPtr<ManagedBuffer>& self) { return self->size(); },
                      "Buffer size in bytes.")
         .def_prop_ro("data", [](nb::handle self) {
-            auto& buf = nb::cast<ManagedBuffer&>(self);
-            void* ptr = buf.data();
+            auto& h = nb::cast<ComPtr<ManagedBuffer>&>(self);
+            void* ptr = h->data();
             if (!ptr)
                 throw std::runtime_error("Buffer has no data");
-            size_t n = buf.size();
+            size_t n = h->size();
             return nb::ndarray<nb::numpy, uint8_t, nb::ndim<1>>(
                 ptr, {n}, self);
         }, "Writeable numpy uint8 view of the buffer.")
-        .def("__repr__", [](const ManagedBuffer& self) {
-            return "ManagedBuffer(size=" + std::to_string(self.size()) + ")";
+        .def("__repr__", [](const ComPtr<ManagedBuffer>& self) {
+            return "ManagedBuffer(size=" + std::to_string(self->size()) + ")";
         }, nb::sig("def __repr__(self) -> str")); // avoid platform-specific C++ type in stub
 
     // -- VideoBufferAllocator --
-    nb::class_<VideoBufferAllocator>(m, "VideoBufferAllocator")
+    nb::class_<ComPtr<VideoBufferAllocator>>(m, "VideoBufferAllocator")
         .def("__init__",
-             [](VideoBufferAllocator* self, size_t size,
+             [](ComPtr<VideoBufferAllocator>* self, size_t size,
                 std::optional<nb::callable> alloc_fn,
                 std::optional<nb::callable> free_fn) {
-                 AllocFn a = nullptr;
-                 FreeFn f = nullptr;
-                 if (alloc_fn) {
-                     nb::object alloc_ref = nb::borrow(*alloc_fn);
-                     a = [alloc_ref](size_t sz) -> void* {
-                         nb::gil_scoped_acquire gil;
-                         nb::object result = alloc_ref(sz);
-                         return reinterpret_cast<void*>(nb::cast<uintptr_t>(result));
-                     };
-                 }
-                 if (free_fn) {
-                     nb::object free_ref = nb::borrow(*free_fn);
-                     f = [free_ref](void* ptr, size_t sz) {
-                         nb::gil_scoped_acquire gil;
-                         free_ref(reinterpret_cast<uintptr_t>(ptr), sz);
-                     };
-                 }
-                 new (self) VideoBufferAllocator(size, std::move(a), std::move(f));
+                 AllocFn a = make_alloc_fn(alloc_fn);
+                 FreeFn  f = make_free_fn(free_fn);
+                 // VideoBufferAllocator ctor starts refcount at 1; ComPtr takes it.
+                 auto* raw = new VideoBufferAllocator(size, std::move(a), std::move(f));
+                 new (self) ComPtr<VideoBufferAllocator>(raw);
              },
              nb::arg("size"),
              nb::arg("alloc") = nb::none(),
@@ -68,43 +82,37 @@ void init_decklink_allocator(nb::module_& m, nb::class_<Device>& device) {
              "  free: Optional callable(ptr: int, size: int) -> None.\n"
              "        Defaults to free.\n\n"
              "For CUDA pinned memory, pass cudaHostAlloc/cudaFreeHost wrappers.")
-        .def_prop_ro("size", &VideoBufferAllocator::buffer_size,
+        .def_prop_ro("size",
+                     [](ComPtr<VideoBufferAllocator>& self) { return self->buffer_size(); },
                      "Buffer size that this allocator produces.")
-        .def_prop_ro("allocated_count", &VideoBufferAllocator::allocated_count,
+        .def_prop_ro("allocated_count",
+                     [](ComPtr<VideoBufferAllocator>& self) { return self->allocated_count(); },
                      "Number of buffers allocated so far.")
-        .def("allocate", &VideoBufferAllocator::allocate_managed,
-             nb::rv_policy::take_ownership,
+        .def_prop_ro("_refcount",
+                     [](ComPtr<VideoBufferAllocator>& self) { return self->refcount(); },
+                     "Internal COM refcount. Test/debug hook; not a public API.")
+        .def("allocate",
+             [](ComPtr<VideoBufferAllocator>& self) -> ComPtr<ManagedBuffer> {
+                 // allocate_managed() returns refcount==1; ComPtr takes that ref.
+                 return ComPtr<ManagedBuffer>(self->allocate_managed());
+             },
              "Allocate a new ManagedBuffer.")
-        .def("__repr__", [](const VideoBufferAllocator& self) {
+        .def("__repr__", [](const ComPtr<VideoBufferAllocator>& self) {
             return "VideoBufferAllocator(size=" +
-                   std::to_string(self.buffer_size()) + ", allocated=" +
-                   std::to_string(self.allocated_count()) + ")";
+                   std::to_string(self->buffer_size()) + ", allocated=" +
+                   std::to_string(self->allocated_count()) + ")";
         }, nb::sig("def __repr__(self) -> str")); // avoid platform-specific C++ type in stub
 
     // -- VideoBufferAllocatorProvider --
-    nb::class_<VideoBufferAllocatorProvider>(m, "VideoBufferAllocatorProvider")
+    nb::class_<ComPtr<VideoBufferAllocatorProvider>>(m, "VideoBufferAllocatorProvider")
         .def("__init__",
-             [](VideoBufferAllocatorProvider* self,
+             [](ComPtr<VideoBufferAllocatorProvider>* self,
                 std::optional<nb::callable> alloc_fn,
                 std::optional<nb::callable> free_fn) {
-                 AllocFn a = nullptr;
-                 FreeFn f = nullptr;
-                 if (alloc_fn) {
-                     nb::object alloc_ref = nb::borrow(*alloc_fn);
-                     a = [alloc_ref](size_t sz) -> void* {
-                         nb::gil_scoped_acquire gil;
-                         nb::object result = alloc_ref(sz);
-                         return reinterpret_cast<void*>(nb::cast<uintptr_t>(result));
-                     };
-                 }
-                 if (free_fn) {
-                     nb::object free_ref = nb::borrow(*free_fn);
-                     f = [free_ref](void* ptr, size_t sz) {
-                         nb::gil_scoped_acquire gil;
-                         free_ref(reinterpret_cast<uintptr_t>(ptr), sz);
-                     };
-                 }
-                 new (self) VideoBufferAllocatorProvider(std::move(a), std::move(f));
+                 AllocFn a = make_alloc_fn(alloc_fn);
+                 FreeFn  f = make_free_fn(free_fn);
+                 auto* raw = new VideoBufferAllocatorProvider(std::move(a), std::move(f));
+                 new (self) ComPtr<VideoBufferAllocatorProvider>(raw);
              },
              nb::arg("alloc") = nb::none(),
              nb::arg("free") = nb::none(),
@@ -115,31 +123,38 @@ void init_decklink_allocator(nb::module_& m, nb::class_<Device>& device) {
              "Allocators are cached by buffer size. Custom alloc/free are\n"
              "propagated to each VideoBufferAllocator created by the provider.")
         .def("get_allocator",
-             [](VideoBufferAllocatorProvider& self,
+             [](ComPtr<VideoBufferAllocatorProvider>& self,
                 uint32_t buffer_size, uint32_t width, uint32_t height,
-                uint32_t row_bytes, _BMDPixelFormat pixel_format) {
-                 return self.get_allocator_py(
+                uint32_t row_bytes, _BMDPixelFormat pixel_format)
+                     -> ComPtr<VideoBufferAllocator> {
+
+                 ComPtr<VideoBufferAllocator> alloc;
+                 HRESULT hr = self->GetVideoBufferAllocator(
                      buffer_size, width, height, row_bytes,
-                     static_cast<BMDPixelFormat>(pixel_format));
+                     static_cast<BMDPixelFormat>(pixel_format),
+                     reinterpret_cast<IDeckLinkVideoBufferAllocator**>(alloc.put()));
+                 if (hr != S_OK || !alloc)
+                     throw std::runtime_error("GetVideoBufferAllocator failed");
+                 return alloc;
              },
-             nb::rv_policy::reference,
              nb::arg("buffer_size"), nb::arg("width"), nb::arg("height"),
              nb::arg("row_bytes"), nb::arg("pixel_format"),
              "Get or create a VideoBufferAllocator for the given parameters.")
-        .def("__repr__", [](const VideoBufferAllocatorProvider&) {
+        .def("__repr__", [](const ComPtr<VideoBufferAllocatorProvider>&) {
             return "VideoBufferAllocatorProvider()";
         });
 
     // -- Device: enable_video_input_with_allocator --
     device.def("enable_video_input_with_allocator",
         [](Device& self, _BMDDisplayMode mode, _BMDPixelFormat pixel_format,
-           _BMDVideoInputFlags flags, VideoBufferAllocatorProvider& provider,
+           _BMDVideoInputFlags flags,
+           ComPtr<VideoBufferAllocatorProvider>& provider,
            bool zero_copy) {
             ComPtr<IDeckLinkInput> input;
             if (self.dl->QueryInterface(IID_IDeckLinkInput, (void**)input.put()) != S_OK)
                 throw std::runtime_error("Device does not support input");
             HRESULT hr = input->EnableVideoInputWithAllocatorProvider(
-                mode, pixel_format, flags, &provider);
+                mode, pixel_format, flags, provider.get());
             if (hr != S_OK)
                 throw std::runtime_error(
                     "EnableVideoInputWithAllocatorProvider failed (HRESULT " +
@@ -163,32 +178,26 @@ void init_decklink_allocator(nb::module_& m, nb::class_<Device>& device) {
     device.def("create_frame_pool_pinned",
         [](Device& self, int count, int32_t width, int32_t height,
            int32_t row_bytes, _BMDPixelFormat pixel_format,
-           VideoBufferAllocator& allocator) {
+           ComPtr<VideoBufferAllocator>& allocator) {
             if (!self.output_)
                 throw std::runtime_error("Video output not enabled");
             if (!self.output_callback_)
                 throw std::runtime_error("No output callback");
 
-            // Allocate frames using CreateVideoFrameWithBuffer with
-            // ManagedBuffer backing stores from the allocator.
             for (int i = 0; i < count; ++i) {
-                ManagedBuffer* buf = allocator.allocate_managed();
+                ComPtr<ManagedBuffer> buf(allocator->allocate_managed());
                 ComPtr<IDeckLinkMutableVideoFrame> frame;
                 HRESULT hr = self.output_->CreateVideoFrameWithBuffer(
                     width, height, row_bytes, pixel_format,
                     bmdFrameFlagDefault,
-                    static_cast<IDeckLinkVideoBuffer*>(buf),
+                    static_cast<IDeckLinkVideoBuffer*>(buf.get()),
                     frame.put());
-                if (hr != S_OK || !frame) {
-                    buf->Release();
+                if (hr != S_OK || !frame)
                     throw std::runtime_error(
                         "CreateVideoFrameWithBuffer failed for pool frame " +
                         std::to_string(i) + " (HRESULT " + std::to_string(hr) + ")");
-                }
-                // The OutputCallback pool takes ownership.
+
                 self.output_callback_->add_pinned_frame(std::move(frame));
-                // buf is held alive by the frame (the SDK retains the
-                // IDeckLinkVideoBuffer reference).
             }
         },
         nb::arg("count"), nb::arg("width"), nb::arg("height"),
