@@ -41,9 +41,7 @@ void init_decklink_allocator(nb::module_& m, nb::class_<Device>& device) {
                  AllocFn a = nullptr;
                  FreeFn f = nullptr;
                  if (alloc_fn) {
-                     // Prevent GC of the Python callable.
                      nb::object alloc_ref = nb::borrow(*alloc_fn);
-                     alloc_ref.inc_ref();
                      a = [alloc_ref](size_t sz) -> void* {
                          nb::gil_scoped_acquire gil;
                          nb::object result = alloc_ref(sz);
@@ -52,7 +50,6 @@ void init_decklink_allocator(nb::module_& m, nb::class_<Device>& device) {
                  }
                  if (free_fn) {
                      nb::object free_ref = nb::borrow(*free_fn);
-                     free_ref.inc_ref();
                      f = [free_ref](void* ptr, size_t sz) {
                          nb::gil_scoped_acquire gil;
                          free_ref(reinterpret_cast<uintptr_t>(ptr), sz);
@@ -94,7 +91,6 @@ void init_decklink_allocator(nb::module_& m, nb::class_<Device>& device) {
                  FreeFn f = nullptr;
                  if (alloc_fn) {
                      nb::object alloc_ref = nb::borrow(*alloc_fn);
-                     alloc_ref.inc_ref();
                      a = [alloc_ref](size_t sz) -> void* {
                          nb::gil_scoped_acquire gil;
                          nb::object result = alloc_ref(sz);
@@ -103,7 +99,6 @@ void init_decklink_allocator(nb::module_& m, nb::class_<Device>& device) {
                  }
                  if (free_fn) {
                      nb::object free_ref = nb::borrow(*free_fn);
-                     free_ref.inc_ref();
                      f = [free_ref](void* ptr, size_t sz) {
                          nb::gil_scoped_acquire gil;
                          free_ref(reinterpret_cast<uintptr_t>(ptr), sz);
@@ -150,11 +145,12 @@ void init_decklink_allocator(nb::module_& m, nb::class_<Device>& device) {
                     "EnableVideoInputWithAllocatorProvider failed (HRESULT " +
                     std::to_string(hr) + ")");
             self.input_ = std::move(input);
-            self.input_callback_ = new InputCallback(self.input_.get(), 8, zero_copy);
+            self.input_callback_ = ComPtr<InputCallback>(
+                new InputCallback(self.input_.get(), 8, zero_copy));
             self.input_callback_->set_current_format(mode, pixel_format, flags);
             bool format_detection = (flags & bmdVideoInputEnableFormatDetection) != 0;
             self.input_callback_->set_format_detection(format_detection);
-            self.input_->SetCallback(self.input_callback_);
+            self.input_->SetCallback(self.input_callback_.get());
         },
         nb::arg("mode"), nb::arg("pixel_format"),
         nb::arg("flags"), nb::arg("allocator_provider"),

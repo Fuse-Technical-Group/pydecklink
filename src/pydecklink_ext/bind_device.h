@@ -51,11 +51,11 @@ struct Device {
 
     // Output state (managed by bind_output.cpp).
     ComPtr<IDeckLinkOutput> output_;
-    OutputCallback* output_callback_ = nullptr;
+    ComPtr<OutputCallback> output_callback_;
 
     // Input state (managed by bind_input.cpp).
     ComPtr<IDeckLinkInput> input_;
-    InputCallback* input_callback_ = nullptr;
+    ComPtr<InputCallback> input_callback_;
 
     Device(int index);
 

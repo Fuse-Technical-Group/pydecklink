@@ -1,4 +1,6 @@
 #include "bind_device.h"
+#include "bind_input.h"   // Complete InputCallback type for ~Device synthesis.
+#include "bind_output.h"  // Complete OutputCallback type for ~Device synthesis.
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/tuple.h>
 #include <nanobind/stl/vector.h>

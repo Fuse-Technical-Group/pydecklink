@@ -97,11 +97,12 @@ void init_decklink_input(nb::module_& m, nb::class_<Device>& device) {
             if (hr != S_OK)
                 throw std::runtime_error("EnableVideoInput failed (HRESULT " + std::to_string(hr) + ")");
             self.input_ = std::move(input);
-            self.input_callback_ = new InputCallback(self.input_.get(), 8, zero_copy);
+            self.input_callback_ = ComPtr<InputCallback>(
+                new InputCallback(self.input_.get(), 8, zero_copy));
             self.input_callback_->set_current_format(mode, pixel_format, flags);
             bool format_detection = (flags & bmdVideoInputEnableFormatDetection) != 0;
             self.input_callback_->set_format_detection(format_detection);
-            self.input_->SetCallback(self.input_callback_);
+            self.input_->SetCallback(self.input_callback_.get());
         },
         nb::arg("mode"), nb::arg("pixel_format"),
         nb::arg("flags") = bmdVideoInputFlagDefault,
@@ -114,10 +115,7 @@ void init_decklink_input(nb::module_& m, nb::class_<Device>& device) {
                 throw std::runtime_error("Video input not enabled");
             self.input_->SetCallback(nullptr);
             self.input_->DisableVideoInput();
-            if (self.input_callback_) {
-                self.input_callback_->Release();
-                self.input_callback_ = nullptr;
-            }
+            self.input_callback_ = ComPtr<InputCallback>();
             self.input_ = ComPtr<IDeckLinkInput>();
         },
         "Disable video input.");
