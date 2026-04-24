@@ -12,16 +12,11 @@
 // --- Device implementation ---
 
 Device::Device(int index) {
-    IDeckLinkIterator* iter = CreateDeckLinkIteratorInstance();
-    if (!iter)
-        throw std::runtime_error(
-            "DeckLink driver not installed. "
-            "Install Desktop Video from blackmagicdesign.com.");
-    ComPtr<IDeckLinkIterator> guard(iter);
+    auto iter = require_iterator();
     int i = 0;
     for (;;) {
         ComPtr<IDeckLink> p;
-        if (guard->Next(p.put()) != S_OK) break;
+        if (iter->Next(p.put()) != S_OK) break;
         if (i == index) {
             dl = std::move(p);
             return;
@@ -116,16 +111,6 @@ static DisplayModeInfo extract_display_mode_info(IDeckLinkDisplayMode* dm) {
 }
 
 // --- Module bindings ---
-
-/// Get an IDeckLinkIterator, throwing if the driver is not installed.
-static ComPtr<IDeckLinkIterator> require_iterator() {
-    IDeckLinkIterator* iter = CreateDeckLinkIteratorInstance();
-    if (!iter)
-        throw std::runtime_error(
-            "DeckLink driver not installed (CreateDeckLinkIteratorInstance returned NULL). "
-            "Install Desktop Video from blackmagicdesign.com.");
-    return ComPtr<IDeckLinkIterator>(iter);
-}
 
 nb::class_<Device> init_decklink_device(nb::module_& m) {
 
