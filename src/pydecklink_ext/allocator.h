@@ -107,13 +107,15 @@ public:
     ULONG refcount() const { return ref_count_.load(); }
 
     /// Allocate a ManagedBuffer and return it (for Python use).
-    ManagedBuffer* allocate_managed() {
-        IDeckLinkVideoBuffer* buf = nullptr;
-        HRESULT hr = AllocateVideoBuffer(&buf);
+    /// ManagedBuffer : public IDeckLinkVideoBuffer (single inheritance),
+    /// so the pointer layouts match and put() can receive the out-param.
+    ComPtr<ManagedBuffer> allocate_managed() {
+        ComPtr<ManagedBuffer> buf;
+        HRESULT hr = AllocateVideoBuffer(
+            reinterpret_cast<IDeckLinkVideoBuffer**>(buf.put()));
         if (hr != S_OK || !buf)
             throw std::runtime_error("AllocateVideoBuffer failed");
-        // buf is a ManagedBuffer*; safe to static_cast.
-        return static_cast<ManagedBuffer*>(buf);
+        return buf;
     }
 
 private:

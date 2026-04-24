@@ -93,8 +93,7 @@ void init_decklink_allocator(nb::module_& m, nb::class_<Device>& device) {
                      "Internal COM refcount. Test/debug hook; not a public API.")
         .def("allocate",
              [](ComPtr<VideoBufferAllocator>& self) -> ComPtr<ManagedBuffer> {
-                 // allocate_managed() returns refcount==1; ComPtr takes that ref.
-                 return ComPtr<ManagedBuffer>(self->allocate_managed());
+                 return self->allocate_managed();
              },
              "Allocate a new ManagedBuffer.")
         .def("__repr__", [](const ComPtr<VideoBufferAllocator>& self) {
@@ -185,7 +184,7 @@ void init_decklink_allocator(nb::module_& m, nb::class_<Device>& device) {
                 throw std::runtime_error("No output callback");
 
             for (int i = 0; i < count; ++i) {
-                ComPtr<ManagedBuffer> buf(allocator->allocate_managed());
+                ComPtr<ManagedBuffer> buf = allocator->allocate_managed();
                 ComPtr<IDeckLinkMutableVideoFrame> frame;
                 HRESULT hr = self.output_->CreateVideoFrameWithBuffer(
                     width, height, row_bytes, pixel_format,
