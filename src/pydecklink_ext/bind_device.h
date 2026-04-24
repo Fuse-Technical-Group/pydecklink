@@ -2,35 +2,24 @@
 
 #include <nanobind/nanobind.h>
 #include "platform.h"
+#include "comptr.h"
+#include <stdexcept>
 #include <string>
 
 namespace nb = nanobind;
 
-/// RAII wrapper for COM pointers.
-template <typename T>
-class ComPtr {
-public:
-    ComPtr() : ptr_(nullptr) {}
-    explicit ComPtr(T* p) : ptr_(p) {}
-    ~ComPtr() { if (ptr_) ptr_->Release(); }
-    ComPtr(const ComPtr&) = delete;
-    ComPtr& operator=(const ComPtr&) = delete;
-    ComPtr(ComPtr&& other) noexcept : ptr_(other.ptr_) { other.ptr_ = nullptr; }
-    ComPtr& operator=(ComPtr&& other) noexcept {
-        if (this != &other) {
-            if (ptr_) ptr_->Release();
-            ptr_ = other.ptr_;
-            other.ptr_ = nullptr;
-        }
-        return *this;
-    }
-    T* get() const { return ptr_; }
-    T** put() { return &ptr_; }
-    T* operator->() const { return ptr_; }
-    explicit operator bool() const { return ptr_ != nullptr; }
-private:
-    T* ptr_;
-};
+/// Get an IDeckLinkIterator, throwing if the driver is not installed.
+/// Uniform across platforms: on Windows CreateDeckLinkIteratorInstance
+/// returns ComPtr and the move ctor is selected; on Linux/Mac the SDK
+/// returns raw IDeckLinkIterator* and the explicit T* ctor is selected.
+inline ComPtr<IDeckLinkIterator> require_iterator() {
+    ComPtr<IDeckLinkIterator> iter(CreateDeckLinkIteratorInstance());
+    if (!iter)
+        throw std::runtime_error(
+            "DeckLink driver not installed (CreateDeckLinkIteratorInstance returned NULL). "
+            "Install Desktop Video from blackmagicdesign.com.");
+    return iter;
+}
 
 // Forward declarations for callback types (defined in bind_output.cpp / bind_input.cpp).
 class OutputCallback;
@@ -58,6 +47,7 @@ struct Device {
     ComPtr<InputCallback> input_callback_;
 
     Device(int index);
+    ~Device();  // Explicit teardown drops SDK callback refs to avoid cycles.
 
     std::string model_name() const;
     std::string display_name() const;

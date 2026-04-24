@@ -14,6 +14,7 @@
 #include <windows.h>
 #include <comdef.h>
 #include "DeckLinkAPI.h"
+#include "comptr.h"
 
 #include <string>
 
@@ -28,8 +29,8 @@ using dlbool_t = BOOL;
 // already initialized as STA by a GUI framework, CoInitializeEx
 // returns RPC_E_CHANGED_MODE — warn rather than silently proceed,
 // because downstream SDK calls may fail in hard-to-diagnose ways.
-inline IDeckLinkIterator* CreateDeckLinkIteratorInstance() {
-    IDeckLinkIterator* iter = nullptr;
+inline ComPtr<IDeckLinkIterator> CreateDeckLinkIteratorInstance() {
+    ComPtr<IDeckLinkIterator> iter;
     HRESULT co_hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
     if (co_hr == RPC_E_CHANGED_MODE) {
         PyErr_WarnEx(PyExc_RuntimeWarning,
@@ -39,9 +40,9 @@ inline IDeckLinkIterator* CreateDeckLinkIteratorInstance() {
     }
     HRESULT hr = CoCreateInstance(
         CLSID_CDeckLinkIterator, nullptr, CLSCTX_ALL,
-        IID_IDeckLinkIterator, reinterpret_cast<void**>(&iter));
+        IID_IDeckLinkIterator, reinterpret_cast<void**>(iter.put()));
     if (FAILED(hr))
-        return nullptr;
+        return ComPtr<IDeckLinkIterator>();
     return iter;
 }
 

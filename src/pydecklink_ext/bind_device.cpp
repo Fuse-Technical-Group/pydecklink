@@ -11,17 +11,23 @@
 
 // --- Device implementation ---
 
+Device::~Device() {
+    // Drop the SDK's refs to our callbacks before the ComPtrs auto-release.
+    // Without this, the SDK retains a ref to input_callback_ via SetCallback,
+    // and InputCallback holds a ComPtr<IDeckLinkInput> back — a refcount
+    // cycle that Device destruction alone cannot break.
+    // This is cycle-break only; full SDK shutdown (stop streams, release
+    // hardware) is the caller's job via disable_video_input / _output.
+    if (input_) input_->SetCallback(nullptr);
+    if (output_) output_->SetScheduledFrameCompletionCallback(nullptr);
+}
+
 Device::Device(int index) {
-    IDeckLinkIterator* iter = CreateDeckLinkIteratorInstance();
-    if (!iter)
-        throw std::runtime_error(
-            "DeckLink driver not installed. "
-            "Install Desktop Video from blackmagicdesign.com.");
-    ComPtr<IDeckLinkIterator> guard(iter);
+    auto iter = require_iterator();
     int i = 0;
     for (;;) {
         ComPtr<IDeckLink> p;
-        if (guard->Next(p.put()) != S_OK) break;
+        if (iter->Next(p.put()) != S_OK) break;
         if (i == index) {
             dl = std::move(p);
             return;
@@ -116,16 +122,6 @@ static DisplayModeInfo extract_display_mode_info(IDeckLinkDisplayMode* dm) {
 }
 
 // --- Module bindings ---
-
-/// Get an IDeckLinkIterator, throwing if the driver is not installed.
-static ComPtr<IDeckLinkIterator> require_iterator() {
-    IDeckLinkIterator* iter = CreateDeckLinkIteratorInstance();
-    if (!iter)
-        throw std::runtime_error(
-            "DeckLink driver not installed (CreateDeckLinkIteratorInstance returned NULL). "
-            "Install Desktop Video from blackmagicdesign.com.");
-    return ComPtr<IDeckLinkIterator>(iter);
-}
 
 nb::class_<Device> init_decklink_device(nb::module_& m) {
 

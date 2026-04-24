@@ -110,6 +110,26 @@ class TestVideoBufferAllocatorProviderExists:
         assert alloc is not None
         assert alloc.size == 4096
 
+    def test_get_allocator_cache_hit_does_not_leak_refs(self):
+        """Repeated cache-hit calls must not grow the cached allocator's refcount."""
+        provider = pydecklink.VideoBufferAllocatorProvider()
+        args = dict(
+            buffer_size=4096,
+            width=1920,
+            height=1080,
+            row_bytes=1920 * 4,
+            pixel_format=pydecklink.PixelFormat.Format8BitBGRA,
+        )
+        first = provider.get_allocator(**args)
+        baseline = first._refcount  # cache(+1) + this handle(+1) == 2
+        for _ in range(50):
+            alloc = provider.get_allocator(**args)
+            assert alloc is not None
+        del alloc
+        assert first._refcount == baseline, (
+            f"refcount grew from {baseline} to {first._refcount} - leak"
+        )
+
 
 class TestDeviceAllocatorMethods:
     """Device has allocator-related methods."""

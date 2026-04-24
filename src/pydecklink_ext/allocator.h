@@ -104,14 +104,18 @@ public:
         return allocated_count_;
     }
 
+    ULONG refcount() const { return ref_count_.load(); }
+
     /// Allocate a ManagedBuffer and return it (for Python use).
-    ManagedBuffer* allocate_managed() {
-        IDeckLinkVideoBuffer* buf = nullptr;
-        HRESULT hr = AllocateVideoBuffer(&buf);
+    /// ManagedBuffer : public IDeckLinkVideoBuffer (single inheritance),
+    /// so the pointer layouts match and put() can receive the out-param.
+    ComPtr<ManagedBuffer> allocate_managed() {
+        ComPtr<ManagedBuffer> buf;
+        HRESULT hr = AllocateVideoBuffer(
+            reinterpret_cast<IDeckLinkVideoBuffer**>(buf.put()));
         if (hr != S_OK || !buf)
             throw std::runtime_error("AllocateVideoBuffer failed");
-        // buf is a ManagedBuffer*; safe to static_cast.
-        return static_cast<ManagedBuffer*>(buf);
+        return buf;
     }
 
 private:
@@ -168,18 +172,6 @@ public:
         alloc->AddRef(); // One ref for the cache, one for the caller.
         *allocator = alloc.get();
         return S_OK;
-    }
-
-    /// Python-facing: get or create an allocator for the given parameters.
-    VideoBufferAllocator* get_allocator_py(
-            uint32_t bufferSize, uint32_t width, uint32_t height,
-            uint32_t rowBytes, BMDPixelFormat pixelFormat) {
-        IDeckLinkVideoBufferAllocator* alloc = nullptr;
-        HRESULT hr = GetVideoBufferAllocator(
-            bufferSize, width, height, rowBytes, pixelFormat, &alloc);
-        if (hr != S_OK || !alloc)
-            throw std::runtime_error("GetVideoBufferAllocator failed");
-        return static_cast<VideoBufferAllocator*>(alloc);
     }
 
 private:
