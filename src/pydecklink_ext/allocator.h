@@ -172,18 +172,6 @@ public:
         return S_OK;
     }
 
-    /// Python-facing: get or create an allocator for the given parameters.
-    VideoBufferAllocator* get_allocator_py(
-            uint32_t bufferSize, uint32_t width, uint32_t height,
-            uint32_t rowBytes, BMDPixelFormat pixelFormat) {
-        IDeckLinkVideoBufferAllocator* alloc = nullptr;
-        HRESULT hr = GetVideoBufferAllocator(
-            bufferSize, width, height, rowBytes, pixelFormat, &alloc);
-        if (hr != S_OK || !alloc)
-            throw std::runtime_error("GetVideoBufferAllocator failed");
-        return static_cast<VideoBufferAllocator*>(alloc);
-    }
-
 private:
     std::atomic<ULONG> ref_count_;
     AllocFn alloc_fn_;
