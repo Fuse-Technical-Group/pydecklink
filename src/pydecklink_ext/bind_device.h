@@ -47,6 +47,7 @@ struct Device {
     ComPtr<InputCallback> input_callback_;
 
     Device(int index);
+    ~Device();  // Explicit teardown drops SDK callback refs to avoid cycles.
 
     std::string model_name() const;
     std::string display_name() const;

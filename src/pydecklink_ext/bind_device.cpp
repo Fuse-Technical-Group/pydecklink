@@ -11,6 +11,17 @@
 
 // --- Device implementation ---
 
+Device::~Device() {
+    // Drop the SDK's refs to our callbacks before the ComPtrs auto-release.
+    // Without this, the SDK retains a ref to input_callback_ via SetCallback,
+    // and InputCallback holds a ComPtr<IDeckLinkInput> back — a refcount
+    // cycle that Device destruction alone cannot break.
+    // This is cycle-break only; full SDK shutdown (stop streams, release
+    // hardware) is the caller's job via disable_video_input / _output.
+    if (input_) input_->SetCallback(nullptr);
+    if (output_) output_->SetScheduledFrameCompletionCallback(nullptr);
+}
+
 Device::Device(int index) {
     auto iter = require_iterator();
     int i = 0;

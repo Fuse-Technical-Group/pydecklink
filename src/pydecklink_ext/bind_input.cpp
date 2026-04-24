@@ -98,7 +98,7 @@ void init_decklink_input(nb::module_& m, nb::class_<Device>& device) {
                 throw std::runtime_error("EnableVideoInput failed (HRESULT " + std::to_string(hr) + ")");
             self.input_ = std::move(input);
             self.input_callback_ = ComPtr<InputCallback>(
-                new InputCallback(self.input_.get(), 8, zero_copy));
+                new InputCallback(self.input_, 8, zero_copy));
             self.input_callback_->set_current_format(mode, pixel_format, flags);
             bool format_detection = (flags & bmdVideoInputEnableFormatDetection) != 0;
             self.input_callback_->set_format_detection(format_detection);
