@@ -835,6 +835,12 @@ class VideoBufferAllocator:
     def allocated_count(self) -> int:
         """Number of buffers allocated so far."""
 
+    @property
+    def recycled_count(self) -> int:
+        """
+        Number of times a buffer has been returned to the free-list. Each release of a ManagedBuffer increments this counter; the next AllocateVideoBuffer reuses the recycled memory.
+        """
+
     def allocate(self) -> ManagedBuffer:
         """Allocate a new ManagedBuffer."""
 

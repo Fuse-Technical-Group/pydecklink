@@ -88,6 +88,11 @@ void init_decklink_allocator(nb::module_& m, nb::class_<Device>& device) {
         .def_prop_ro("allocated_count",
                      [](ComPtr<VideoBufferAllocator>& self) { return self->allocated_count(); },
                      "Number of buffers allocated so far.")
+        .def_prop_ro("recycled_count",
+                     [](ComPtr<VideoBufferAllocator>& self) { return self->recycled_count(); },
+                     "Number of times a buffer has been returned to the free-list. "
+                     "Each release of a ManagedBuffer increments this counter; the "
+                     "next AllocateVideoBuffer reuses the recycled memory.")
         .def_prop_ro("_refcount",
                      [](ComPtr<VideoBufferAllocator>& self) { return self->refcount(); },
                      "Internal COM refcount. Test/debug hook; not a public API.")

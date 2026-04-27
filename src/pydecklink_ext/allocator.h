@@ -1,7 +1,7 @@
 #pragma once
 
 #include "DeckLinkAPI.h"
-#include "bind_device.h"
+#include "comptr.h"
 #include <atomic>
 #include <cstdlib>
 #include <functional>
@@ -17,29 +17,25 @@ using AllocFn = std::function<void*(size_t)>;
 /// Custom deallocation function signature.
 using FreeFn = std::function<void(void*, size_t)>;
 
+class VideoBufferAllocator;
+
 /// A managed video buffer backed by externally allocated memory.
 /// Implements IDeckLinkVideoBuffer so the DeckLink SDK can use it
 /// for both input (via allocator provider) and output (via
 /// CreateVideoFrameWithBuffer).
+///
+/// On COM `Release()` reaching zero, the buffer returns to its parent
+/// allocator's free-list rather than freeing its memory. The buffer's
+/// memory is freed only when the parent allocator is destroyed. See
+/// SPEC §4 — buffer recycling.
 class ManagedBuffer : public IDeckLinkVideoBuffer {
 public:
-    ManagedBuffer(size_t size, void* data, FreeFn free_fn)
-        : ref_count_(1), size_(size), data_(data), free_fn_(std::move(free_fn)) {}
-
-    ~ManagedBuffer() {
-        if (data_ && free_fn_) {
-            free_fn_(data_, size_);
-        }
-    }
+    ManagedBuffer(VideoBufferAllocator* parent, size_t size, void* data);
 
     // IUnknown
     HRESULT QueryInterface(REFIID, void**) override { return E_NOINTERFACE; }
     ULONG AddRef() override { return ++ref_count_; }
-    ULONG Release() override {
-        ULONG c = --ref_count_;
-        if (c == 0) delete this;
-        return c;
-    }
+    ULONG Release() override;  // Defined after VideoBufferAllocator.
 
     // IDeckLinkVideoBuffer
     HRESULT GetBytes(void** buffer) override {
@@ -55,16 +51,36 @@ public:
     void* data() const { return data_; }
 
 private:
+    friend class VideoBufferAllocator;
+
+    /// Reset to live state when popped from the parent's free-list.
+    /// The parent already holds a strong ref on behalf of the new
+    /// owner of this buffer (Python or SDK), so do not AddRef again.
+    void revive() { ref_count_.store(1); }
+
     std::atomic<ULONG> ref_count_;
     size_t size_;
     void* data_;
-    FreeFn free_fn_;
+    /// Borrowed pointer. The buffer keeps the parent alive via an
+    /// AddRef'd ref while the buffer's refcount is non-zero. While
+    /// the buffer sits on the parent's free-list (refcount == 0),
+    /// the parent owns the buffer instead — see `return_to_free_list`.
+    VideoBufferAllocator* parent_;
 };
 
 /// Implements IDeckLinkVideoBufferAllocator.
-/// Allocates ManagedBuffer instances using a configurable allocation
-/// function. Defaults to malloc/free. Can be configured to use
-/// CUDA cudaHostAlloc or any other allocator.
+///
+/// Backs `ManagedBuffer` instances with memory from a configurable
+/// allocation function (defaults to malloc/free). Suitable for
+/// CUDA `cudaHostAlloc`, HIP `hipHostMalloc`, or any custom allocator.
+///
+/// Maintains a free-list of recycled buffers. When the SDK releases
+/// a `ManagedBuffer` (COM refcount → 0), the buffer returns to the
+/// free-list instead of calling `free_fn`. The next
+/// `AllocateVideoBuffer` pops from the free-list when non-empty.
+/// `free_fn` runs only on allocator destruction, draining all
+/// recycled buffers. This avoids the ~1ms-per-call cost of GPU
+/// page-locking syscalls at frame rate (SPEC §4).
 class VideoBufferAllocator : public IDeckLinkVideoBufferAllocator {
 public:
     VideoBufferAllocator(size_t buffer_size,
@@ -73,6 +89,22 @@ public:
         : ref_count_(1), buffer_size_(buffer_size),
           alloc_fn_(alloc_fn ? std::move(alloc_fn) : default_alloc),
           free_fn_(free_fn ? std::move(free_fn) : default_free) {}
+
+    ~VideoBufferAllocator() {
+        // Drain the free-list: free each recycled buffer's backing
+        // memory and delete the ManagedBuffer object. Live buffers
+        // (refcount > 0) cannot reach this destructor — they hold
+        // the parent's free-list slot indirectly via the SDK or
+        // Python wrapper.
+        std::lock_guard<std::mutex> lock(free_list_mutex_);
+        for (ManagedBuffer* buf : free_list_) {
+            if (buf->data_ && free_fn_) {
+                free_fn_(buf->data_, buf->size_);
+            }
+            delete buf;
+        }
+        free_list_.clear();
+    }
 
     // IUnknown
     HRESULT QueryInterface(REFIID, void**) override { return E_NOINTERFACE; }
@@ -87,10 +119,26 @@ public:
     HRESULT AllocateVideoBuffer(IDeckLinkVideoBuffer** allocatedBuffer) override {
         if (!allocatedBuffer) return E_INVALIDARG;
 
+        // Fast path: pop from free-list. The free-list owns recycled
+        // buffers (no parent ref); reviving transfers ownership back
+        // to the new caller, who needs a parent ref to keep us alive.
+        {
+            std::lock_guard<std::mutex> lock(free_list_mutex_);
+            if (!free_list_.empty()) {
+                ManagedBuffer* recycled = free_list_.back();
+                free_list_.pop_back();
+                recycled->revive();
+                AddRef();  // The buffer holds a ref on us again.
+                *allocatedBuffer = recycled;
+                return S_OK;
+            }
+        }
+
+        // Slow path: invoke alloc_fn. ManagedBuffer constructor AddRefs us.
         void* mem = alloc_fn_(buffer_size_);
         if (!mem) return E_OUTOFMEMORY;
 
-        auto* buf = new ManagedBuffer(buffer_size_, mem, free_fn_);
+        auto* buf = new ManagedBuffer(this, buffer_size_, mem);
         *allocatedBuffer = buf;
 
         ++allocated_count_;
@@ -102,6 +150,10 @@ public:
 
     size_t allocated_count() const {
         return allocated_count_;
+    }
+
+    size_t recycled_count() const {
+        return recycled_count_;
     }
 
     ULONG refcount() const { return ref_count_.load(); }
@@ -119,15 +171,48 @@ public:
     }
 
 private:
+    friend class ManagedBuffer;
+
+    /// Push a buffer back onto the free-list. Called by
+    /// `ManagedBuffer::Release` when refcount reaches zero.
+    void return_to_free_list(ManagedBuffer* buf) {
+        std::lock_guard<std::mutex> lock(free_list_mutex_);
+        free_list_.push_back(buf);
+        ++recycled_count_;
+    }
+
     std::atomic<ULONG> ref_count_;
     size_t buffer_size_;
     AllocFn alloc_fn_;
     FreeFn free_fn_;
     std::atomic<size_t> allocated_count_ = 0;
+    std::atomic<size_t> recycled_count_ = 0;
+    std::mutex free_list_mutex_;
+    std::vector<ManagedBuffer*> free_list_;  // Owned. Drained at allocator destruction.
 
     static void* default_alloc(size_t size) { return std::malloc(size); }
     static void default_free(void* ptr, size_t) { std::free(ptr); }
 };
+
+inline ManagedBuffer::ManagedBuffer(VideoBufferAllocator* parent,
+                                    size_t size, void* data)
+    : ref_count_(1), size_(size), data_(data), parent_(parent) {
+    if (parent_) parent_->AddRef();  // Keep parent alive while buffer is live.
+}
+
+inline ULONG ManagedBuffer::Release() {
+    ULONG c = --ref_count_;
+    if (c == 0 && parent_) {
+        // Hand ownership of `this` to the parent's free-list. The
+        // parent's destructor drains the free-list and frees memory
+        // via free_fn. The buffer's parent ref is released LAST so
+        // the parent stays alive across return_to_free_list.
+        VideoBufferAllocator* parent = parent_;
+        parent->return_to_free_list(this);
+        parent->Release();  // Drop the buffer's ref on parent.
+    }
+    return c;
+}
 
 /// Implements IDeckLinkVideoBufferAllocatorProvider.
 /// Creates VideoBufferAllocator instances on demand, caching by buffer_size
