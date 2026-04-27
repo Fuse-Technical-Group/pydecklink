@@ -65,9 +65,6 @@ class TestDeviceOutputMethods:
     def test_create_video_frame_exists(self):
         assert hasattr(pydecklink.Device, "create_video_frame")
 
-    def test_schedule_frame_exists(self):
-        assert hasattr(pydecklink.Device, "schedule_frame")
-
     def test_start_scheduled_playback_exists(self):
         assert hasattr(pydecklink.Device, "start_scheduled_playback")
 

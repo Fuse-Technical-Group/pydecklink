@@ -90,15 +90,15 @@ public:
         while (!available_.empty()) available_.pop();
 
         for (int i = 0; i < count; ++i) {
-            IDeckLinkMutableVideoFrame* raw = nullptr;
+            ComPtr<IDeckLinkMutableVideoFrame> frame;
             HRESULT hr = output->CreateVideoFrame(
                 width, height, row_bytes, pixel_format,
-                bmdFrameFlagDefault, &raw);
-            if (hr != S_OK || !raw)
+                bmdFrameFlagDefault, frame.put());
+            if (hr != S_OK || !frame)
                 throw std::runtime_error(
                     "CreateVideoFrame failed for pool frame " + std::to_string(i));
-            all_frames_.emplace_back(raw);
-            available_.push(raw);
+            available_.push(frame.get());
+            all_frames_.push_back(std::move(frame));
         }
         pool_enabled_ = true;
     }
@@ -126,10 +126,10 @@ public:
     }
 
     /// Add a pre-created frame (e.g. from CreateVideoFrameWithBuffer) to the pool.
-    void add_pinned_frame(IDeckLinkMutableVideoFrame* frame) {
+    void add_pinned_frame(ComPtr<IDeckLinkMutableVideoFrame>&& frame) {
         std::lock_guard<std::mutex> lock(pool_mutex_);
-        all_frames_.emplace_back(frame);
-        available_.push(frame);
+        available_.push(frame.get());
+        all_frames_.push_back(std::move(frame));
         pool_enabled_ = true;
     }
 
@@ -142,6 +142,8 @@ private:
     bool pool_enabled_ = false;
     mutable std::mutex pool_mutex_;
     std::condition_variable pool_cv_;
+    // all_frames_ owns every pooled frame; available_ holds non-owning
+    // pointers into that set for O(1) acquire.
     std::vector<ComPtr<IDeckLinkMutableVideoFrame>> all_frames_;
     std::queue<IDeckLinkMutableVideoFrame*> available_;
 };

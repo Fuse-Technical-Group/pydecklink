@@ -93,10 +93,7 @@ public:
         auto* buf = new ManagedBuffer(buffer_size_, mem, free_fn_);
         *allocatedBuffer = buf;
 
-        {
-            std::lock_guard<std::mutex> lock(mutex_);
-            ++allocated_count_;
-        }
+        ++allocated_count_;
 
         return S_OK;
     }
@@ -104,18 +101,21 @@ public:
     size_t buffer_size() const { return buffer_size_; }
 
     size_t allocated_count() const {
-        std::lock_guard<std::mutex> lock(mutex_);
         return allocated_count_;
     }
 
+    ULONG refcount() const { return ref_count_.load(); }
+
     /// Allocate a ManagedBuffer and return it (for Python use).
-    ManagedBuffer* allocate_managed() {
-        IDeckLinkVideoBuffer* buf = nullptr;
-        HRESULT hr = AllocateVideoBuffer(&buf);
+    /// ManagedBuffer : public IDeckLinkVideoBuffer (single inheritance),
+    /// so the pointer layouts match and put() can receive the out-param.
+    ComPtr<ManagedBuffer> allocate_managed() {
+        ComPtr<ManagedBuffer> buf;
+        HRESULT hr = AllocateVideoBuffer(
+            reinterpret_cast<IDeckLinkVideoBuffer**>(buf.put()));
         if (hr != S_OK || !buf)
             throw std::runtime_error("AllocateVideoBuffer failed");
-        // buf is a ManagedBuffer*; safe to static_cast.
-        return static_cast<ManagedBuffer*>(buf);
+        return buf;
     }
 
 private:
@@ -123,8 +123,7 @@ private:
     size_t buffer_size_;
     AllocFn alloc_fn_;
     FreeFn free_fn_;
-    mutable std::mutex mutex_;
-    size_t allocated_count_ = 0;
+    std::atomic<size_t> allocated_count_ = 0;
 
     static void* default_alloc(size_t size) { return std::malloc(size); }
     static void default_free(void* ptr, size_t) { std::free(ptr); }
@@ -159,38 +158,20 @@ public:
         std::lock_guard<std::mutex> lock(mutex_);
 
         // Check cache for existing allocator with this buffer size.
-        for (auto& cached : allocators_) {
+        for (ComPtr<VideoBufferAllocator>& cached : allocators_) {
             if (cached->buffer_size() == bufferSize) {
                 cached->AddRef();
-                *allocator = cached;
+                *allocator = cached.get();
                 return S_OK;
             }
         }
 
         // Create new allocator.
-        auto* alloc = new VideoBufferAllocator(bufferSize, alloc_fn_, free_fn_);
-        allocators_.push_back(alloc);
+        auto& alloc = allocators_.emplace_back(new VideoBufferAllocator(bufferSize, alloc_fn_, free_fn_));
+
         alloc->AddRef(); // One ref for the cache, one for the caller.
-        *allocator = alloc;
+        *allocator = alloc.get();
         return S_OK;
-    }
-
-    /// Python-facing: get or create an allocator for the given parameters.
-    VideoBufferAllocator* get_allocator_py(
-            uint32_t bufferSize, uint32_t width, uint32_t height,
-            uint32_t rowBytes, BMDPixelFormat pixelFormat) {
-        IDeckLinkVideoBufferAllocator* alloc = nullptr;
-        HRESULT hr = GetVideoBufferAllocator(
-            bufferSize, width, height, rowBytes, pixelFormat, &alloc);
-        if (hr != S_OK || !alloc)
-            throw std::runtime_error("GetVideoBufferAllocator failed");
-        return static_cast<VideoBufferAllocator*>(alloc);
-    }
-
-    // COM interfaces on windows have no virtual destructor so can't use override here.
-    ~VideoBufferAllocatorProvider() {
-        for (auto* a : allocators_)
-            a->Release();
     }
 
 private:
@@ -198,5 +179,5 @@ private:
     AllocFn alloc_fn_;
     FreeFn free_fn_;
     std::mutex mutex_;
-    std::vector<VideoBufferAllocator*> allocators_;  // Cached allocators (owned via ref count).
+    std::vector<ComPtr<VideoBufferAllocator>> allocators_;  // Cached allocators (owned via ref count).
 };

@@ -7,6 +7,11 @@ on:
         required: true
         type: string
   workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Existing release tag to upload wheels to (e.g. v0.2.0). Leave blank to only produce artifacts."
+        required: false
+        type: string
 
 permissions:
   contents: write

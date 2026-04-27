@@ -56,7 +56,10 @@ struct InputFormatInfo {
 /// Copies frame data into a bounded thread-safe queue.
 class InputCallback : public IDeckLinkInputCallback {
 public:
-    InputCallback(IDeckLinkInput* input, size_t max_queue = 8, bool zero_copy = false)
+    // Copy-construct input_: shares a ref with the caller's ComPtr.
+    // The cycle this creates (input <-> callback) is broken by
+    // Device's destructor calling input_->SetCallback(nullptr).
+    InputCallback(const ComPtr<IDeckLinkInput>& input, size_t max_queue = 8, bool zero_copy = false)
         : ref_count_(1), input_(input), max_queue_(max_queue),
           format_detection_enabled_(false), zero_copy_(zero_copy) {}
 
@@ -158,8 +161,8 @@ public:
             cf.stream_duration = sd;
             cf.hw_ref_timestamp = hw_time;
 
-            IDeckLinkVideoBuffer* buf = nullptr;
-            videoFrame->QueryInterface(IID_IDeckLinkVideoBuffer, (void**)&buf);
+            ComPtr<IDeckLinkVideoBuffer> buf;
+            videoFrame->QueryInterface(IID_IDeckLinkVideoBuffer, (void**)buf.put());
             if (buf) {
                 buf->StartAccess(bmdBufferAccessRead);
                 void* bytes = nullptr;
@@ -170,7 +173,6 @@ public:
                     std::memcpy(cf.pixels.data(), bytes, total);
                 }
                 buf->EndAccess(bmdBufferAccessRead);
-                buf->Release();
             }
 
             {
@@ -221,7 +223,7 @@ public:
 
 private:
     std::atomic<ULONG> ref_count_;
-    IDeckLinkInput* input_;  // Non-owning; Device owns this.
+    ComPtr<IDeckLinkInput> input_;  // Owns a ref; cycle broken by ~Device.
     size_t max_queue_;
     bool format_detection_enabled_;
     bool zero_copy_;
