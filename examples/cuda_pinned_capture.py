@@ -1,0 +1,251 @@
+"""CUDA-pinned-memory capture patterns for pydecklink.
+
+Two ways to feed DeckLink DMA into CUDA-pinned host memory. pydecklink
+has no GPU dependency; this example wires NVIDIA's `cuda-python`
+bindings to the allocator surface from SPEC §gpu-pinned-memory.
+
+Pattern A -- ``cudaHostAlloc`` via the allocator API
+    Consumer-supplied alloc/free callables wrap ``cudaHostAlloc`` and
+    ``cudaFreeHost``. Plug them into ``VideoBufferAllocatorProvider``
+    and call ``device.enable_video_input_with_allocator``. The SDK
+    DMAs straight into pinned memory. Best when the consumer controls
+    the buffer pool from start.
+
+Pattern B -- ``cudaHostRegister`` post-allocation
+    The SDK allocates buffers normally (malloc); the consumer calls
+    ``cudaHostRegister`` on each unique buffer pointer the first time
+    it sees it (idempotent via a set). Buffers are unregistered on
+    shutdown. No allocator override required. Best when the consumer
+    cannot influence the SDK's allocator.
+
+Synchronization contract (SPEC §gpu-pinned-memory):
+    DeckLink DMA and GPU copies must not overlap on the same buffer.
+    Wait for the frame callback before launching ``cudaMemcpyAsync``;
+    hold the ``CaptureFrameRef`` until the CUDA stream completes.
+    This example does not run a GPU copy -- it demonstrates the
+    pinning plumbing only. Real consumers add a triple-buffer
+    pattern (DeckLink fills N, GPU copies N-1, GPU processes N-2).
+
+Install:
+    pip install pydecklink[cuda-examples]
+
+Usage:
+    python examples/cuda_pinned_capture.py --mode alloc --device 0
+    python examples/cuda_pinned_capture.py --mode register --device 0
+
+This script requires DeckLink hardware and an active SDI input.
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
+
+import pydecklink
+
+# cuda-python is an optional dependency. Import lazily inside the
+# pattern functions so the module can be imported (and unit-tested)
+# without cuda installed.
+
+
+# Default capture format -- override on the command line if needed.
+_DEFAULT_MODE = pydecklink.DisplayMode.HD1080p25
+_DEFAULT_PIXEL_FORMAT = pydecklink.PixelFormat.Format8BitYUV
+
+
+def _check(err: object, op: str) -> None:
+    """Raise on a non-zero CUDA error code."""
+    # cuda-python returns a cudaError_t enum whose .value is the int code.
+    code = getattr(err, "value", err)
+    if code != 0:
+        raise RuntimeError(f"{op} failed: cudaError={code}")
+
+
+def run_alloc_mode(
+    device_index: int = 0,
+    mode: pydecklink.DisplayMode = _DEFAULT_MODE,
+    pixel_format: pydecklink.PixelFormat = _DEFAULT_PIXEL_FORMAT,
+    frame_count: int = 30,
+) -> None:
+    """Pattern A: SDK DMAs into ``cudaHostAlloc`` buffers via the
+    allocator provider.
+
+    The consumer supplies ``alloc``/``free`` callables that wrap
+    ``cudaHostAlloc``/``cudaFreeHost``. The allocator's free-list
+    recycles buffers across frames; ``free`` runs only at allocator
+    teardown. ``recycled_count`` reports reuse.
+    """
+    from cuda.bindings import runtime as cudart
+
+    def cuda_host_alloc(size: int) -> int:
+        # cudaHostAllocDefault: cached host memory. Use
+        # cudaHostAllocWriteCombined when the CPU never reads the
+        # frame (GPU-only processing) -- see SPEC §gpu-pinned-memory.
+        err, ptr = cudart.cudaHostAlloc(size, cudart.cudaHostAllocDefault)
+        _check(err, "cudaHostAlloc")
+        return int(ptr)
+
+    def cuda_free_host(ptr: int, _size: int) -> None:
+        (err,) = cudart.cudaFreeHost(ptr)
+        _check(err, "cudaFreeHost")
+
+    provider = pydecklink.VideoBufferAllocatorProvider(
+        alloc=cuda_host_alloc,
+        free=cuda_free_host,
+    )
+
+    dev = pydecklink.Device(index=device_index)
+    dev.enable_video_input_with_allocator(
+        mode=mode,
+        pixel_format=pixel_format,
+        flags=pydecklink.VideoInputFlag(0),
+        allocator_provider=provider,
+        zero_copy=True,
+    )
+    dev.start_streams()
+
+    captured = 0
+    try:
+        while captured < frame_count:
+            frame = dev.pop_capture_frame_ref(timeout_ms=1000)
+            if frame is None or not frame.has_signal:
+                continue
+            captured += 1
+        # Inspect the cached allocator after capture. The provider
+        # caches one allocator per buffer size; query it back with
+        # the same parameters.
+        frame_bytes = pydecklink.get_frame_bytes(mode, pixel_format)
+        width = pydecklink.get_mode_width(mode)
+        height = pydecklink.get_mode_height(mode)
+        row_bytes = dev.row_bytes_for_pixel_format(pixel_format, width)
+        alloc = provider.get_allocator(
+            buffer_size=frame_bytes,
+            width=width,
+            height=height,
+            row_bytes=row_bytes,
+            pixel_format=pixel_format,
+        )
+        print(
+            f"[alloc] frames={captured} "
+            f"allocated={alloc.allocated_count} "
+            f"recycled={alloc.recycled_count}"
+        )
+    finally:
+        dev.stop_streams()
+        dev.disable_video_input()
+        # Allocator destruction (when `provider` and `alloc` go out of
+        # scope) drains the free-list and calls cuda_free_host once
+        # per backing buffer.
+
+
+def run_register_mode(
+    device_index: int = 0,
+    mode: pydecklink.DisplayMode = _DEFAULT_MODE,
+    pixel_format: pydecklink.PixelFormat = _DEFAULT_PIXEL_FORMAT,
+    frame_count: int = 30,
+) -> None:
+    """Pattern B: register SDK-allocated buffers with CUDA on first
+    sight.
+
+    Each ``CaptureFrameRef`` exposes ``data`` as a numpy view of the
+    underlying SDK buffer. The first time a pointer is seen, register
+    it with ``cudaHostRegister``; track the (ptr, size) pairs so each
+    is unregistered exactly once at shutdown.
+    """
+    from cuda.bindings import runtime as cudart
+
+    dev = pydecklink.Device(index=device_index)
+    dev.enable_video_input(
+        mode=mode,
+        pixel_format=pixel_format,
+        zero_copy=True,
+    )
+    dev.start_streams()
+
+    registered: dict[int, int] = {}  # ptr -> size
+
+    captured = 0
+    try:
+        while captured < frame_count:
+            frame = dev.pop_capture_frame_ref(timeout_ms=1000)
+            if frame is None or not frame.has_signal:
+                continue
+            arr = frame.data
+            ptr = int(arr.ctypes.data)
+            size = int(arr.nbytes)
+            if ptr not in registered:
+                (err,) = cudart.cudaHostRegister(
+                    ptr, size, cudart.cudaHostRegisterDefault
+                )
+                _check(err, "cudaHostRegister")
+                registered[ptr] = size
+            captured += 1
+        print(
+            f"[register] frames={captured} "
+            f"unique_buffers={len(registered)}"
+        )
+    finally:
+        dev.stop_streams()
+        dev.disable_video_input()
+        # Unregister every buffer we touched. The SDK frees its own
+        # buffers later; unregistering before free is the correct order.
+        for ptr in registered:
+            (err,) = cudart.cudaHostUnregister(ptr)
+            _check(err, "cudaHostUnregister")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="CUDA-pinned-memory capture patterns for pydecklink."
+    )
+    parser.add_argument(
+        "--mode",
+        choices=["alloc", "register"],
+        required=True,
+        help="alloc: cudaHostAlloc via allocator API. "
+        "register: cudaHostRegister on SDK buffers.",
+    )
+    parser.add_argument(
+        "--device", type=int, default=0, help="DeckLink device index"
+    )
+    parser.add_argument(
+        "--frames", type=int, default=30, help="Number of frames to capture"
+    )
+    parser.add_argument(
+        "--pixel-format",
+        choices=["8bit", "10bit"],
+        default="8bit",
+    )
+    args = parser.parse_args()
+
+    pixel_format = (
+        pydecklink.PixelFormat.Format10BitYUV
+        if args.pixel_format == "10bit"
+        else pydecklink.PixelFormat.Format8BitYUV
+    )
+
+    devices = pydecklink.list_devices()
+    if args.device >= len(devices):
+        print(
+            f"Device index {args.device} out of range "
+            f"({len(devices)} devices found).",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    if args.mode == "alloc":
+        run_alloc_mode(
+            device_index=args.device,
+            pixel_format=pixel_format,
+            frame_count=args.frames,
+        )
+    else:
+        run_register_mode(
+            device_index=args.device,
+            pixel_format=pixel_format,
+            frame_count=args.frames,
+        )
+
+
+if __name__ == "__main__":
+    main()
