@@ -1,0 +1,81 @@
+{
+  "name": "pydecklink (CUDA)",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "../.."
+  },
+
+  // DeckLink + NVIDIA GPU passthrough.
+  // GPU: CDI (Container Device Interface) for podman + NVIDIA Container Toolkit.
+  // Host prerequisite: `sudo nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml`
+  // run once after installing nvidia-container-toolkit.
+  //
+  // --userns=keep-id preserves the host UID through to the kernel so DMA
+  // via get_user_pages() (used by both the DeckLink driver and the NVIDIA
+  // driver for pinned memory) sees the real user, not a subordinate UID
+  // from podman's default mapping.
+  //
+  // --ulimit memlock=-1 is a belt-and-suspenders mate to the limits.conf
+  // entry in the Dockerfile. devcontainer CLI is known to drop ulimit
+  // runArgs silently — limits.conf is the effective path — but leaving
+  // this here documents intent and works under raw `podman run`.
+  "runArgs": [
+    "--device=/dev/blackmagic",
+    "--device=nvidia.com/gpu=all",
+    "--userns=keep-id",
+    "--security-opt=label=disable",
+    "--ulimit", "memlock=-1"
+  ],
+
+  "containerEnv": {
+    "SSH_AUTH_SOCK": "/tmp/ssh-agent.sock",
+    "DECKLINK_SDK_DIR": "/workspaces/pydecklink/vendor/Blackmagic DeckLink SDK 15.3/Linux/include",
+    // Defensive — CDI passthrough should set these, but NGC convention is
+    // to specify explicitly. `compute` for CUDA runtime, `utility` for
+    // nvidia-smi. Skip `video` (NVENC/NVDEC) — pydecklink doesn't use it.
+    "NVIDIA_VISIBLE_DEVICES": "all",
+    "NVIDIA_DRIVER_CAPABILITIES": "compute,utility"
+  },
+
+  "features": {
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "installZsh": false,
+      "installOhMyZsh": false,
+      "installOhMyZshConfig": false,
+      "upgradePackages": false,
+      "username": "ubuntu",
+      "userUid": "automatic",
+      "userGid": "automatic"
+    },
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    "ghcr.io/meaningful-ooo/devcontainer-features/fish:2": {}
+  },
+
+  "mounts": [
+    "source=/var/lib/blackmagic/lib,target=/var/lib/blackmagic/lib,type=bind,readonly",
+    "source=/var/lib/blackmagic/bin,target=/var/lib/blackmagic/bin,type=bind,readonly",
+    "source=claude-config-cuda-${devcontainerId},target=/home/ubuntu/.claude,type=volume",
+    "source=${localEnv:HOME}/.claude/.credentials.json,target=/home/ubuntu/.claude/.credentials.json,type=bind",
+    "source=${localEnv:HOME}/.claude/settings.json,target=/home/ubuntu/.claude/settings.json,type=bind",
+    "source=${localEnv:HOME}/.claude/CLAUDE.md,target=/home/ubuntu/.claude/CLAUDE.md,type=bind",
+    "source=${localEnv:HOME}/.claude/commands,target=/home/ubuntu/.claude/commands,type=bind",
+    "source=/tmp/ssh-agent-pydecklink-${localEnv:USER}.sock,target=/tmp/ssh-agent.sock,type=bind",
+    "source=${localEnv:HOME}/.gitconfig,target=/home/ubuntu/.gitconfig,type=bind,readonly",
+    "source=${localEnv:HOME}/.config/gh,target=/home/ubuntu/.config/gh,type=bind,readonly"
+  ],
+
+  "initializeCommand": "bash .devcontainer/ensure-mounts.sh",
+
+  "postCreateCommand": "sudo ldconfig",
+
+  "remoteUser": "ubuntu",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-vscode.cmake-tools",
+        "ms-vscode.cpptools"
+      ]
+    }
+  }
+}
