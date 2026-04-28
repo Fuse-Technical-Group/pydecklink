@@ -4,6 +4,7 @@
 #include "comptr.h"
 #include <atomic>
 #include <cstdlib>
+#include <cstring>
 #include <functional>
 #include <mutex>
 #include <stdexcept>
@@ -33,7 +34,28 @@ public:
     ManagedBuffer(VideoBufferAllocator* parent, size_t size, void* data);
 
     // IUnknown
-    HRESULT QueryInterface(REFIID, void**) override { return E_NOINTERFACE; }
+    HRESULT QueryInterface(REFIID iid, void** ppv) override {
+        // Per SPEC §2.5.55, the SDK wraps our buffer into its own video
+        // frame and may call QueryInterface to obtain interface
+        // pointers. Returning E_NOINTERFACE for IUnknown / our own
+        // interface violates COM and triggers SDK-internal stalls
+        // when the input pipeline transitions out of no-signal state.
+        // Copy IID macros to locals: on Linux they expand to compound
+        // literals (rvalues), so &IID_IUnknown is invalid.
+        REFIID iunknown = IID_IUnknown;
+        REFIID ividbuf = IID_IDeckLinkVideoBuffer;
+        if (!ppv) return E_POINTER;
+        if (memcmp(&iid, &iunknown, sizeof(REFIID)) == 0) {
+            *ppv = static_cast<IUnknown*>(this);
+        } else if (memcmp(&iid, &ividbuf, sizeof(REFIID)) == 0) {
+            *ppv = static_cast<IDeckLinkVideoBuffer*>(this);
+        } else {
+            *ppv = nullptr;
+            return E_NOINTERFACE;
+        }
+        AddRef();
+        return S_OK;
+    }
     ULONG AddRef() override { return ++ref_count_; }
     ULONG Release() override;  // Defined after VideoBufferAllocator.
 
@@ -107,7 +129,21 @@ public:
     }
 
     // IUnknown
-    HRESULT QueryInterface(REFIID, void**) override { return E_NOINTERFACE; }
+    HRESULT QueryInterface(REFIID iid, void** ppv) override {
+        REFIID iunknown = IID_IUnknown;
+        REFIID ialloc = IID_IDeckLinkVideoBufferAllocator;
+        if (!ppv) return E_POINTER;
+        if (memcmp(&iid, &iunknown, sizeof(REFIID)) == 0) {
+            *ppv = static_cast<IUnknown*>(this);
+        } else if (memcmp(&iid, &ialloc, sizeof(REFIID)) == 0) {
+            *ppv = static_cast<IDeckLinkVideoBufferAllocator*>(this);
+        } else {
+            *ppv = nullptr;
+            return E_NOINTERFACE;
+        }
+        AddRef();
+        return S_OK;
+    }
     ULONG AddRef() override { return ++ref_count_; }
     ULONG Release() override {
         ULONG c = --ref_count_;
@@ -135,6 +171,11 @@ public:
         }
 
         // Slow path: invoke alloc_fn. ManagedBuffer constructor AddRefs us.
+        // With Python alloc callbacks, this path acquires the GIL and
+        // calls into Python — taking milliseconds, which the SDK input
+        // pipeline cannot tolerate at signal-rate. Callers must
+        // pre-fill the free-list (see ``prefill``) before streaming
+        // starts so that this path never runs on the SDK thread.
         void* mem = alloc_fn_(buffer_size_);
         if (!mem) return E_OUTOFMEMORY;
 
@@ -142,7 +183,6 @@ public:
         *allocatedBuffer = buf;
 
         ++allocated_count_;
-
         return S_OK;
     }
 
@@ -157,6 +197,40 @@ public:
     }
 
     ULONG refcount() const { return ref_count_.load(); }
+
+    /// Pre-allocate ``count`` buffers and seat them on the free-list.
+    ///
+    /// The SDK input pipeline calls ``AllocateVideoBuffer`` on its own
+    /// thread when it needs a buffer. With Python alloc callbacks,
+    /// each SLOW-path call acquires the GIL, dispatches into Python,
+    /// and returns — typically 1–10ms. The SDK pipeline cannot
+    /// tolerate that latency at signal-rate, and stalls.
+    ///
+    /// ``prefill`` runs the SLOW path ``count`` times on the *calling*
+    /// thread (typically Python's main thread, before
+    /// ``start_streams``) and pushes each buffer onto the free-list.
+    /// At runtime the SDK's allocations take the FAST path with no
+    /// Python involvement. The buffers stay on the free-list until
+    /// the SDK requests one, at which point they are revived.
+    void prefill(size_t count) {
+        std::vector<ManagedBuffer*> staged;
+        staged.reserve(count);
+        for (size_t i = 0; i < count; ++i) {
+            void* mem = alloc_fn_(buffer_size_);
+            if (!mem)
+                throw std::runtime_error(
+                    "prefill: alloc_fn returned nullptr");
+            auto* buf = new ManagedBuffer(this, buffer_size_, mem);
+            ++allocated_count_;
+            staged.push_back(buf);
+        }
+        // Drop each buffer's ref to send it to the free-list. Each
+        // ManagedBuffer ctor AddRef'd the parent (us); Release brings
+        // the buffer's refcount to 0 and the parent ref drops with it.
+        for (ManagedBuffer* buf : staged) {
+            buf->Release();
+        }
+    }
 
     /// Allocate a ManagedBuffer and return it (for Python use).
     /// ManagedBuffer : public IDeckLinkVideoBuffer (single inheritance),
@@ -225,7 +299,21 @@ public:
           free_fn_(free_fn) {}
 
     // IUnknown
-    HRESULT QueryInterface(REFIID, void**) override { return E_NOINTERFACE; }
+    HRESULT QueryInterface(REFIID iid, void** ppv) override {
+        REFIID iunknown = IID_IUnknown;
+        REFIID iprov = IID_IDeckLinkVideoBufferAllocatorProvider;
+        if (!ppv) return E_POINTER;
+        if (memcmp(&iid, &iunknown, sizeof(REFIID)) == 0) {
+            *ppv = static_cast<IUnknown*>(this);
+        } else if (memcmp(&iid, &iprov, sizeof(REFIID)) == 0) {
+            *ppv = static_cast<IDeckLinkVideoBufferAllocatorProvider*>(this);
+        } else {
+            *ppv = nullptr;
+            return E_NOINTERFACE;
+        }
+        AddRef();
+        return S_OK;
+    }
     ULONG AddRef() override { return ++ref_count_; }
     ULONG Release() override {
         ULONG c = --ref_count_;

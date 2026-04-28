@@ -844,6 +844,16 @@ class VideoBufferAllocator:
     def allocate(self) -> ManagedBuffer:
         """Allocate a new ManagedBuffer."""
 
+    def prefill(self, count: int) -> None:
+        """
+        Pre-allocate ``count`` buffers and seat them on the free-list. Use this
+        before ``start_streams`` when the allocator wraps a Python callback
+        (e.g. cudaHostAlloc): each SLOW-path allocation pays a GIL+Python
+        round-trip, which the SDK input pipeline cannot tolerate at signal
+        rate. Pre-filling moves all that cost to the calling thread; runtime
+        allocations take the FAST path.
+        """
+
     def __repr__(self) -> str: ...
 
 class VideoBufferAllocatorProvider:

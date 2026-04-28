@@ -101,6 +101,18 @@ void init_decklink_allocator(nb::module_& m, nb::class_<Device>& device) {
                  return self->allocate_managed();
              },
              "Allocate a new ManagedBuffer.")
+        .def("prefill",
+             [](ComPtr<VideoBufferAllocator>& self, size_t count) {
+                 self->prefill(count);
+             },
+             nb::arg("count"),
+             "Pre-allocate ``count`` buffers and seat them on the "
+             "free-list. Use this before ``start_streams`` when the "
+             "allocator wraps a Python callback (e.g. cudaHostAlloc): "
+             "each SLOW-path allocation pays a GIL+Python round-trip, "
+             "which the SDK input pipeline cannot tolerate at signal "
+             "rate. Pre-filling moves all that cost to the calling "
+             "thread; runtime allocations take the FAST path.")
         .def("__repr__", [](const ComPtr<VideoBufferAllocator>& self) {
             return "VideoBufferAllocator(size=" +
                    std::to_string(self->buffer_size()) + ", allocated=" +
