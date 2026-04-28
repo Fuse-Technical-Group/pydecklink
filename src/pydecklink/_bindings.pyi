@@ -836,6 +836,14 @@ class VideoBufferAllocator:
                 Defaults to free.
 
         For CUDA pinned memory, pass cudaHostAlloc/cudaFreeHost wrappers.
+
+        Note on lifecycle: when ``alloc`` and ``free`` are top-level module
+        functions, a reference cycle forms via ``func.__globals__`` that
+        Python's GC cannot break (it passes through C++). Wrap your setup
+        in a function so the allocator and its callbacks are local variables
+        and the cycle is reclaimed when that function returns. Both examples
+        (``cuda_pinned_pipelined.py``, ``cuda_register_pinned.py``) follow
+        this pattern.
         """
 
     @property
@@ -878,6 +886,13 @@ class VideoBufferAllocatorProvider:
 
         Allocators are cached by buffer size. Custom alloc/free are
         propagated to each VideoBufferAllocator created by the provider.
+
+        Note on lifecycle: when ``alloc`` and ``free`` are top-level module
+        functions, a reference cycle forms via ``func.__globals__`` that
+        Python's GC cannot break (it passes through C++). Wrap your setup
+        in a function so the provider and its callbacks are local variables
+        and the cycle is reclaimed when that function returns. The pipelined
+        example (``cuda_pinned_pipelined.py``) follows this pattern.
         """
 
     def get_allocator(self, buffer_size: int, width: int, height: int, row_bytes: int, pixel_format: PixelFormat) -> VideoBufferAllocator:

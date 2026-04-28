@@ -81,7 +81,15 @@ void init_decklink_allocator(nb::module_& m, nb::class_<Device>& device) {
              "         Defaults to malloc.\n"
              "  free: Optional callable(ptr: int, size: int) -> None.\n"
              "        Defaults to free.\n\n"
-             "For CUDA pinned memory, pass cudaHostAlloc/cudaFreeHost wrappers.")
+             "For CUDA pinned memory, pass cudaHostAlloc/cudaFreeHost wrappers.\n\n"
+             "Note on lifecycle: when ``alloc`` and ``free`` are top-level\n"
+             "module functions, a reference cycle forms via\n"
+             "``func.__globals__`` that Python's GC cannot break (it\n"
+             "passes through C++). Wrap your setup in a function so the\n"
+             "allocator and its callbacks are local variables and the\n"
+             "cycle is reclaimed when that function returns. Both\n"
+             "examples (``cuda_pinned_pipelined.py``,\n"
+             "``cuda_register_pinned.py``) follow this pattern.")
         .def_prop_ro("size",
                      [](ComPtr<VideoBufferAllocator>& self) { return self->buffer_size(); },
                      "Buffer size that this allocator produces.")
@@ -137,7 +145,14 @@ void init_decklink_allocator(nb::module_& m, nb::class_<Device>& device) {
              "  alloc: Optional callable(size: int) -> int returning a pointer.\n"
              "  free: Optional callable(ptr: int, size: int) -> None.\n\n"
              "Allocators are cached by buffer size. Custom alloc/free are\n"
-             "propagated to each VideoBufferAllocator created by the provider.")
+             "propagated to each VideoBufferAllocator created by the provider.\n\n"
+             "Note on lifecycle: when ``alloc`` and ``free`` are top-level\n"
+             "module functions, a reference cycle forms via\n"
+             "``func.__globals__`` that Python's GC cannot break (it\n"
+             "passes through C++). Wrap your setup in a function so the\n"
+             "provider and its callbacks are local variables and the\n"
+             "cycle is reclaimed when that function returns. The pipelined\n"
+             "example (``cuda_pinned_pipelined.py``) follows this pattern.")
         .def("get_allocator",
              [](ComPtr<VideoBufferAllocatorProvider>& self,
                 uint32_t buffer_size, uint32_t width, uint32_t height,
