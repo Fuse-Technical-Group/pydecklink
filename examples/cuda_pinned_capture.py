@@ -29,6 +29,10 @@ Synchronization contract (SPEC §gpu-pinned-memory):
 Install:
     pip install pydecklink[cuda-examples]
 
+Default capture format is 4K UHD 59.94p / 10-bit YUV (v210) — the
+project's real-time target. Frames are ~22 MB; the 16.7 ms frame
+budget is the constraint to design against.
+
 Usage:
     python examples/cuda_pinned_capture.py --mode alloc --device 0
     python examples/cuda_pinned_capture.py --mode register --device 0
@@ -37,6 +41,11 @@ Usage:
     # (drives --source-device as output, captures on --device):
     python examples/cuda_pinned_capture.py --mode alloc --source self \\
         --device 0 --source-device 2
+
+    # Per-frame latency profiling (L1 SDK→pop, L2 Python+CUDA submit,
+    # L3 GPU H2D), reports min/p50/p95/p99/max:
+    python examples/cuda_pinned_capture.py --mode alloc --source self \\
+        --device 0 --source-device 2 --frames 100 --profile
 
 This script requires DeckLink hardware. ``--source external`` (default)
 needs an active SDI input on ``--device``; ``--source self`` only needs
@@ -59,9 +68,12 @@ import pydecklink
 # without cuda installed.
 
 
-# Default capture format -- override on the command line if needed.
-_DEFAULT_MODE = pydecklink.DisplayMode.HD1080p25
-_DEFAULT_PIXEL_FORMAT = pydecklink.PixelFormat.Format8BitYUV
+# Default capture format -- 4K UHD 59.94p, 10-bit YUV (v210). This is
+# the project's stated real-time target. Each frame is ~22 MB; at the
+# 16.7 ms frame interval, end-to-end budget is what matters. Override
+# on the command line with --pixel-format if needed.
+_DEFAULT_MODE = pydecklink.DisplayMode.Mode4K2160p5994
+_DEFAULT_PIXEL_FORMAT = pydecklink.PixelFormat.Format10BitYUV
 
 
 def _check(err: object, op: str) -> None:
@@ -561,7 +573,9 @@ def main() -> None:
     parser.add_argument(
         "--pixel-format",
         choices=["8bit", "10bit"],
-        default="8bit",
+        default="10bit",
+        help="10bit (default, v210, ~22 MB/frame at 4K) or 8bit "
+        "(2vuy, ~8 MB/frame at 4K).",
     )
     parser.add_argument(
         "--source",
