@@ -165,7 +165,7 @@ void init_decklink_allocator(nb::module_& m, nb::class_<Device>& device) {
         [](Device& self, _BMDDisplayMode mode, _BMDPixelFormat pixel_format,
            _BMDVideoInputFlags flags,
            ComPtr<VideoBufferAllocatorProvider>& provider,
-           bool zero_copy) {
+           bool zero_copy, size_t max_queue) {
             ComPtr<IDeckLinkInput> input;
             if (self.dl->QueryInterface(IID_IDeckLinkInput, (void**)input.put()) != S_OK)
                 throw std::runtime_error("Device does not support input");
@@ -177,7 +177,7 @@ void init_decklink_allocator(nb::module_& m, nb::class_<Device>& device) {
                     std::to_string(hr) + ")");
             self.input_ = std::move(input);
             self.input_callback_ = ComPtr<InputCallback>(
-                new InputCallback(self.input_, 8, zero_copy));
+                new InputCallback(self.input_, max_queue, zero_copy));
             self.input_callback_->set_current_format(mode, pixel_format, flags);
             bool format_detection = (flags & bmdVideoInputEnableFormatDetection) != 0;
             self.input_callback_->set_format_detection(format_detection);
@@ -186,9 +186,14 @@ void init_decklink_allocator(nb::module_& m, nb::class_<Device>& device) {
         nb::arg("mode"), nb::arg("pixel_format"),
         nb::arg("flags"), nb::arg("allocator_provider"),
         nb::arg("zero_copy") = true,
+        nb::arg("max_queue") = 1,
         "Enable video input using a custom buffer allocator provider. "
         "The SDK will call the provider to obtain allocators for DMA buffers, "
-        "enabling GPU-pinned memory for zero-copy capture.");
+        "enabling GPU-pinned memory for zero-copy capture. ``max_queue`` "
+        "bounds our internal frame queue (default 1 = real-time, drop "
+        "late frames); each queued frame in zero-copy mode holds an "
+        "AddRef on a ManagedBuffer, keeping it off the allocator's "
+        "free-list, so a deep queue puts buffer-pool pressure on the SDK.");
 
     // -- Device: create_frame_pool_pinned --
     device.def("create_frame_pool_pinned",

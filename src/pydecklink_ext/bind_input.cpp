@@ -89,7 +89,7 @@ void init_decklink_input(nb::module_& m, nb::class_<Device>& device) {
 
     device.def("enable_video_input",
         [](Device& self, _BMDDisplayMode mode, _BMDPixelFormat pixel_format,
-           _BMDVideoInputFlags flags, bool zero_copy) {
+           _BMDVideoInputFlags flags, bool zero_copy, size_t max_queue) {
             ComPtr<IDeckLinkInput> input;
             if (self.dl->QueryInterface(IID_IDeckLinkInput, (void**)input.put()) != S_OK)
                 throw std::runtime_error("Device does not support input");
@@ -98,7 +98,7 @@ void init_decklink_input(nb::module_& m, nb::class_<Device>& device) {
                 throw std::runtime_error("EnableVideoInput failed (HRESULT " + std::to_string(hr) + ")");
             self.input_ = std::move(input);
             self.input_callback_ = ComPtr<InputCallback>(
-                new InputCallback(self.input_, 8, zero_copy));
+                new InputCallback(self.input_, max_queue, zero_copy));
             self.input_callback_->set_current_format(mode, pixel_format, flags);
             bool format_detection = (flags & bmdVideoInputEnableFormatDetection) != 0;
             self.input_callback_->set_format_detection(format_detection);
@@ -107,7 +107,13 @@ void init_decklink_input(nb::module_& m, nb::class_<Device>& device) {
         nb::arg("mode"), nb::arg("pixel_format"),
         nb::arg("flags") = bmdVideoInputFlagDefault,
         nb::arg("zero_copy") = false,
-        "Enable video input for the given display mode and pixel format.");
+        nb::arg("max_queue") = 1,
+        "Enable video input for the given display mode and pixel format. "
+        "``max_queue`` bounds our internal C++ frame queue between the "
+        "SDK input thread (producer) and the Python consumer; on overflow "
+        "the oldest frame is dropped. Default 1 (real-time: drop late "
+        "frames, never lag); raise for recorder-style consumers that "
+        "need to absorb consumer-side jitter.");
 
     device.def("disable_video_input",
         [](Device& self) {

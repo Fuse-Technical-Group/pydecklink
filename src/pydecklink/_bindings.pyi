@@ -599,8 +599,14 @@ class Device:
     def write_config(self) -> None:
         """Persist configuration changes to preferences."""
 
-    def enable_video_input(self, mode: DisplayMode, pixel_format: PixelFormat, flags: VideoInputFlag = VideoInputFlag.Default, zero_copy: bool = False) -> None:
-        """Enable video input for the given display mode and pixel format."""
+    def enable_video_input(self, mode: DisplayMode, pixel_format: PixelFormat, flags: VideoInputFlag = VideoInputFlag.Default, zero_copy: bool = False, max_queue: int = 1) -> None:
+        """
+        Enable video input for the given display mode and pixel format.
+        ``max_queue`` bounds our internal C++ frame queue between the SDK input
+        thread (producer) and the Python consumer; on overflow the oldest frame
+        is dropped. Default 1 (real-time: drop late frames, never lag); raise
+        for recorder-style consumers that need to absorb consumer-side jitter.
+        """
 
     def disable_video_input(self) -> None:
         """Disable video input."""
@@ -621,9 +627,14 @@ class Device:
     def current_input_format(self) -> InputFormatInfo | None:
         """Current detected input format, or None if input is not enabled."""
 
-    def enable_video_input_with_allocator(self, mode: DisplayMode, pixel_format: PixelFormat, flags: VideoInputFlag, allocator_provider: VideoBufferAllocatorProvider, zero_copy: bool = True) -> None:
+    def enable_video_input_with_allocator(self, mode: DisplayMode, pixel_format: PixelFormat, flags: VideoInputFlag, allocator_provider: VideoBufferAllocatorProvider, zero_copy: bool = True, max_queue: int = 1) -> None:
         """
-        Enable video input using a custom buffer allocator provider. The SDK will call the provider to obtain allocators for DMA buffers, enabling GPU-pinned memory for zero-copy capture.
+        Enable video input using a custom buffer allocator provider. The SDK will
+        call the provider to obtain allocators for DMA buffers, enabling
+        GPU-pinned memory for zero-copy capture. ``max_queue`` bounds our internal
+        frame queue (default 1 = real-time, drop late frames); each queued frame
+        in zero-copy mode holds an AddRef on a ManagedBuffer, keeping it off the
+        allocator's free-list, so a deep queue puts buffer-pool pressure on the SDK.
         """
 
     def create_frame_pool_pinned(self, count: int, width: int, height: int, row_bytes: int, pixel_format: PixelFormat, allocator: VideoBufferAllocator) -> None:
