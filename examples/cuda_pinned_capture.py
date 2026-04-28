@@ -39,7 +39,10 @@ This script requires DeckLink hardware and an active SDI input.
 from __future__ import annotations
 
 import argparse
+import signal
 import sys
+import time
+from collections.abc import Callable
 
 import pydecklink
 
@@ -59,6 +62,68 @@ def _check(err: object, op: str) -> None:
     code = getattr(err, "value", err)
     if code != 0:
         raise RuntimeError(f"{op} failed: cudaError={code}")
+
+
+def _print_status(line: str) -> None:
+    """Overwrite the current terminal line with ``line`` (CR + clear-to-EOL)."""
+    sys.stdout.write(f"\r{line}\033[K")
+    sys.stdout.flush()
+
+
+def _capture_with_progress(
+    dev: pydecklink.Device,
+    frame_count: int,
+    on_frame: Callable[[object], None],
+) -> tuple[int, bool]:
+    """Run a capture loop with a live progress indicator.
+
+    Without this, the example sits silently on ``pop_capture_frame_ref``
+    when no SDI signal is present, indistinguishable from a hang. Here
+    we tick a status line each poll so the user can see "waiting for
+    signal" with elapsed seconds, switching to "capturing N/M" once
+    frames arrive. A SIGINT handler flips a flag so Ctrl-C exits the
+    loop cleanly instead of raising mid-pop.
+
+    Returns ``(captured, interrupted)``.
+
+    The SIGINT handler is *not* restored on exit. Restoring it before
+    device teardown re-arms the default handler, and a follow-up SIGINT
+    (or pending one) would then raise KeyboardInterrupt during
+    ``stop_streams`` / ``disable_video_input``, leaking SDK state.
+    Callers that need the original handler back must save and restore
+    it themselves around this call.
+    """
+    stop_requested = [False]
+
+    def _on_sigint(_sig: int, _frame: object) -> None:
+        stop_requested[0] = True
+
+    signal.signal(signal.SIGINT, _on_sigint)
+
+    captured = 0
+    started = time.monotonic()
+    last_status = 0.0
+    try:
+        while captured < frame_count and not stop_requested[0]:
+            frame = dev.pop_capture_frame_ref(timeout_ms=1000)
+            now = time.monotonic()
+            if frame is None or not frame.has_signal:
+                if now - last_status >= 0.5:
+                    elapsed = int(now - started)
+                    state = "waiting for signal" if captured == 0 else "signal lost"
+                    _print_status(
+                        f"{state}: {elapsed}s elapsed, "
+                        f"{captured}/{frame_count} frames"
+                    )
+                    last_status = now
+                continue
+            on_frame(frame)
+            captured += 1
+            _print_status(f"capturing: {captured}/{frame_count} frames")
+    finally:
+        sys.stdout.write("\n")
+        sys.stdout.flush()
+    return captured, stop_requested[0]
 
 
 def run_alloc_mode(
@@ -104,13 +169,14 @@ def run_alloc_mode(
     )
     dev.start_streams()
 
-    captured = 0
     try:
-        while captured < frame_count:
-            frame = dev.pop_capture_frame_ref(timeout_ms=1000)
-            if frame is None or not frame.has_signal:
-                continue
-            captured += 1
+        captured, interrupted = _capture_with_progress(
+            dev, frame_count, on_frame=lambda _f: None
+        )
+        if captured == 0:
+            print("[alloc] no frames captured (interrupted)." if interrupted
+                  else "[alloc] no frames captured.")
+            return
         # Inspect the cached allocator after capture. The provider
         # caches one allocator per buffer size; query it back with
         # the same parameters.
@@ -125,10 +191,11 @@ def run_alloc_mode(
             row_bytes=row_bytes,
             pixel_format=pixel_format,
         )
+        suffix = " (interrupted)" if interrupted else ""
         print(
             f"[alloc] frames={captured} "
             f"allocated={alloc.allocated_count} "
-            f"recycled={alloc.recycled_count}"
+            f"recycled={alloc.recycled_count}{suffix}"
         )
     finally:
         dev.stop_streams()
@@ -164,25 +231,25 @@ def run_register_mode(
 
     registered: dict[int, int] = {}  # ptr -> size
 
-    captured = 0
+    def _register_first_seen(frame: object) -> None:
+        arr = frame.data  # type: ignore[attr-defined]
+        ptr = int(arr.ctypes.data)
+        size = int(arr.nbytes)
+        if ptr not in registered:
+            (err,) = cudart.cudaHostRegister(
+                ptr, size, cudart.cudaHostRegisterDefault
+            )
+            _check(err, "cudaHostRegister")
+            registered[ptr] = size
+
     try:
-        while captured < frame_count:
-            frame = dev.pop_capture_frame_ref(timeout_ms=1000)
-            if frame is None or not frame.has_signal:
-                continue
-            arr = frame.data
-            ptr = int(arr.ctypes.data)
-            size = int(arr.nbytes)
-            if ptr not in registered:
-                (err,) = cudart.cudaHostRegister(
-                    ptr, size, cudart.cudaHostRegisterDefault
-                )
-                _check(err, "cudaHostRegister")
-                registered[ptr] = size
-            captured += 1
+        captured, interrupted = _capture_with_progress(
+            dev, frame_count, on_frame=_register_first_seen
+        )
+        suffix = " (interrupted)" if interrupted else ""
         print(
             f"[register] frames={captured} "
-            f"unique_buffers={len(registered)}"
+            f"unique_buffers={len(registered)}{suffix}"
         )
     finally:
         dev.stop_streams()

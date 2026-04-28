@@ -74,3 +74,49 @@ def test_main_is_guarded() -> None:
     """main() must not run at import time."""
     source = EXAMPLE_PATH.read_text()
     assert 'if __name__ == "__main__":' in source
+
+
+def test_capture_with_progress_counts_only_valid_frames() -> None:
+    """`_capture_with_progress` must skip None and no-signal frames and
+    invoke the on_frame callback only for valid frames. Without this,
+    the example's main loop has no observable progress when the input
+    signal is missing — it appears hung.
+    """
+    mod = _load_example()
+
+    class _FakeFrame:
+        def __init__(self, has_signal: bool) -> None:
+            self.has_signal = has_signal
+
+    class _FakeDev:
+        def __init__(self) -> None:
+            # Two no-signal returns, then two valid frames.
+            self._frames = [
+                None,
+                _FakeFrame(has_signal=False),
+                _FakeFrame(has_signal=True),
+                _FakeFrame(has_signal=True),
+            ]
+            self._idx = 0
+
+        def pop_capture_frame_ref(self, timeout_ms: int):
+            if self._idx >= len(self._frames):
+                return None
+            f = self._frames[self._idx]
+            self._idx += 1
+            return f
+
+    import signal
+
+    prev_handler = signal.getsignal(signal.SIGINT)
+    seen: list[object] = []
+    try:
+        captured, interrupted = mod._capture_with_progress(
+            _FakeDev(), frame_count=2, on_frame=seen.append
+        )
+    finally:
+        signal.signal(signal.SIGINT, prev_handler)
+    assert captured == 2
+    assert interrupted is False
+    assert len(seen) == 2
+    assert all(getattr(f, "has_signal", False) for f in seen)
