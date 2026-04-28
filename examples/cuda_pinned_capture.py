@@ -78,6 +78,122 @@ def _print_status(line: str) -> None:
     sys.stdout.flush()
 
 
+def _percentiles(samples: list[float], qs: tuple[float, ...]) -> dict[float, float]:
+    """Naive nearest-rank percentiles. Avoids a numpy dep here."""
+    if not samples:
+        return {q: 0.0 for q in qs}
+    s = sorted(samples)
+    n = len(s)
+    out = {}
+    for q in qs:
+        idx = max(0, min(n - 1, round(q / 100.0 * (n - 1))))
+        out[q] = s[idx]
+    return out
+
+
+class _Profiler:
+    """Per-frame latency recorder.
+
+    Measures three layers:
+      L1 = callback_arrived_us (in C++ callback, on SDK thread) →
+           Python ``clock_us()`` after pop_capture_frame_ref returns.
+           Both use std::chrono::steady_clock so they share a clock.
+      L2 = pop returned → cudaMemcpyAsync queued (Python work + API submit).
+      L3 = GPU-timeline H2D copy elapsed (cudaEvent before/after the copy).
+
+    Per-frame the GPU side runs synchronous (record T0, copy, record T1,
+    cudaEventSynchronize). That serializes copies for measurement clarity.
+    Real consumers would overlap copies on multiple streams; that's not
+    what we're characterizing here.
+    """
+
+    def __init__(self, frame_bytes: int) -> None:
+        from cuda.bindings import runtime as cudart
+
+        self._cudart = cudart
+        err, d_ptr = cudart.cudaMalloc(frame_bytes)
+        _check(err, "cudaMalloc")
+        self._d_ptr = int(d_ptr)
+        self._frame_bytes = frame_bytes
+        err, stream = cudart.cudaStreamCreate()
+        _check(err, "cudaStreamCreate")
+        self._stream = stream
+        err, ev0 = cudart.cudaEventCreate()
+        _check(err, "cudaEventCreate")
+        err, ev1 = cudart.cudaEventCreate()
+        _check(err, "cudaEventCreate")
+        self._ev0 = ev0
+        self._ev1 = ev1
+        self.l1_us: list[float] = []
+        self.l2_us: list[float] = []
+        self.l3_us: list[float] = []
+
+    def on_frame(self, frame: object) -> None:
+        cudart = self._cudart
+        # L1: SDK callback fired → pop returned to Python.
+        pop_returned_us = pydecklink.clock_us()
+        self.l1_us.append(
+            float(pop_returned_us - frame.callback_arrived_us)  # type: ignore[attr-defined]
+        )
+        # Submit the H2D copy bracketed by CUDA events.
+        h_ptr = int(frame.data.ctypes.data)  # type: ignore[attr-defined]
+        cudart.cudaEventRecord(self._ev0, self._stream)
+        (err,) = cudart.cudaMemcpyAsync(
+            self._d_ptr, h_ptr, self._frame_bytes,
+            cudart.cudaMemcpyKind.cudaMemcpyHostToDevice, self._stream,
+        )
+        _check(err, "cudaMemcpyAsync")
+        cudart.cudaEventRecord(self._ev1, self._stream)
+        # L2: time spent on Python + API submit, before the GPU sync.
+        submit_returned_us = pydecklink.clock_us()
+        self.l2_us.append(float(submit_returned_us - pop_returned_us))
+        # L3: actual GPU H2D elapsed.
+        (err,) = cudart.cudaEventSynchronize(self._ev1)
+        _check(err, "cudaEventSynchronize")
+        err, dt_ms = cudart.cudaEventElapsedTime(self._ev0, self._ev1)
+        _check(err, "cudaEventElapsedTime")
+        self.l3_us.append(float(dt_ms) * 1000.0)
+
+    def close(self) -> None:
+        cudart = self._cudart
+        cudart.cudaEventDestroy(self._ev0)
+        cudart.cudaEventDestroy(self._ev1)
+        cudart.cudaStreamDestroy(self._stream)
+        cudart.cudaFree(self._d_ptr)
+
+    def report(self) -> None:
+        if not self.l1_us:
+            print("[profile] no frames recorded.")
+            return
+        qs = (50.0, 95.0, 99.0)
+        l1 = _percentiles(self.l1_us, qs)
+        l2 = _percentiles(self.l2_us, qs)
+        l3 = _percentiles(self.l3_us, qs)
+        n = len(self.l1_us)
+        print(
+            f"[profile] n={n}  ({self._frame_bytes / 1_000_000:.2f} MB/frame)"
+        )
+        print(
+            "          "
+            "min     p50     p95     p99     max     (microseconds)"
+        )
+        print(
+            "  L1 cb→pop"
+            f"  {min(self.l1_us):>6.0f}  {l1[50]:>6.0f}  "
+            f"{l1[95]:>6.0f}  {l1[99]:>6.0f}  {max(self.l1_us):>6.0f}"
+        )
+        print(
+            "  L2 py+sub"
+            f"  {min(self.l2_us):>6.0f}  {l2[50]:>6.0f}  "
+            f"{l2[95]:>6.0f}  {l2[99]:>6.0f}  {max(self.l2_us):>6.0f}"
+        )
+        print(
+            "  L3 H2D   "
+            f"  {min(self.l3_us):>6.0f}  {l3[50]:>6.0f}  "
+            f"{l3[95]:>6.0f}  {l3[99]:>6.0f}  {max(self.l3_us):>6.0f}"
+        )
+
+
 def _capture_with_progress(
     dev: pydecklink.Device,
     frame_count: int,
@@ -234,6 +350,7 @@ def run_alloc_mode(
     pixel_format: pydecklink.PixelFormat = _DEFAULT_PIXEL_FORMAT,
     frame_count: int = 30,
     source_device_index: int | None = None,
+    profile: bool = False,
 ) -> None:
     """Pattern A: SDK DMAs into ``cudaHostAlloc`` buffers via the
     allocator provider.
@@ -290,7 +407,9 @@ def run_alloc_mode(
         # Python alloc callbacks (cudaHostAlloc here) the SDK input
         # pipeline cannot tolerate SLOW-path latency at signal rate;
         # pre-filling on the main thread keeps all runtime allocations
-        # on the FAST path. ``row_bytes_for_pixel_format`` requires
+        # on the FAST path. With ``max_queue=1`` (the default), 2
+        # buffers cover the no-signal → signal-locked transition; 4 is
+        # a small safety margin. ``row_bytes_for_pixel_format`` requires
         # video output to be enabled, so derive row_bytes from
         # frame_bytes / height instead — the provider only uses
         # buffer_size for cache lookup anyway.
@@ -305,15 +424,19 @@ def run_alloc_mode(
             row_bytes=row_bytes,
             pixel_format=pixel_format,
         )
-        in_alloc.prefill(32)
+        in_alloc.prefill(4)
 
         dev.start_streams()
         if src is not None:
             src.start_playback()
 
-        def _on_frame(_f: object) -> None:
+        profiler = _Profiler(frame_bytes) if profile else None
+
+        def _on_frame(f: object) -> None:
             if src is not None:
                 src.schedule_next()
+            if profiler is not None:
+                profiler.on_frame(f)
 
         try:
             captured, interrupted = _capture_with_progress(
@@ -329,7 +452,11 @@ def run_alloc_mode(
                 f"allocated={in_alloc.allocated_count} "
                 f"recycled={in_alloc.recycled_count}{suffix}"
             )
+            if profiler is not None:
+                profiler.report()
         finally:
+            if profiler is not None:
+                profiler.close()
             dev.stop_streams()
             dev.disable_video_input()
             # Allocator destruction (when `provider` and `alloc` go out of
@@ -452,6 +579,18 @@ def main() -> None:
         default=2,
         help="DeckLink device index to drive as output when --source=self.",
     )
+    parser.add_argument(
+        "--profile",
+        action="store_true",
+        help=(
+            "Measure per-frame latency: L1 (SDK callback → Python pop), "
+            "L2 (Python work + cudaMemcpyAsync submit), L3 (GPU H2D "
+            "elapsed via cudaEvent). Prints min/p50/p95/p99/max at the "
+            "end. Adds a real cudaMalloc'd device buffer and "
+            "synchronizes per-frame on the H2D copy, so this is "
+            "diagnostic, not steady-state."
+        ),
+    )
     args = parser.parse_args()
 
     pixel_format = (
@@ -493,8 +632,15 @@ def main() -> None:
             pixel_format=pixel_format,
             frame_count=args.frames,
             source_device_index=source_device_index,
+            profile=args.profile,
         )
     else:
+        if args.profile:
+            print(
+                "--profile is currently only implemented for --mode=alloc.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
         run_register_mode(
             device_index=args.device,
             pixel_format=pixel_format,
