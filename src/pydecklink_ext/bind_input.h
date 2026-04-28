@@ -59,8 +59,8 @@ public:
     // Copy-construct input_: shares a ref with the caller's ComPtr.
     // The cycle this creates (input <-> callback) is broken by
     // Device's destructor calling input_->SetCallback(nullptr).
-    InputCallback(const ComPtr<IDeckLinkInput>& input, size_t max_queue = 8, bool zero_copy = false)
-        : ref_count_(1), input_(input), max_queue_(max_queue),
+    InputCallback(const ComPtr<IDeckLinkInput>& input, size_t input_queue_depth = 1, bool zero_copy = false)
+        : ref_count_(1), input_(input), input_queue_depth_(input_queue_depth),
           format_detection_enabled_(false), zero_copy_(zero_copy) {}
 
     void set_format_detection(bool enabled) {
@@ -144,7 +144,7 @@ public:
 
             {
                 std::lock_guard<std::mutex> lock(ref_queue_mutex_);
-                if (ref_queue_.size() >= max_queue_)
+                if (ref_queue_.size() >= input_queue_depth_)
                     ref_queue_.pop();
                 ref_queue_.push(std::move(cfr));
             }
@@ -177,7 +177,7 @@ public:
 
             {
                 std::lock_guard<std::mutex> lock(queue_mutex_);
-                if (queue_.size() >= max_queue_)
+                if (queue_.size() >= input_queue_depth_)
                     queue_.pop();
                 queue_.push(std::move(cf));
             }
@@ -224,7 +224,7 @@ public:
 private:
     std::atomic<ULONG> ref_count_;
     ComPtr<IDeckLinkInput> input_;  // Owns a ref; cycle broken by ~Device.
-    size_t max_queue_;
+    size_t input_queue_depth_;
     bool format_detection_enabled_;
     bool zero_copy_;
     int64_t timescale_ = 10000000;  // Default 10MHz.

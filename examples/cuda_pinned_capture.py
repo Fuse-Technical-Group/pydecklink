@@ -419,7 +419,7 @@ def run_alloc_mode(
         # Python alloc callbacks (cudaHostAlloc here) the SDK input
         # pipeline cannot tolerate SLOW-path latency at signal rate;
         # pre-filling on the main thread keeps all runtime allocations
-        # on the FAST path. With ``max_queue=1`` (the default), 2
+        # on the FAST path. With ``input_queue_depth=1`` (the default), 2
         # buffers cover the no-signal → signal-locked transition; 4 is
         # a small safety margin. ``row_bytes_for_pixel_format`` requires
         # video output to be enabled, so derive row_bytes from

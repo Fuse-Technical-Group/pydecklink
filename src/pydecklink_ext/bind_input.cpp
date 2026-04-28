@@ -89,7 +89,7 @@ void init_decklink_input(nb::module_& m, nb::class_<Device>& device) {
 
     device.def("enable_video_input",
         [](Device& self, _BMDDisplayMode mode, _BMDPixelFormat pixel_format,
-           _BMDVideoInputFlags flags, bool zero_copy, size_t max_queue) {
+           _BMDVideoInputFlags flags, bool zero_copy, size_t input_queue_depth) {
             ComPtr<IDeckLinkInput> input;
             if (self.dl->QueryInterface(IID_IDeckLinkInput, (void**)input.put()) != S_OK)
                 throw std::runtime_error("Device does not support input");
@@ -98,7 +98,7 @@ void init_decklink_input(nb::module_& m, nb::class_<Device>& device) {
                 throw std::runtime_error("EnableVideoInput failed (HRESULT " + std::to_string(hr) + ")");
             self.input_ = std::move(input);
             self.input_callback_ = ComPtr<InputCallback>(
-                new InputCallback(self.input_, max_queue, zero_copy));
+                new InputCallback(self.input_, input_queue_depth, zero_copy));
             self.input_callback_->set_current_format(mode, pixel_format, flags);
             bool format_detection = (flags & bmdVideoInputEnableFormatDetection) != 0;
             self.input_callback_->set_format_detection(format_detection);
@@ -107,9 +107,9 @@ void init_decklink_input(nb::module_& m, nb::class_<Device>& device) {
         nb::arg("mode"), nb::arg("pixel_format"),
         nb::arg("flags") = bmdVideoInputFlagDefault,
         nb::arg("zero_copy") = false,
-        nb::arg("max_queue") = 1,
+        nb::arg("input_queue_depth") = 1,
         "Enable video input for the given display mode and pixel format. "
-        "``max_queue`` bounds our internal C++ frame queue between the "
+        "``input_queue_depth`` bounds the internal C++ queue between the "
         "SDK input thread (producer) and the Python consumer; on overflow "
         "the oldest frame is dropped. Default 1 (real-time: drop late "
         "frames, never lag); raise for recorder-style consumers that "
