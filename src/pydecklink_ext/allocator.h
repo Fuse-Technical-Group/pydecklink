@@ -41,8 +41,10 @@ public:
         // interface violates COM and triggers SDK-internal stalls
         // when the input pipeline transitions out of no-signal state.
         // Copy IID macros to locals: on Linux they expand to compound
-        // literals (rvalues), so &IID_IUnknown is invalid.
-        REFIID iunknown = IID_IUnknown;
+        // literals (rvalues), so &IUnknownUUID is invalid. ``IUnknownUUID``
+        // (not ``IID_IUnknown``) is the cross-platform name — Apple's
+        // headers only define ``IUnknownUUID``; Linux aliases the two.
+        REFIID iunknown = IUnknownUUID;
         REFIID ividbuf = IID_IDeckLinkVideoBuffer;
         if (!ppv) return E_POINTER;
         if (memcmp(&iid, &iunknown, sizeof(REFIID)) == 0) {
@@ -130,7 +132,7 @@ public:
 
     // IUnknown
     HRESULT QueryInterface(REFIID iid, void** ppv) override {
-        REFIID iunknown = IID_IUnknown;
+        REFIID iunknown = IUnknownUUID;
         REFIID ialloc = IID_IDeckLinkVideoBufferAllocator;
         if (!ppv) return E_POINTER;
         if (memcmp(&iid, &iunknown, sizeof(REFIID)) == 0) {
@@ -300,7 +302,7 @@ public:
 
     // IUnknown
     HRESULT QueryInterface(REFIID iid, void** ppv) override {
-        REFIID iunknown = IID_IUnknown;
+        REFIID iunknown = IUnknownUUID;
         REFIID iprov = IID_IDeckLinkVideoBufferAllocatorProvider;
         if (!ppv) return E_POINTER;
         if (memcmp(&iid, &iunknown, sizeof(REFIID)) == 0) {

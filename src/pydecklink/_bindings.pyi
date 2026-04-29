@@ -601,11 +601,7 @@ class Device:
 
     def enable_video_input(self, mode: DisplayMode, pixel_format: PixelFormat, flags: VideoInputFlag = VideoInputFlag.Default, zero_copy: bool = False, input_queue_depth: int = 1) -> None:
         """
-        Enable video input for the given display mode and pixel format.
-        ``input_queue_depth`` bounds the internal C++ queue between the SDK input
-        thread (producer) and the Python consumer; on overflow the oldest frame
-        is dropped. Default 1 (real-time: drop late frames, never lag); raise
-        for recorder-style consumers that need to absorb consumer-side jitter.
+        Enable video input for the given display mode and pixel format. ``input_queue_depth`` bounds the internal C++ queue between the SDK input thread (producer) and the Python consumer; on overflow the oldest frame is dropped. Default 1 (real-time: drop late frames, never lag); raise for recorder-style consumers that need to absorb consumer-side jitter.
         """
 
     def disable_video_input(self) -> None:
@@ -629,12 +625,7 @@ class Device:
 
     def enable_video_input_with_allocator(self, mode: DisplayMode, pixel_format: PixelFormat, flags: VideoInputFlag, allocator_provider: VideoBufferAllocatorProvider, zero_copy: bool = True, input_queue_depth: int = 1) -> None:
         """
-        Enable video input using a custom buffer allocator provider. The SDK will
-        call the provider to obtain allocators for DMA buffers, enabling host
-        pinned memory for the H2D path. ``input_queue_depth`` bounds the internal
-        frame queue (default 1 = real-time, drop late frames); each queued frame
-        in zero-copy mode holds an AddRef on a ManagedBuffer, keeping it off the
-        allocator's free-list, so a deep queue puts buffer-pool pressure on the SDK.
+        Enable video input using a custom buffer allocator provider. The SDK will call the provider to obtain allocators for DMA buffers, enabling host pinned memory for the H2D path. ``input_queue_depth`` bounds the internal frame queue (default 1 = real-time, drop late frames); each queued frame in zero-copy mode holds an AddRef on a ManagedBuffer, keeping it off the allocator's free-list, so a deep queue puts buffer-pool pressure on the SDK.
         """
 
     def create_frame_pool_pinned(self, count: int, width: int, height: int, row_bytes: int, pixel_format: PixelFormat, allocator: VideoBufferAllocator) -> None:
@@ -837,13 +828,14 @@ class VideoBufferAllocator:
 
         For CUDA pinned memory, pass cudaHostAlloc/cudaFreeHost wrappers.
 
-        Note on lifecycle: when ``alloc`` and ``free`` are top-level module
-        functions, a reference cycle forms via ``func.__globals__`` that
-        Python's GC cannot break (it passes through C++). Wrap your setup
-        in a function so the allocator and its callbacks are local variables
-        and the cycle is reclaimed when that function returns. Both examples
-        (``cuda_pinned_pipelined.py``, ``cuda_register_pinned.py``) follow
-        this pattern.
+        Note on lifecycle: when ``alloc`` and ``free`` are top-level
+        module functions, a reference cycle forms via
+        ``func.__globals__`` that Python's GC cannot break (it
+        passes through C++). Wrap your setup in a function so the
+        allocator and its callbacks are local variables and the
+        cycle is reclaimed when that function returns. Both
+        examples (``cuda_pinned_pipelined.py``,
+        ``cuda_register_pinned.py``) follow this pattern.
         """
 
     @property
@@ -865,12 +857,7 @@ class VideoBufferAllocator:
 
     def prefill(self, count: int) -> None:
         """
-        Pre-allocate ``count`` buffers and seat them on the free-list. Use this
-        before ``start_streams`` when the allocator wraps a Python callback
-        (e.g. cudaHostAlloc): each SLOW-path allocation pays a GIL+Python
-        round-trip, which the SDK input pipeline cannot tolerate at signal
-        rate. Pre-filling moves all that cost to the calling thread; runtime
-        allocations take the FAST path.
+        Pre-allocate ``count`` buffers and seat them on the free-list. Use this before ``start_streams`` when the allocator wraps a Python callback (e.g. cudaHostAlloc): each SLOW-path allocation pays a GIL+Python round-trip, which the SDK input pipeline cannot tolerate at signal rate. Pre-filling moves all that cost to the calling thread; runtime allocations take the FAST path.
         """
 
     def __repr__(self) -> str: ...
@@ -887,11 +874,12 @@ class VideoBufferAllocatorProvider:
         Allocators are cached by buffer size. Custom alloc/free are
         propagated to each VideoBufferAllocator created by the provider.
 
-        Note on lifecycle: when ``alloc`` and ``free`` are top-level module
-        functions, a reference cycle forms via ``func.__globals__`` that
-        Python's GC cannot break (it passes through C++). Wrap your setup
-        in a function so the provider and its callbacks are local variables
-        and the cycle is reclaimed when that function returns. The pipelined
+        Note on lifecycle: when ``alloc`` and ``free`` are top-level
+        module functions, a reference cycle forms via
+        ``func.__globals__`` that Python's GC cannot break (it
+        passes through C++). Wrap your setup in a function so the
+        provider and its callbacks are local variables and the
+        cycle is reclaimed when that function returns. The pipelined
         example (``cuda_pinned_pipelined.py``) follows this pattern.
         """
 
