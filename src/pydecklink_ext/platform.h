@@ -1,6 +1,7 @@
 #pragma once
 
 #include <chrono>
+#include <cstring>
 
 // Platform compatibility layer for DeckLink SDK differences between
 // Linux/Mac (dlopen dispatch, const char* strings) and
@@ -125,3 +126,29 @@ inline int64_t steady_clock_us() {
     return duration_cast<microseconds>(
         steady_clock::now().time_since_epoch()).count();
 }
+
+// Cross-platform IID comparison and IUnknown IID access.
+//
+// REFIID is platform-specific:
+//   - Windows: ``const GUID&`` (a reference; ``IsEqualIID`` is canonical).
+//   - Linux:   ``struct REFIID`` (16-byte struct from LinuxCOM.h).
+//   - macOS:   ``CFUUIDBytes`` (Apple's 16-byte struct).
+//
+// The IUnknown IID is also named differently:
+//   - Windows: ``IID_IUnknown`` (from <unknwn.h>, included via <comdef.h>).
+//   - Linux:   ``IUnknownUUID`` aliased to ``IID_IUnknown`` (REFIID).
+//   - macOS:   ``IUnknownUUID`` is ``CFUUIDRef``; bytes via ``CFUUIDGetUUIDBytes``.
+//
+// On Linux, ``CFUUIDGetUUIDBytes(x)`` is ``#define``d to ``x`` — a no-op
+// alias — so the same expression works on both POSIX platforms.
+#ifdef _WIN32
+inline bool iid_matches(REFIID got, REFIID expected) {
+    return IsEqualIID(got, expected);
+}
+#define PYDECKLINK_IUNKNOWN_IID IID_IUnknown
+#else
+inline bool iid_matches(REFIID got, REFIID expected) {
+    return std::memcmp(&got, &expected, sizeof(REFIID)) == 0;
+}
+#define PYDECKLINK_IUNKNOWN_IID CFUUIDGetUUIDBytes(IUnknownUUID)
+#endif

@@ -2,9 +2,9 @@
 
 #include "DeckLinkAPI.h"
 #include "comptr.h"
+#include "platform.h"  // iid_matches, PYDECKLINK_IUNKNOWN_IID
 #include <atomic>
 #include <cstdlib>
-#include <cstring>
 #include <functional>
 #include <mutex>
 #include <stdexcept>
@@ -35,21 +35,16 @@ public:
 
     // IUnknown
     HRESULT QueryInterface(REFIID iid, void** ppv) override {
-        // Per SPEC §2.5.55, the SDK wraps our buffer into its own video
+        // Per SDK §2.5.55, the SDK wraps our buffer into its own video
         // frame and may call QueryInterface to obtain interface
-        // pointers. Returning E_NOINTERFACE for IUnknown / our own
-        // interface violates COM and triggers SDK-internal stalls
-        // when the input pipeline transitions out of no-signal state.
-        // Copy IID macros to locals: on Linux they expand to compound
-        // literals (rvalues), so &IUnknownUUID is invalid. ``IUnknownUUID``
-        // (not ``IID_IUnknown``) is the cross-platform name — Apple's
-        // headers only define ``IUnknownUUID``; Linux aliases the two.
-        REFIID iunknown = IUnknownUUID;
-        REFIID ividbuf = IID_IDeckLinkVideoBuffer;
+        // pointers. Returning E_NOINTERFACE for IUnknown or our own
+        // interface violates COM and stalls the input pipeline at the
+        // no-signal → signal-locked transition. ``iid_matches`` and
+        // the IUnknown IID name vary per platform — see platform.h.
         if (!ppv) return E_POINTER;
-        if (memcmp(&iid, &iunknown, sizeof(REFIID)) == 0) {
+        if (iid_matches(iid, PYDECKLINK_IUNKNOWN_IID)) {
             *ppv = static_cast<IUnknown*>(this);
-        } else if (memcmp(&iid, &ividbuf, sizeof(REFIID)) == 0) {
+        } else if (iid_matches(iid, IID_IDeckLinkVideoBuffer)) {
             *ppv = static_cast<IDeckLinkVideoBuffer*>(this);
         } else {
             *ppv = nullptr;
@@ -132,12 +127,10 @@ public:
 
     // IUnknown
     HRESULT QueryInterface(REFIID iid, void** ppv) override {
-        REFIID iunknown = IUnknownUUID;
-        REFIID ialloc = IID_IDeckLinkVideoBufferAllocator;
         if (!ppv) return E_POINTER;
-        if (memcmp(&iid, &iunknown, sizeof(REFIID)) == 0) {
+        if (iid_matches(iid, PYDECKLINK_IUNKNOWN_IID)) {
             *ppv = static_cast<IUnknown*>(this);
-        } else if (memcmp(&iid, &ialloc, sizeof(REFIID)) == 0) {
+        } else if (iid_matches(iid, IID_IDeckLinkVideoBufferAllocator)) {
             *ppv = static_cast<IDeckLinkVideoBufferAllocator*>(this);
         } else {
             *ppv = nullptr;
@@ -302,12 +295,10 @@ public:
 
     // IUnknown
     HRESULT QueryInterface(REFIID iid, void** ppv) override {
-        REFIID iunknown = IUnknownUUID;
-        REFIID iprov = IID_IDeckLinkVideoBufferAllocatorProvider;
         if (!ppv) return E_POINTER;
-        if (memcmp(&iid, &iunknown, sizeof(REFIID)) == 0) {
+        if (iid_matches(iid, PYDECKLINK_IUNKNOWN_IID)) {
             *ppv = static_cast<IUnknown*>(this);
-        } else if (memcmp(&iid, &iprov, sizeof(REFIID)) == 0) {
+        } else if (iid_matches(iid, IID_IDeckLinkVideoBufferAllocatorProvider)) {
             *ppv = static_cast<IDeckLinkVideoBufferAllocatorProvider*>(this);
         } else {
             *ppv = nullptr;
