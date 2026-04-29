@@ -22,11 +22,9 @@ RUN apt-get update \
        sudo \
     && rm -rf /var/lib/apt/lists/*
 
-# nvidia/cuda images don't ship the `ubuntu` user — create it to match the
-# default devcontainer (UID 1000). common-utils feature in devcontainer.json
-# will reconcile UID/GID at start.
-RUN useradd -m -u 1000 -s /bin/bash ubuntu \
-    && echo "ubuntu ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/ubuntu
+# Ubuntu 24.04 ships an `ubuntu` user at UID 1000; nvidia/cuda inherits it.
+# Just grant passwordless sudo.
+RUN echo "ubuntu ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/ubuntu
 
 RUN curl -LsSf https://astral.sh/uv/install.sh | UV_INSTALL_DIR=/usr/local/bin sh \
     && uv python install 3.13
