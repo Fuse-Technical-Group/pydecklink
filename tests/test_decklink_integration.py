@@ -299,9 +299,7 @@ class TestCustomAllocatorZeroCopy:
     mode.
     """
 
-    def test_zero_copy_streams_with_custom_allocator(
-        self, output_device, input_device
-    ):
+    def test_zero_copy_streams_with_custom_allocator(self, output_device, input_device):
         """Stream signal-locked frames through a custom allocator,
         verify recycle behavior."""
         libc = ctypes.CDLL("libc.so.6")
@@ -319,7 +317,8 @@ class TestCustomAllocatorZeroCopy:
             libc.free(ctypes.c_void_p(ptr))
 
         provider = pydecklink.VideoBufferAllocatorProvider(
-            alloc=py_alloc, free=py_free,
+            alloc=py_alloc,
+            free=py_free,
         )
 
         # Set up output side (provides the SDI signal we'll capture back).
@@ -367,9 +366,7 @@ class TestCustomAllocatorZeroCopy:
             # Pre-roll output and start playback.
             for i in range(preroll):
                 schedule_pattern(i * FRAME_DURATION)
-            output_device.start_scheduled_playback(
-                start_time=0, timescale=TIMESCALE
-            )
+            output_device.start_scheduled_playback(start_time=0, timescale=TIMESCALE)
             display_time = preroll * FRAME_DURATION
 
             # Drain no-signal frames until signal locks.

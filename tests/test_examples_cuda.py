@@ -139,9 +139,7 @@ def test_self_source_defers_playback_until_explicit_start() -> None:
         ) -> None:
             self.calls.append(("schedule_output_frame", display_time))
 
-        def start_scheduled_playback(
-            self, start_time: int, timescale: int
-        ) -> None:
+        def start_scheduled_playback(self, start_time: int, timescale: int) -> None:
             self.calls.append(("start_scheduled_playback", start_time, timescale))
 
         def stop_scheduled_playback(self) -> None:

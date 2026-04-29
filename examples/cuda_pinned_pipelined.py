@@ -134,9 +134,7 @@ class _SelfSource:
         self._output_enabled = True
         width = pydecklink.get_mode_width(self._mode)
         height = pydecklink.get_mode_height(self._mode)
-        row_bytes = self._dev.row_bytes_for_pixel_format(
-            self._pixel_format, width
-        )
+        row_bytes = self._dev.row_bytes_for_pixel_format(self._pixel_format, width)
         self._dev.create_frame_pool(
             self.POOL_DEPTH, width, height, row_bytes, self._pixel_format
         )
@@ -145,9 +143,7 @@ class _SelfSource:
     def start_playback(self) -> None:
         for i in range(self.PREROLL):
             self._schedule_one(i * self._duration)
-        self._dev.start_scheduled_playback(
-            start_time=0, timescale=self._timescale
-        )
+        self._dev.start_scheduled_playback(start_time=0, timescale=self._timescale)
         self._playback_started = True
         self._display_time = self.PREROLL * self._duration
 
@@ -184,6 +180,7 @@ class _SelfSource:
 
 class _Slot:
     """One GPU pipeline slot: device pointer + reusable CUDA event."""
+
     __slots__ = ("d_ptr", "event")
 
     def __init__(self, d_ptr: int, event: object) -> None:
@@ -193,6 +190,7 @@ class _Slot:
 
 class _Frame:
     """An in-flight frame handed from capture thread to consumer thread."""
+
     __slots__ = ("callback_arrived_us", "cfr", "slot", "submit_us")
 
     def __init__(
@@ -231,7 +229,7 @@ class _Pipeline:
         self.frames_dropped_no_slot = 0
         self.frames_dropped_no_signal = 0
         self.delivery_us: list[float] = []  # callback → consumer release
-        self.h2d_gpu_us: list[float] = []   # GPU-timeline H2D event elapsed
+        self.h2d_gpu_us: list[float] = []  # GPU-timeline H2D event elapsed
         # CUDA stream for all transfers.
         err, stream = cudart.cudaStreamCreate()
         _check(err, "cudaStreamCreate")
@@ -288,7 +286,11 @@ class _Pipeline:
             # consumer releases it.
             host_ptr = int(cfr.data.ctypes.data)
             (err,) = cudart.cudaMemcpyAsync(
-                slot.d_ptr, host_ptr, self._frame_bytes, H2D, self._stream,
+                slot.d_ptr,
+                host_ptr,
+                self._frame_bytes,
+                H2D,
+                self._stream,
             )
             _check(err, "cudaMemcpyAsync")
             (err,) = cudart.cudaEventRecord(slot.event, self._stream)
@@ -325,9 +327,7 @@ class _Pipeline:
             (err,) = cudart.cudaEventSynchronize(frame.slot.event)
             _check(err, "cudaEventSynchronize")
             done_us = pydecklink.clock_us()
-            self.delivery_us.append(
-                float(done_us - frame.callback_arrived_us)
-            )
+            self.delivery_us.append(float(done_us - frame.callback_arrived_us))
             self.frames_captured += 1
             # Hold slot in a local before dropping the frame.
             slot = frame.slot
@@ -344,16 +344,17 @@ class _Pipeline:
             return
         qs = (50.0, 95.0, 99.0)
         d = _percentiles(self.delivery_us, qs)
-        print(f"[pipelined] frames={n} dropped="
-              f"(no_slot={self.frames_dropped_no_slot}, "
-              f"no_signal={self.frames_dropped_no_signal})")
-        print(f"            run={run_seconds:.1f}s  "
-              f"effective_fps={n / run_seconds:.1f}  "
-              f"({self._frame_bytes / 1_000_000:.2f} MB/frame)")
         print(
-            "            "
-            "min     p50     p95     p99     max     (microseconds)"
+            f"[pipelined] frames={n} dropped="
+            f"(no_slot={self.frames_dropped_no_slot}, "
+            f"no_signal={self.frames_dropped_no_signal})"
         )
+        print(
+            f"            run={run_seconds:.1f}s  "
+            f"effective_fps={n / run_seconds:.1f}  "
+            f"({self._frame_bytes / 1_000_000:.2f} MB/frame)"
+        )
+        print("            min     p50     p95     p99     max     (microseconds)")
         print(
             "  delivery"
             f"  {min(self.delivery_us):>6.0f}  {d[50]:>6.0f}  "
@@ -390,7 +391,8 @@ def run_pipelined(
         _check(err, "cudaFreeHost")
 
     provider = pydecklink.VideoBufferAllocatorProvider(
-        alloc=cuda_host_alloc, free=cuda_free_host,
+        alloc=cuda_host_alloc,
+        free=cuda_free_host,
     )
     frame_bytes = pydecklink.get_frame_bytes(mode, pixel_format)
     width = pydecklink.get_mode_width(mode)
@@ -447,6 +449,7 @@ def run_pipelined(
 
         def _on_sigint(_sig: int, _frame: object) -> None:
             stop.set()
+
         prev_sigint = signal.signal(signal.SIGINT, _on_sigint)
 
         capture_thread = threading.Thread(
@@ -476,8 +479,11 @@ def run_pipelined(
                 if duration_seconds > 0 and elapsed >= duration_seconds:
                     break
                 if now - last_status >= 0.5:
-                    state = ("running" if pipeline.frames_captured > 0
-                             else "waiting for signal")
+                    state = (
+                        "running"
+                        if pipeline.frames_captured > 0
+                        else "waiting for signal"
+                    )
                     _print_status(
                         f"{state}: {int(elapsed)}s elapsed, "
                         f"{pipeline.frames_captured} captured "
@@ -501,8 +507,10 @@ def run_pipelined(
 
         try:
             pipeline.report(run_seconds)
-            print(f"[allocator] allocated={in_alloc.allocated_count} "
-                  f"recycled={in_alloc.recycled_count}")
+            print(
+                f"[allocator] allocated={in_alloc.allocated_count} "
+                f"recycled={in_alloc.recycled_count}"
+            )
         finally:
             pipeline.close()
             dev.stop_streams()
@@ -514,16 +522,21 @@ def main() -> None:
         description="Threaded DeckLink → CUDA H2D capture pipeline.",
     )
     parser.add_argument(
-        "--device", type=int, default=0,
+        "--device",
+        type=int,
+        default=0,
         help="DeckLink device index for capture.",
     )
     parser.add_argument(
-        "--frames", type=int, default=0,
-        help="Stop after N captured frames. 0 = unlimited (use --duration "
-             "or Ctrl-C).",
+        "--frames",
+        type=int,
+        default=0,
+        help="Stop after N captured frames. 0 = unlimited (use --duration or Ctrl-C).",
     )
     parser.add_argument(
-        "--duration", type=float, default=0.0,
+        "--duration",
+        type=float,
+        default=0.0,
         help="Stop after S seconds of capture. 0 = unlimited.",
     )
     parser.add_argument(
@@ -531,15 +544,17 @@ def main() -> None:
         choices=["8bit", "10bit"],
         default="10bit",
         help="10bit (default, v210, ~22 MB/frame at 4K) or 8bit "
-             "(2vuy, ~8 MB/frame at 4K).",
+        "(2vuy, ~8 MB/frame at 4K).",
     )
     parser.add_argument(
         "--source",
         choices=["external", "self"],
         default="external",
-        help=("external: capture from an external SDI source on --device. "
-              "self: drive --source-device as output with neutral-gray "
-              "(BNC jumper required between the two ports)."),
+        help=(
+            "external: capture from an external SDI source on --device. "
+            "self: drive --source-device as output with neutral-gray "
+            "(BNC jumper required between the two ports)."
+        ),
     )
     parser.add_argument(
         "--source-device",
@@ -561,19 +576,24 @@ def main() -> None:
 
     devices = pydecklink.list_devices()
     if args.device >= len(devices):
-        print(f"Device index {args.device} out of range "
-              f"({len(devices)} devices found).", file=sys.stderr)
+        print(
+            f"Device index {args.device} out of range ({len(devices)} devices found).",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     source_device_index: int | None = None
     if args.source == "self":
         if args.source_device == args.device:
-            print(f"--source-device must differ from --device "
-                  f"(both = {args.device}).", file=sys.stderr)
+            print(
+                f"--source-device must differ from --device (both = {args.device}).",
+                file=sys.stderr,
+            )
             sys.exit(1)
         if args.source_device >= len(devices):
-            print(f"--source-device {args.source_device} out of range.",
-                  file=sys.stderr)
+            print(
+                f"--source-device {args.source_device} out of range.", file=sys.stderr
+            )
             sys.exit(1)
         source_device_index = args.source_device
 

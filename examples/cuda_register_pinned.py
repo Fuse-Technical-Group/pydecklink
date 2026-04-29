@@ -85,6 +85,7 @@ def run_register(
 
     def _on_sigint(_sig: int, _frame: object) -> None:
         stop[0] = True
+
     prev = signal.signal(signal.SIGINT, _on_sigint)
 
     captured = 0
@@ -97,11 +98,9 @@ def run_register(
             if frame is None or not frame.has_signal:
                 if now - last_status >= 0.5:
                     elapsed = int(now - started)
-                    state = ("waiting for signal" if captured == 0
-                             else "signal lost")
+                    state = "waiting for signal" if captured == 0 else "signal lost"
                     _print_status(
-                        f"{state}: {elapsed}s elapsed, "
-                        f"{captured}/{frame_count} frames"
+                        f"{state}: {elapsed}s elapsed, {captured}/{frame_count} frames"
                     )
                     last_status = now
                 continue
@@ -110,7 +109,9 @@ def run_register(
             size = int(arr.nbytes)
             if ptr not in registered:
                 (err,) = cudart.cudaHostRegister(
-                    ptr, size, cudart.cudaHostRegisterDefault,
+                    ptr,
+                    size,
+                    cudart.cudaHostRegisterDefault,
                 )
                 _check(err, "cudaHostRegister")
                 registered[ptr] = size
@@ -119,8 +120,7 @@ def run_register(
         sys.stdout.write("\n")
         sys.stdout.flush()
         suffix = " (interrupted)" if stop[0] else ""
-        print(f"[register] frames={captured} "
-              f"unique_buffers={len(registered)}{suffix}")
+        print(f"[register] frames={captured} unique_buffers={len(registered)}{suffix}")
     finally:
         dev.stop_streams()
         dev.disable_video_input()
@@ -138,11 +138,15 @@ def main() -> None:
         description="Retroactively CUDA-pin SDK-allocated capture buffers.",
     )
     parser.add_argument(
-        "--device", type=int, default=0,
+        "--device",
+        type=int,
+        default=0,
         help="DeckLink device index for capture.",
     )
     parser.add_argument(
-        "--frames", type=int, default=60,
+        "--frames",
+        type=int,
+        default=60,
         help="Number of valid frames to capture.",
     )
     parser.add_argument(
@@ -160,8 +164,10 @@ def main() -> None:
 
     devices = pydecklink.list_devices()
     if args.device >= len(devices):
-        print(f"Device index {args.device} out of range "
-              f"({len(devices)} devices found).", file=sys.stderr)
+        print(
+            f"Device index {args.device} out of range ({len(devices)} devices found).",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     run_register(
