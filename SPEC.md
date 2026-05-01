@@ -110,8 +110,10 @@ per-frame CPU overhead to ~4.7ms at 4K 59.94 10-bit YUV, leaving
 The SDK v15.3 provides `IDeckLinkVideoBufferAllocator` and
 `IDeckLinkVideoBufferAllocatorProvider` to control how DMA buffers
 are allocated. The binding exposes these as `VideoBufferAllocator`
-and `VideoBufferAllocatorProvider`, backed by `ManagedBuffer`
-(an `IDeckLinkVideoBuffer` implementation).
+and `VideoBufferAllocatorProvider`. Each `AllocateVideoBuffer` call
+returns a `ManagedBuffer` — a per-issuance `IDeckLinkVideoBuffer`
+handle wrapping a pooled memory chunk owned by the allocator's
+free-list.
 
 By default, allocators use malloc/free. Users can supply custom
 Python callables for alloc/free at construction time. The allocator
@@ -133,7 +135,7 @@ configuration choice, not a code change to pydecklink.
 
 #### COM contract
 
-`ManagedBuffer`, `VideoBufferAllocator`, and
+The handle (`ManagedBuffer`), `VideoBufferAllocator`, and
 `VideoBufferAllocatorProvider` all implement `IUnknown::QueryInterface`
 to return the correct interface pointer for `IID_IUnknown` and for
 the implementing type's own IID, with `AddRef` on success. The SDK
@@ -151,12 +153,28 @@ allocators (`cudaHostAlloc`, `hipHostMalloc`, `zeMemAllocHost`)
 it is fatal — these are kernel page-table operations (~1 ms each)
 that cannot sustain frame-rate alloc/free cycles.
 
-The allocator maintains a free-list. When the SDK releases a
-`ManagedBuffer` (COM refcount → 0), the buffer returns to the
-parent allocator's free-list instead of calling the free function.
-The next `AllocateVideoBuffer` call returns a recycled buffer.
-The free function is called only when the allocator itself is
-destroyed.
+The allocator separates per-issuance lifetime from memory lifetime
+to keep COM semantics standard while still pooling the expensive
+allocation:
+
+- A *pooled buffer* — the raw memory chunk + size — is owned by
+  the allocator's free-list. Created once via the user-supplied
+  alloc function; freed via the user-supplied free function only
+  when the allocator itself is destroyed.
+- A *handle* (`ManagedBuffer` in Python) is a per-issuance COM
+  object implementing `IDeckLinkVideoBuffer`. Each
+  `AllocateVideoBuffer` returns a fresh handle wrapping a pooled
+  buffer popped from the free-list (or freshly allocated when the
+  list is empty). When the handle's COM refcount reaches zero,
+  the handle destructs (standard COM) and its destructor returns
+  the underlying pooled buffer to the free-list. The next
+  `AllocateVideoBuffer` reuses that pooled buffer in a fresh
+  handle.
+
+This split keeps `Release()→0 → delete this` true for the COM
+object, while the pooled memory amortizes across many issuances.
+The handle's own heap allocation is a few dozen bytes — negligible
+versus the page-locking syscalls the pool exists to avoid.
 
 This recycling is internal to the SDK's COM `Release` path.
 Python-owned buffers (created via `allocator.allocate()` for the
