@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.2.1](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.2.0...v0.2.1) (2026-05-02)
+
+
+### Added
+
+* allocator capture pipeline — bugfixes, examples, real-time defaults ([9d722dd](https://github.com/Fuse-Technical-Group/pydecklink/commit/9d722dd0aa8acf6c7244c78e1535e2ba4c7c401c))
+* **examples:** --profile flag with per-frame L1/L2/L3 latency ([5d1683f](https://github.com/Fuse-Technical-Group/pydecklink/commit/5d1683fbe2262b339752a986f83af3fe79111f83))
+* **examples:** cuda-pinned capture patterns via cuda-python ([475139d](https://github.com/Fuse-Technical-Group/pydecklink/commit/475139d9bbfa98b2f8a4f9d0c8af026d5dd35d93))
+* **examples:** default cuda_pinned_capture to 4K59.94 / 10-bit YUV ([cc9e0e3](https://github.com/Fuse-Technical-Group/pydecklink/commit/cc9e0e377ad0c5e767c18eb04771d37004b9b6bc))
+* **examples:** self-loopback + free-list prefill in cuda_pinned_capture ([327177b](https://github.com/Fuse-Technical-Group/pydecklink/commit/327177b4d9b776c59c76ab9625853a06ff0a4a77))
+* **examples:** split into pipelined (production recipe) + register ([297b200](https://github.com/Fuse-Technical-Group/pydecklink/commit/297b200b8dd8f9c074dc38481d4fa9c0fb356cdd))
+* **input:** expose max_queue, default to 1 for real-time capture ([f9a4a17](https://github.com/Fuse-Technical-Group/pydecklink/commit/f9a4a17a4ba30c7eeb03654470ddd563af1bcd27))
+
+
+### Fixed
+
+* **allocator:** cross-platform IID comparison helper ([4e280f5](https://github.com/Fuse-Technical-Group/pydecklink/commit/4e280f5b9ab044d32b488c3bb04f6473942e2435))
+* **allocator:** drop unmatched inc_ref on captured callables ([7367f90](https://github.com/Fuse-Technical-Group/pydecklink/commit/7367f9094bed06bd405fe909b5c383e09fd42821))
+* **allocator:** prefill API + COM QueryInterface correctness ([71f03e4](https://github.com/Fuse-Technical-Group/pydecklink/commit/71f03e41788152691d48973c4a1a0884d660d29b))
+* **allocator:** use IUnknownUUID, regenerate stub for CI ([abd89d7](https://github.com/Fuse-Technical-Group/pydecklink/commit/abd89d7eda2a99b0370af124423d8776a8f3234f))
+* **devcontainer:** drop redundant useradd in CUDA variant ([81e86df](https://github.com/Fuse-Technical-Group/pydecklink/commit/81e86df923834438be6dd08eb8bf986c0868dd40))
+* **examples:** live progress + clean SIGINT in cuda_pinned_capture ([15c881b](https://github.com/Fuse-Technical-Group/pydecklink/commit/15c881bb6dbbcdbf5b166ac02fc722302530226e))
+* **input:** pair StartAccess/EndAccess across CaptureFrameRef lifetime ([fd5038e](https://github.com/Fuse-Technical-Group/pydecklink/commit/fd5038ef23ea7e53bdeaefa824ac72e044d0b826))
+
 ## [0.2.0](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.1.19...v0.2.0) (2026-04-23)
 
 
