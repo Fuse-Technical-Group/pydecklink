@@ -20,18 +20,32 @@ using FreeFn = std::function<void(void*, size_t)>;
 
 class VideoBufferAllocator;
 
-/// A managed video buffer backed by externally allocated memory.
-/// Implements IDeckLinkVideoBuffer so the DeckLink SDK can use it
-/// for both input (via allocator provider) and output (via
-/// CreateVideoFrameWithBuffer).
+/// Pooled backing memory. Owned by the parent allocator's free-list
+/// across all issuances. A `PooledBuffer` is created once (via the
+/// allocator's `alloc_fn`) and returned to the free-list each time the
+/// `BufferHandle` wrapping it is released. Its memory is freed via
+/// `free_fn` only when the parent allocator is destroyed.
+struct PooledBuffer {
+    void* data;
+    size_t size;
+};
+
+/// Per-issuance COM handle implementing IDeckLinkVideoBuffer.
 ///
-/// On COM `Release()` reaching zero, the buffer returns to its parent
-/// allocator's free-list rather than freeing its memory. The buffer's
-/// memory is freed only when the parent allocator is destroyed. See
-/// SPEC §4 — buffer recycling.
-class ManagedBuffer : public IDeckLinkVideoBuffer {
+/// Standard COM lifetime: `Release()` reaching zero destroys this
+/// object (`delete this`). The destructor returns the underlying
+/// `PooledBuffer*` to the parent allocator's free-list. The pooled
+/// memory itself is not freed — it is amortized across many handle
+/// issuances. This is the recycling mechanism that lets a Python-side
+/// allocator (e.g. `cudaHostAlloc`) avoid running on the SDK input
+/// thread at signal rate.
+///
+/// The handle holds a strong ref on the parent allocator via
+/// `ComPtr<VideoBufferAllocator>`, so the parent stays alive across
+/// the handle's lifetime and can service `return_to_free_list`.
+class BufferHandle : public IDeckLinkVideoBuffer {
 public:
-    ManagedBuffer(VideoBufferAllocator* parent, size_t size, void* data);
+    BufferHandle(ComPtr<VideoBufferAllocator> parent, PooledBuffer* pooled);
 
     // IUnknown
     HRESULT QueryInterface(REFIID iid, void** ppv) override {
@@ -54,52 +68,48 @@ public:
         return S_OK;
     }
     ULONG AddRef() override { return ++ref_count_; }
-    ULONG Release() override;  // Defined after VideoBufferAllocator.
+    ULONG Release() override {
+        ULONG c = --ref_count_;
+        if (c == 0) delete this;
+        return c;
+    }
 
     // IDeckLinkVideoBuffer
     HRESULT GetBytes(void** buffer) override {
         if (!buffer) return E_INVALIDARG;
-        *buffer = data_;
+        *buffer = pooled_->data;
         return S_OK;
     }
 
     HRESULT StartAccess(BMDBufferAccessFlags) override { return S_OK; }
     HRESULT EndAccess(BMDBufferAccessFlags) override { return S_OK; }
 
-    size_t size() const { return size_; }
-    void* data() const { return data_; }
+    size_t size() const { return pooled_->size; }
+    void* data() const { return pooled_->data; }
 
 private:
-    friend class VideoBufferAllocator;
-
-    /// Reset to live state when popped from the parent's free-list.
-    /// The parent already holds a strong ref on behalf of the new
-    /// owner of this buffer (Python or SDK), so do not AddRef again.
-    void revive() { ref_count_.store(1); }
+    ~BufferHandle();  // Defined after VideoBufferAllocator.
 
     std::atomic<ULONG> ref_count_;
-    size_t size_;
-    void* data_;
-    /// Borrowed pointer. The buffer keeps the parent alive via an
-    /// AddRef'd ref while the buffer's refcount is non-zero. While
-    /// the buffer sits on the parent's free-list (refcount == 0),
-    /// the parent owns the buffer instead — see `return_to_free_list`.
-    VideoBufferAllocator* parent_;
+    PooledBuffer* pooled_;                   // Borrowed; returned to pool on dtor.
+    ComPtr<VideoBufferAllocator> parent_;    // Strong ref keeps parent alive.
 };
 
 /// Implements IDeckLinkVideoBufferAllocator.
 ///
-/// Backs `ManagedBuffer` instances with memory from a configurable
-/// allocation function (defaults to malloc/free). Suitable for
-/// CUDA `cudaHostAlloc`, HIP `hipHostMalloc`, or any custom allocator.
+/// Backs `BufferHandle` instances with `PooledBuffer` memory from a
+/// configurable allocation function (defaults to malloc/free). Suitable
+/// for CUDA `cudaHostAlloc`, HIP `hipHostMalloc`, or any custom
+/// allocator.
 ///
-/// Maintains a free-list of recycled buffers. When the SDK releases
-/// a `ManagedBuffer` (COM refcount → 0), the buffer returns to the
-/// free-list instead of calling `free_fn`. The next
-/// `AllocateVideoBuffer` pops from the free-list when non-empty.
-/// `free_fn` runs only on allocator destruction, draining all
-/// recycled buffers. This avoids the ~1ms-per-call cost of GPU
-/// page-locking syscalls at frame rate (SPEC §4).
+/// Maintains a free-list of `PooledBuffer*`. When a `BufferHandle` is
+/// released (COM refcount → 0), the handle destructs and returns its
+/// `PooledBuffer*` to the free-list instead of calling `free_fn`. The
+/// next `AllocateVideoBuffer` pops a `PooledBuffer*` from the free-list
+/// (when non-empty) and wraps it in a fresh `BufferHandle`. `free_fn`
+/// runs only on allocator destruction, draining all pooled buffers.
+/// This avoids the ~1ms-per-call cost of GPU page-locking syscalls at
+/// frame rate (SPEC §4).
 class VideoBufferAllocator : public IDeckLinkVideoBufferAllocator {
 public:
     VideoBufferAllocator(size_t buffer_size,
@@ -110,17 +120,16 @@ public:
           free_fn_(free_fn ? std::move(free_fn) : default_free) {}
 
     ~VideoBufferAllocator() {
-        // Drain the free-list: free each recycled buffer's backing
-        // memory and delete the ManagedBuffer object. Live buffers
-        // (refcount > 0) cannot reach this destructor — they hold
-        // the parent's free-list slot indirectly via the SDK or
-        // Python wrapper.
+        // Drain the free-list: free each pooled buffer's backing memory
+        // and delete the PooledBuffer record. Live handles cannot
+        // reach this destructor — each handle holds a strong ref on
+        // us via its `parent_` ComPtr.
         std::lock_guard<std::mutex> lock(free_list_mutex_);
-        for (ManagedBuffer* buf : free_list_) {
-            if (buf->data_ && free_fn_) {
-                free_fn_(buf->data_, buf->size_);
+        for (PooledBuffer* p : free_list_) {
+            if (p->data && free_fn_) {
+                free_fn_(p->data, p->size);
             }
-            delete buf;
+            delete p;
         }
         free_list_.clear();
     }
@@ -150,34 +159,14 @@ public:
     HRESULT AllocateVideoBuffer(IDeckLinkVideoBuffer** allocatedBuffer) override {
         if (!allocatedBuffer) return E_INVALIDARG;
 
-        // Fast path: pop from free-list. The free-list owns recycled
-        // buffers (no parent ref); reviving transfers ownership back
-        // to the new caller, who needs a parent ref to keep us alive.
-        {
-            std::lock_guard<std::mutex> lock(free_list_mutex_);
-            if (!free_list_.empty()) {
-                ManagedBuffer* recycled = free_list_.back();
-                free_list_.pop_back();
-                recycled->revive();
-                AddRef();  // The buffer holds a ref on us again.
-                *allocatedBuffer = recycled;
-                return S_OK;
-            }
-        }
+        PooledBuffer* pooled = take_or_alloc();
+        if (!pooled) return E_OUTOFMEMORY;
 
-        // Slow path: invoke alloc_fn. ManagedBuffer constructor AddRefs us.
-        // With Python alloc callbacks, this path acquires the GIL and
-        // calls into Python — taking milliseconds, which the SDK input
-        // pipeline cannot tolerate at signal-rate. Callers must
-        // pre-fill the free-list (see ``prefill``) before streaming
-        // starts so that this path never runs on the SDK thread.
-        void* mem = alloc_fn_(buffer_size_);
-        if (!mem) return E_OUTOFMEMORY;
-
-        auto* buf = new ManagedBuffer(this, buffer_size_, mem);
-        *allocatedBuffer = buf;
-
-        ++allocated_count_;
+        // AddRef paired with the ComPtr below adopting; the new
+        // BufferHandle takes ownership of this ref.
+        AddRef();
+        *allocatedBuffer = new BufferHandle(
+            ComPtr<VideoBufferAllocator>(this), pooled);
         return S_OK;
     }
 
@@ -193,7 +182,8 @@ public:
 
     ULONG refcount() const { return ref_count_.load(); }
 
-    /// Pre-allocate ``count`` buffers and seat them on the free-list.
+    /// Pre-allocate ``count`` pooled buffers and seat them on the
+    /// free-list.
     ///
     /// The SDK input pipeline calls ``AllocateVideoBuffer`` on its own
     /// thread when it needs a buffer. With Python alloc callbacks,
@@ -201,37 +191,31 @@ public:
     /// and returns — typically 1–10ms. The SDK pipeline cannot
     /// tolerate that latency at signal-rate, and stalls.
     ///
-    /// ``prefill`` runs the SLOW path ``count`` times on the *calling*
+    /// ``prefill`` runs ``alloc_fn`` ``count`` times on the *calling*
     /// thread (typically Python's main thread, before
-    /// ``start_streams``) and pushes each buffer onto the free-list.
-    /// At runtime the SDK's allocations take the FAST path with no
-    /// Python involvement. The buffers stay on the free-list until
-    /// the SDK requests one, at which point they are revived.
+    /// ``start_streams``) and pushes each ``PooledBuffer*`` directly
+    /// onto the free-list. At runtime the SDK's allocations take the
+    /// FAST path: pop a pooled buffer, wrap it in a fresh handle, no
+    /// Python involvement.
     void prefill(size_t count) {
-        std::vector<ManagedBuffer*> staged;
-        staged.reserve(count);
+        std::lock_guard<std::mutex> lock(free_list_mutex_);
+        free_list_.reserve(free_list_.size() + count);
         for (size_t i = 0; i < count; ++i) {
             void* mem = alloc_fn_(buffer_size_);
             if (!mem)
                 throw std::runtime_error(
                     "prefill: alloc_fn returned nullptr");
-            auto* buf = new ManagedBuffer(this, buffer_size_, mem);
+            free_list_.push_back(new PooledBuffer{mem, buffer_size_});
             ++allocated_count_;
-            staged.push_back(buf);
-        }
-        // Drop each buffer's ref to send it to the free-list. Each
-        // ManagedBuffer ctor AddRef'd the parent (us); Release brings
-        // the buffer's refcount to 0 and the parent ref drops with it.
-        for (ManagedBuffer* buf : staged) {
-            buf->Release();
+            ++recycled_count_;
         }
     }
 
-    /// Allocate a ManagedBuffer and return it (for Python use).
-    /// ManagedBuffer : public IDeckLinkVideoBuffer (single inheritance),
+    /// Allocate a BufferHandle and return it (for Python use).
+    /// BufferHandle : public IDeckLinkVideoBuffer (single inheritance),
     /// so the pointer layouts match and put() can receive the out-param.
-    ComPtr<ManagedBuffer> allocate_managed() {
-        ComPtr<ManagedBuffer> buf;
+    ComPtr<BufferHandle> allocate_managed() {
+        ComPtr<BufferHandle> buf;
         HRESULT hr = AllocateVideoBuffer(
             reinterpret_cast<IDeckLinkVideoBuffer**>(buf.put()));
         if (hr != S_OK || !buf)
@@ -240,14 +224,37 @@ public:
     }
 
 private:
-    friend class ManagedBuffer;
+    friend class BufferHandle;
 
-    /// Push a buffer back onto the free-list. Called by
-    /// `ManagedBuffer::Release` when refcount reaches zero.
-    void return_to_free_list(ManagedBuffer* buf) {
+    /// Push a pooled buffer back onto the free-list. Called by
+    /// `BufferHandle::~BufferHandle`.
+    void return_to_free_list(PooledBuffer* p) {
         std::lock_guard<std::mutex> lock(free_list_mutex_);
-        free_list_.push_back(buf);
+        free_list_.push_back(p);
         ++recycled_count_;
+    }
+
+    /// Pop a pooled buffer from the free-list, or allocate a fresh
+    /// one if the list is empty. Returns nullptr on alloc failure.
+    PooledBuffer* take_or_alloc() {
+        {
+            std::lock_guard<std::mutex> lock(free_list_mutex_);
+            if (!free_list_.empty()) {
+                PooledBuffer* p = free_list_.back();
+                free_list_.pop_back();
+                return p;
+            }
+        }
+        // Slow path: invoke alloc_fn. With Python alloc callbacks,
+        // this acquires the GIL and calls into Python — taking
+        // milliseconds, which the SDK input pipeline cannot tolerate
+        // at signal-rate. Callers must pre-fill the free-list (see
+        // ``prefill``) before streaming starts so this path never
+        // runs on the SDK thread.
+        void* mem = alloc_fn_(buffer_size_);
+        if (!mem) return nullptr;
+        ++allocated_count_;
+        return new PooledBuffer{mem, buffer_size_};
     }
 
     std::atomic<ULONG> ref_count_;
@@ -257,30 +264,23 @@ private:
     std::atomic<size_t> allocated_count_ = 0;
     std::atomic<size_t> recycled_count_ = 0;
     std::mutex free_list_mutex_;
-    std::vector<ManagedBuffer*> free_list_;  // Owned. Drained at allocator destruction.
+    std::vector<PooledBuffer*> free_list_;  // Owned. Drained at allocator destruction.
 
     static void* default_alloc(size_t size) { return std::malloc(size); }
     static void default_free(void* ptr, size_t) { std::free(ptr); }
 };
 
-inline ManagedBuffer::ManagedBuffer(VideoBufferAllocator* parent,
-                                    size_t size, void* data)
-    : ref_count_(1), size_(size), data_(data), parent_(parent) {
-    if (parent_) parent_->AddRef();  // Keep parent alive while buffer is live.
-}
+inline BufferHandle::BufferHandle(ComPtr<VideoBufferAllocator> parent,
+                                  PooledBuffer* pooled)
+    : ref_count_(1), pooled_(pooled), parent_(std::move(parent)) {}
 
-inline ULONG ManagedBuffer::Release() {
-    ULONG c = --ref_count_;
-    if (c == 0 && parent_) {
-        // Hand ownership of `this` to the parent's free-list. The
-        // parent's destructor drains the free-list and frees memory
-        // via free_fn. The buffer's parent ref is released LAST so
-        // the parent stays alive across return_to_free_list.
-        VideoBufferAllocator* parent = parent_;
-        parent->return_to_free_list(this);
-        parent->Release();  // Drop the buffer's ref on parent.
+inline BufferHandle::~BufferHandle() {
+    // Return the pooled buffer to the parent's free-list before the
+    // ComPtr drops the parent ref. The parent stays alive throughout
+    // this call (parent_ is a member that destructs after the body).
+    if (pooled_) {
+        parent_->return_to_free_list(pooled_);
     }
-    return c;
 }
 
 /// Implements IDeckLinkVideoBufferAllocatorProvider.

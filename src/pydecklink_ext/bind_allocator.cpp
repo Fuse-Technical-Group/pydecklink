@@ -41,13 +41,15 @@ FreeFn make_free_fn(std::optional<nb::callable>& free_fn) {
 
 void init_decklink_allocator(nb::module_& m, nb::class_<Device>& device) {
 
-    // -- ManagedBuffer --
-    nb::class_<ComPtr<ManagedBuffer>>(m, "ManagedBuffer")
+    // -- ManagedBuffer (C++ BufferHandle) --
+    // Python sees "ManagedBuffer"; the C++ type is BufferHandle, a per-issuance
+    // COM handle wrapping a pooled buffer (see allocator.h).
+    nb::class_<ComPtr<BufferHandle>>(m, "ManagedBuffer")
         .def_prop_ro("size",
-                     [](ComPtr<ManagedBuffer>& self) { return self->size(); },
+                     [](ComPtr<BufferHandle>& self) { return self->size(); },
                      "Buffer size in bytes.")
         .def_prop_ro("data", [](nb::handle self) {
-            auto& h = nb::cast<ComPtr<ManagedBuffer>&>(self);
+            auto& h = nb::cast<ComPtr<BufferHandle>&>(self);
             void* ptr = h->data();
             if (!ptr)
                 throw std::runtime_error("Buffer has no data");
@@ -55,7 +57,7 @@ void init_decklink_allocator(nb::module_& m, nb::class_<Device>& device) {
             return nb::ndarray<nb::numpy, uint8_t, nb::ndim<1>>(
                 ptr, {n}, self);
         }, "Writeable numpy uint8 view of the buffer.")
-        .def("__repr__", [](const ComPtr<ManagedBuffer>& self) {
+        .def("__repr__", [](const ComPtr<BufferHandle>& self) {
             return "ManagedBuffer(size=" + std::to_string(self->size()) + ")";
         }, nb::sig("def __repr__(self) -> str")); // avoid platform-specific C++ type in stub
 
@@ -105,7 +107,7 @@ void init_decklink_allocator(nb::module_& m, nb::class_<Device>& device) {
                      [](ComPtr<VideoBufferAllocator>& self) { return self->refcount(); },
                      "Internal COM refcount. Test/debug hook; not a public API.")
         .def("allocate",
-             [](ComPtr<VideoBufferAllocator>& self) -> ComPtr<ManagedBuffer> {
+             [](ComPtr<VideoBufferAllocator>& self) -> ComPtr<BufferHandle> {
                  return self->allocate_managed();
              },
              "Allocate a new ManagedBuffer.")
@@ -222,7 +224,7 @@ void init_decklink_allocator(nb::module_& m, nb::class_<Device>& device) {
                 throw std::runtime_error("No output callback");
 
             for (int i = 0; i < count; ++i) {
-                ComPtr<ManagedBuffer> buf = allocator->allocate_managed();
+                ComPtr<BufferHandle> buf = allocator->allocate_managed();
                 ComPtr<IDeckLinkMutableVideoFrame> frame;
                 HRESULT hr = self.output_->CreateVideoFrameWithBuffer(
                     width, height, row_bytes, pixel_format,
