@@ -37,7 +37,7 @@ struct CaptureFrame {
 /// The right place to pair them is the lifetime of the
 /// ``CaptureFrameRef`` itself: open the read window when the SDK
 /// delivers the frame to our InputCallback, close it when the consumer
-/// drops their last reference. ``ManagedBuffer`` makes both calls
+/// drops their last reference. ``BufferHandle`` makes both calls
 /// no-ops, but allocators that need real preparation (mapped GPU
 /// memory, macOS XPC-marshaled, dmabuf) depend on us honoring the
 /// pairing — so we do it correctly even though it's free in our case.
