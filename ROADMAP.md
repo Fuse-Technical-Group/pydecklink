@@ -2,25 +2,23 @@
 
 Derived from [SPEC.md](SPEC.md). Sections are in build-dependency order.
 
-## GPU DMA
+## Allocator cleanup
 
-### §road:allocator-buffer-recycling
-
-Add free-list to `VideoBufferAllocator` so SDK-managed buffers
-recycle on COM `Release` instead of calling `free_fn`. Touches
-`allocator.h` and `bind_allocator.cpp`. §spec:gpu-pinned-memory
-
-### §road:cuda-host-register-example
-
-Example script showing `cudaHostRegister` (pin SDK-allocated
-buffers on first sight) and allocator-based (`cudaHostAlloc`)
-capture patterns. New file `examples/cuda_pinned_capture.py`.
-Depends on §road:allocator-buffer-recycling. §spec:gpu-pinned-memory
-
-**Verify:** custom alloc/free callables that log calls show: alloc
-called N times at startup, free never called during capture, free
-called N times at shutdown. `recycled_count` property confirms
-buffer reuse.
+- **split-pooled-buffer-handle**: Refactor `ManagedBuffer` into a
+  pure-data `PooledBuffer` (memory + size, owned by the allocator's
+  free-list) and a per-issuance `BufferHandle` (implements
+  `IDeckLinkVideoBuffer`, standard COM semantics, dtor returns
+  `PooledBuffer*` to the free-list). Restores standard COM
+  refcount semantics — `Release()→0` destroys the handle instead
+  of the current "refcount==0 still valid memory" exception that
+  fights `ComPtr`. Removes `revive()`, the manual AddRef/Release
+  pair in ctor/Release, and the `ManagedBuffer*` raw-owning
+  free-list. Per-issuance `new BufferHandle` is a tiny heap object
+  (no syscall) — the pool still amortizes the expensive `cudaHostAlloc`.
+  Hardware regression: existing `TestCustomAllocatorZeroCopy` plus a
+  4K59.94/10-bit loopback run. Raised in PR #110 review (#110 lands
+  the recycling design as-is; this workstream closes the COM-semantics
+  gap).
 
 ## Future
 

@@ -129,7 +129,18 @@ output pool and are recycled via `ScheduledFrameCompleted`.
 
 This infrastructure is allocator-agnostic. CUDA pinned memory,
 HIP pinned memory, or any other page-locked allocator is a
-configuration choice, not a code change.
+configuration choice, not a code change to pydecklink.
+
+#### COM contract
+
+`ManagedBuffer`, `VideoBufferAllocator`, and
+`VideoBufferAllocatorProvider` all implement `IUnknown::QueryInterface`
+to return the correct interface pointer for `IID_IUnknown` and for
+the implementing type's own IID, with `AddRef` on success. The SDK
+relies on this to wrap our buffers into its internal video-frame
+objects. Returning `E_NOINTERFACE` for the type's own IID is a
+contract violation that stalls the SDK input pipeline at the
+no-signal → signal-locked transition.
 
 #### Buffer recycling
 
@@ -137,7 +148,7 @@ The SDK treats capture buffers as disposable: allocate via
 `AllocateVideoBuffer`, DMA-fill, deliver via callback, `Release`
 when done. With malloc this is nanoseconds. With GPU pinned
 allocators (`cudaHostAlloc`, `hipHostMalloc`, `zeMemAllocHost`)
-it is fatal — these are kernel page-table operations (~1ms each)
+it is fatal — these are kernel page-table operations (~1 ms each)
 that cannot sustain frame-rate alloc/free cycles.
 
 The allocator maintains a free-list. When the SDK releases a
@@ -152,6 +163,24 @@ Python-owned buffers (created via `allocator.allocate()` for the
 output frame pool) are unaffected — those buffers live for the
 duration of the pool and recycle at the frame level via
 `ScheduledFrameCompleted`.
+
+#### Pre-fill for slow allocators
+
+Recycling closes the loop in steady state but doesn't cover the
+no-signal → signal-locked transition: the SDK requests fresh
+buffers when its internal pipeline reconfigures, and a Python
+allocator callback (which acquires the GIL and dispatches into
+Python) takes ~1–10 ms — far longer than the SDK input thread can
+tolerate. The thread blocks, no callbacks fire, the pipeline
+stalls.
+
+`VideoBufferAllocator.prefill(count)` runs the slow path on the
+calling thread before `start_streams`, seating `count` buffers on
+the free-list. Mid-stream allocations then take the FAST path
+(free-list pop) with no Python involvement. Empirically 2 buffers
+cover the transition with `input_queue_depth=1`; 4 is a small
+safety margin. Default-malloc allocators don't need pre-fill
+because their slow path is microseconds.
 
 ### GPU pinned memory integration §spec:gpu-pinned-memory
 
@@ -178,7 +207,12 @@ CUDA and HIP also offer a "register existing memory" path
 (`cudaHostRegister` / `hipHostRegister`) that pins malloc'd
 buffers after allocation. Intel Level Zero has no equivalent.
 The register path is a consumer-side pattern that requires no
-pydecklink changes — see `examples/cuda_pinned_capture.py`.
+pydecklink changes — see `examples/cuda_register_pinned.py`.
+
+`examples/cuda_pinned_pipelined.py` is the production-shaped
+recipe for the allocator path: capture and consumer on separate
+threads, GPU buffer pool, GC tuned for the hot loop, end-to-end
+delivery latency reported.
 
 #### Synchronization contract
 
@@ -191,6 +225,17 @@ DeckLink DMA and GPU copies must not overlap on the same buffer:
   completes.
 - Triple-buffer pattern: DeckLink writes buffer N, GPU copies
   buffer N-1, GPU processes buffer N-2.
+
+The SDK exposes `IDeckLinkVideoBuffer::StartAccess` /
+`EndAccess` as the access-synchronization primitive — independent
+of COM refcount. The binding opens a read access window on each
+delivered frame's `ManagedBuffer` in `InputCallback::VideoInputFrameArrived`
+and closes it in the `CaptureFrameRef` destructor. Allocators
+with non-trivial access semantics (mapped GPU memory, macOS
+XPC-marshaled buffers, dmabuf) implement these as real
+preparation/coherency operations; `ManagedBuffer` makes them
+no-ops because cudaHostAlloc-backed memory is always
+CPU-accessible.
 
 #### cudaHostAlloc flags
 
@@ -209,6 +254,15 @@ frames into bounded thread-safe queues; Python consumes via blocking
 pop. The queue drops oldest frames on overflow, matching hardware
 behavior. In zero-copy mode, the callback AddRefs the SDK frame and
 enqueues a lightweight reference — no pixel copy.
+
+The bounded depth is exposed as `input_queue_depth` on
+`enable_video_input` and `enable_video_input_with_allocator`,
+defaulting to 1 — the right cap for real-time consumers (drop
+late frames, never lag). Recorder-style consumers can raise it
+to absorb consumer-side jitter at the cost of latency and (in
+zero-copy mode) buffer-pool pressure: each queued frame holds an
+AddRef on a `ManagedBuffer`, keeping it off the allocator's
+free-list.
 
 ## 5. Python API
 
@@ -261,7 +315,8 @@ blocking pop.
 
 Setup:
 
-- `device.enable_video_input(mode, pixel_format, flags=0)`
+- `device.enable_video_input(mode, pixel_format, flags=0,
+  zero_copy=False, input_queue_depth=1)`
 - `device.start_streams()`
 - `device.stop_streams()`
 - `device.disable_video_input()`
@@ -462,6 +517,21 @@ Capture on one sub-device, play out on another (requires a card with
 both input and output, or two cards). Verify frame data integrity
 end-to-end.
 
+### 7.6 Custom-allocator + zero-copy + signal-locked recycling
+
+Streams signal-locked frames through a custom allocator (Python
+`libc.malloc` / `libc.free` callbacks via ctypes), zero-copy
+delivery, `prefill(4)`. Asserts:
+
+- frames are delivered (input thread didn't stall);
+- `recycled_count > 0` (free-list cycle is closed at runtime);
+- `allocated_count` stable after prefill (no SLOW path during
+  streaming).
+
+Each assertion guards a distinct failure mode of the recycling
+path: stall on slow allocator, broken Release-to-free-list cycle,
+SLOW-path growth on the SDK input thread.
+
 ## 8. Secondary Use Case: Test Pattern Generation
 
 *Status: not started*
@@ -479,23 +549,37 @@ The integration path is the same as pyntv2's §8: a narrow
 Wraps `IDeckLinkVideoBufferAllocator`, `IDeckLinkVideoBufferAllocatorProvider`,
 and `IDeckLinkVideoBuffer` for user-controlled DMA buffer allocation.
 
-- `VideoBufferAllocator(size)` — allocator producing buffers of
-  `size` bytes. Uses malloc/free by default.
+- `VideoBufferAllocator(size, alloc=None, free=None)` — allocator
+  producing buffers of `size` bytes. Optional Python callables
+  override the default malloc/free.
 - `VideoBufferAllocator.allocate() → ManagedBuffer`
+- `VideoBufferAllocator.prefill(count) → None` — pre-allocate
+  `count` buffers and seat them on the free-list. Required before
+  `start_streams` whenever `alloc` is a Python callable; see §4
+  buffer recycling for why.
 - `VideoBufferAllocator.size → int`
 - `VideoBufferAllocator.allocated_count → int`
-- `VideoBufferAllocatorProvider()` — creates allocators on demand,
-  caching by buffer size.
+- `VideoBufferAllocator.recycled_count → int` — number of times
+  a `ManagedBuffer` has been pushed back onto the free-list.
+- `VideoBufferAllocatorProvider(alloc=None, free=None)` — creates
+  allocators on demand, caching by buffer size.
 - `VideoBufferAllocatorProvider.get_allocator(buffer_size, width,
   height, row_bytes, pixel_format) → VideoBufferAllocator`
 - `ManagedBuffer.data → numpy.ndarray` — writeable uint8 view.
 - `ManagedBuffer.size → int`
 - `device.enable_video_input_with_allocator(mode, pixel_format,
-  flags, allocator_provider, zero_copy=True)` — capture with
-  custom-allocated DMA buffers.
+  flags, allocator_provider, zero_copy=True, input_queue_depth=1)`
+  — capture with custom-allocated DMA buffers.
 - `device.create_frame_pool_pinned(count, width, height, row_bytes,
   pixel_format, allocator)` — output pool backed by
   allocator-managed buffers via `CreateVideoFrameWithBuffer`.
+
+When `alloc` and `free` are top-level module functions, a reference
+cycle forms via the function's `__globals__` that Python's GC
+cannot break (the cycle passes through C++). Callers wrap setup
+in a function so the allocator and its callbacks are local
+variables; the cycle is reclaimed when that function returns.
+Both CUDA examples follow this pattern.
 
 ### 5.11 Device Status and Reference Input
 
@@ -588,10 +672,13 @@ how `get_attribute_int` already behaves.
 
 ## 9. Explicit Non-Goals (Phase 1)
 
-- **GPU RDMA.** The allocator infrastructure and buffer recycling
-  design support GPU pinned memory (§spec:gpu-pinned-memory).
-  Wiring a specific GPU allocator is a consumer configuration step,
-  not a pydecklink code change.
+- **GPU RDMA.** The allocator infrastructure, free-list recycling,
+  and `prefill` API support GPU pinned memory
+  (§spec:gpu-pinned-memory). Wiring a specific GPU allocator (CUDA,
+  HIP, Level Zero) is a consumer step; pydecklink imports no GPU
+  toolkit. True GPU RDMA — DMA from PCIe direct into GPU VRAM,
+  bypassing host memory — is not implemented; the SDK's deprecated
+  DVP / GPUDirect headers have no maintained path.
 - **Audio.** Deferred. The SDK supports audio scheduling; the binding
   does not expose it yet.
 - **Ancillary data.** Timecode, closed captions — deferred.

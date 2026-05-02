@@ -28,13 +28,72 @@ struct CaptureFrame {
 };
 
 /// Zero-copy captured frame holding a ref to the SDK's IDeckLinkVideoInputFrame.
+///
+/// Per SDK §2.5.53.2, ``StartAccess(Read)``/``EndAccess(Read)`` is the
+/// access-synchronization primitive — it bounds the interval the
+/// consumer is reading the buffer's contents. Independent of the COM
+/// refcount on the wrapping IDeckLinkVideoInputFrame.
+///
+/// The right place to pair them is the lifetime of the
+/// ``CaptureFrameRef`` itself: open the read window when the SDK
+/// delivers the frame to our InputCallback, close it when the consumer
+/// drops their last reference. ``ManagedBuffer`` makes both calls
+/// no-ops, but allocators that need real preparation (mapped GPU
+/// memory, macOS XPC-marshaled, dmabuf) depend on us honoring the
+/// pairing — so we do it correctly even though it's free in our case.
+///
+/// Move-only: the access window is a non-copyable resource. After a
+/// move, the source no longer owns the window.
 struct CaptureFrameRef {
     ComPtr<IDeckLinkVideoInputFrame> frame;
+    ComPtr<IDeckLinkVideoBuffer> buf;  // For StartAccess/EndAccess.
+    bool access_open = false;          // True if we owe an EndAccess(Read).
     bool has_signal = true;
     int64_t stream_time = 0;
     int64_t stream_duration = 0;
     int64_t hw_ref_timestamp = 0;
     int64_t callback_arrived_us = 0;  // CLOCK_MONOTONIC_RAW, microseconds
+
+    CaptureFrameRef() = default;
+    CaptureFrameRef(const CaptureFrameRef&) = delete;
+    CaptureFrameRef& operator=(const CaptureFrameRef&) = delete;
+
+    CaptureFrameRef(CaptureFrameRef&& o) noexcept
+        : frame(std::move(o.frame)),
+          buf(std::move(o.buf)),
+          access_open(o.access_open),
+          has_signal(o.has_signal),
+          stream_time(o.stream_time),
+          stream_duration(o.stream_duration),
+          hw_ref_timestamp(o.hw_ref_timestamp),
+          callback_arrived_us(o.callback_arrived_us) {
+        o.access_open = false;
+    }
+
+    CaptureFrameRef& operator=(CaptureFrameRef&& o) noexcept {
+        if (this != &o) {
+            close_access();
+            frame = std::move(o.frame);
+            buf = std::move(o.buf);
+            access_open = o.access_open;
+            o.access_open = false;
+            has_signal = o.has_signal;
+            stream_time = o.stream_time;
+            stream_duration = o.stream_duration;
+            hw_ref_timestamp = o.hw_ref_timestamp;
+            callback_arrived_us = o.callback_arrived_us;
+        }
+        return *this;
+    }
+
+    ~CaptureFrameRef() { close_access(); }
+
+    void close_access() {
+        if (access_open && buf) {
+            buf->EndAccess(bmdBufferAccessRead);
+        }
+        access_open = false;
+    }
 
     long width() const { return frame ? frame->GetWidth() : 0; }
     long height() const { return frame ? frame->GetHeight() : 0; }
@@ -59,8 +118,8 @@ public:
     // Copy-construct input_: shares a ref with the caller's ComPtr.
     // The cycle this creates (input <-> callback) is broken by
     // Device's destructor calling input_->SetCallback(nullptr).
-    InputCallback(const ComPtr<IDeckLinkInput>& input, size_t max_queue = 8, bool zero_copy = false)
-        : ref_count_(1), input_(input), max_queue_(max_queue),
+    InputCallback(const ComPtr<IDeckLinkInput>& input, size_t input_queue_depth = 1, bool zero_copy = false)
+        : ref_count_(1), input_(input), input_queue_depth_(input_queue_depth),
           format_detection_enabled_(false), zero_copy_(zero_copy) {}
 
     void set_format_detection(bool enabled) {
@@ -132,10 +191,19 @@ public:
         videoFrame->GetHardwareReferenceTimestamp(timescale_, &hw_time, &hw_dur);
 
         if (zero_copy_) {
-            // Zero-copy path: AddRef the SDK frame and enqueue.
+            // Zero-copy path: AddRef the SDK frame, open the read access
+            // window, and enqueue. The window stays open for the
+            // lifetime of the CaptureFrameRef; its destructor closes it.
             CaptureFrameRef cfr;
             videoFrame->AddRef();
             cfr.frame = ComPtr<IDeckLinkVideoInputFrame>(videoFrame);
+            videoFrame->QueryInterface(IID_IDeckLinkVideoBuffer,
+                                       (void**)cfr.buf.put());
+            if (cfr.buf) {
+                if (cfr.buf->StartAccess(bmdBufferAccessRead) == S_OK) {
+                    cfr.access_open = true;
+                }
+            }
             cfr.has_signal = has_signal;
             cfr.stream_time = st;
             cfr.stream_duration = sd;
@@ -144,7 +212,7 @@ public:
 
             {
                 std::lock_guard<std::mutex> lock(ref_queue_mutex_);
-                if (ref_queue_.size() >= max_queue_)
+                if (ref_queue_.size() >= input_queue_depth_)
                     ref_queue_.pop();
                 ref_queue_.push(std::move(cfr));
             }
@@ -177,7 +245,7 @@ public:
 
             {
                 std::lock_guard<std::mutex> lock(queue_mutex_);
-                if (queue_.size() >= max_queue_)
+                if (queue_.size() >= input_queue_depth_)
                     queue_.pop();
                 queue_.push(std::move(cf));
             }
@@ -224,7 +292,7 @@ public:
 private:
     std::atomic<ULONG> ref_count_;
     ComPtr<IDeckLinkInput> input_;  // Owns a ref; cycle broken by ~Device.
-    size_t max_queue_;
+    size_t input_queue_depth_;
     bool format_detection_enabled_;
     bool zero_copy_;
     int64_t timescale_ = 10000000;  // Default 10MHz.

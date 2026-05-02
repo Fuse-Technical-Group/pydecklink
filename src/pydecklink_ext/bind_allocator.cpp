@@ -81,13 +81,26 @@ void init_decklink_allocator(nb::module_& m, nb::class_<Device>& device) {
              "         Defaults to malloc.\n"
              "  free: Optional callable(ptr: int, size: int) -> None.\n"
              "        Defaults to free.\n\n"
-             "For CUDA pinned memory, pass cudaHostAlloc/cudaFreeHost wrappers.")
+             "For CUDA pinned memory, pass cudaHostAlloc/cudaFreeHost wrappers.\n\n"
+             "Note on lifecycle: when ``alloc`` and ``free`` are top-level\n"
+             "module functions, a reference cycle forms via\n"
+             "``func.__globals__`` that Python's GC cannot break (it\n"
+             "passes through C++). Wrap your setup in a function so the\n"
+             "allocator and its callbacks are local variables and the\n"
+             "cycle is reclaimed when that function returns. Both\n"
+             "examples (``cuda_pinned_pipelined.py``,\n"
+             "``cuda_register_pinned.py``) follow this pattern.")
         .def_prop_ro("size",
                      [](ComPtr<VideoBufferAllocator>& self) { return self->buffer_size(); },
                      "Buffer size that this allocator produces.")
         .def_prop_ro("allocated_count",
                      [](ComPtr<VideoBufferAllocator>& self) { return self->allocated_count(); },
                      "Number of buffers allocated so far.")
+        .def_prop_ro("recycled_count",
+                     [](ComPtr<VideoBufferAllocator>& self) { return self->recycled_count(); },
+                     "Number of times a buffer has been returned to the free-list. "
+                     "Each release of a ManagedBuffer increments this counter; the "
+                     "next AllocateVideoBuffer reuses the recycled memory.")
         .def_prop_ro("_refcount",
                      [](ComPtr<VideoBufferAllocator>& self) { return self->refcount(); },
                      "Internal COM refcount. Test/debug hook; not a public API.")
@@ -96,6 +109,18 @@ void init_decklink_allocator(nb::module_& m, nb::class_<Device>& device) {
                  return self->allocate_managed();
              },
              "Allocate a new ManagedBuffer.")
+        .def("prefill",
+             [](ComPtr<VideoBufferAllocator>& self, size_t count) {
+                 self->prefill(count);
+             },
+             nb::arg("count"),
+             "Pre-allocate ``count`` buffers and seat them on the "
+             "free-list. Use this before ``start_streams`` when the "
+             "allocator wraps a Python callback (e.g. cudaHostAlloc): "
+             "each SLOW-path allocation pays a GIL+Python round-trip, "
+             "which the SDK input pipeline cannot tolerate at signal "
+             "rate. Pre-filling moves all that cost to the calling "
+             "thread; runtime allocations take the FAST path.")
         .def("__repr__", [](const ComPtr<VideoBufferAllocator>& self) {
             return "VideoBufferAllocator(size=" +
                    std::to_string(self->buffer_size()) + ", allocated=" +
@@ -120,7 +145,14 @@ void init_decklink_allocator(nb::module_& m, nb::class_<Device>& device) {
              "  alloc: Optional callable(size: int) -> int returning a pointer.\n"
              "  free: Optional callable(ptr: int, size: int) -> None.\n\n"
              "Allocators are cached by buffer size. Custom alloc/free are\n"
-             "propagated to each VideoBufferAllocator created by the provider.")
+             "propagated to each VideoBufferAllocator created by the provider.\n\n"
+             "Note on lifecycle: when ``alloc`` and ``free`` are top-level\n"
+             "module functions, a reference cycle forms via\n"
+             "``func.__globals__`` that Python's GC cannot break (it\n"
+             "passes through C++). Wrap your setup in a function so the\n"
+             "provider and its callbacks are local variables and the\n"
+             "cycle is reclaimed when that function returns. The pipelined\n"
+             "example (``cuda_pinned_pipelined.py``) follows this pattern.")
         .def("get_allocator",
              [](ComPtr<VideoBufferAllocatorProvider>& self,
                 uint32_t buffer_size, uint32_t width, uint32_t height,
@@ -148,7 +180,7 @@ void init_decklink_allocator(nb::module_& m, nb::class_<Device>& device) {
         [](Device& self, _BMDDisplayMode mode, _BMDPixelFormat pixel_format,
            _BMDVideoInputFlags flags,
            ComPtr<VideoBufferAllocatorProvider>& provider,
-           bool zero_copy) {
+           bool zero_copy, size_t input_queue_depth) {
             ComPtr<IDeckLinkInput> input;
             if (self.dl->QueryInterface(IID_IDeckLinkInput, (void**)input.put()) != S_OK)
                 throw std::runtime_error("Device does not support input");
@@ -160,7 +192,7 @@ void init_decklink_allocator(nb::module_& m, nb::class_<Device>& device) {
                     std::to_string(hr) + ")");
             self.input_ = std::move(input);
             self.input_callback_ = ComPtr<InputCallback>(
-                new InputCallback(self.input_, 8, zero_copy));
+                new InputCallback(self.input_, input_queue_depth, zero_copy));
             self.input_callback_->set_current_format(mode, pixel_format, flags);
             bool format_detection = (flags & bmdVideoInputEnableFormatDetection) != 0;
             self.input_callback_->set_format_detection(format_detection);
@@ -169,9 +201,15 @@ void init_decklink_allocator(nb::module_& m, nb::class_<Device>& device) {
         nb::arg("mode"), nb::arg("pixel_format"),
         nb::arg("flags"), nb::arg("allocator_provider"),
         nb::arg("zero_copy") = true,
+        nb::arg("input_queue_depth") = 1,
         "Enable video input using a custom buffer allocator provider. "
-        "The SDK will call the provider to obtain allocators for DMA buffers, "
-        "enabling GPU-pinned memory for zero-copy capture.");
+        "The SDK will call the provider to obtain allocators for DMA "
+        "buffers, enabling host pinned memory for the H2D path. "
+        "``input_queue_depth`` bounds the internal frame queue (default "
+        "1 = real-time, drop late frames); each queued frame in "
+        "zero-copy mode holds an AddRef on a ManagedBuffer, keeping it "
+        "off the allocator's free-list, so a deep queue puts buffer-pool "
+        "pressure on the SDK.");
 
     // -- Device: create_frame_pool_pinned --
     device.def("create_frame_pool_pinned",

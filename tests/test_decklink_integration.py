@@ -13,6 +13,7 @@ DeckLink input → host.
 from __future__ import annotations
 
 import contextlib
+import ctypes
 
 import numpy as np
 import pytest
@@ -258,3 +259,164 @@ class TestPassthroughStreaming:
         assert status.dropped == 0, f"Output dropped {status.dropped} frames"
         assert status.late == 0, f"Output had {status.late} late frames"
         assert not status.underrun, "Output underran during streaming"
+
+
+# -- Custom Allocator + Zero-Copy + Signal-Locked Capture --------------------
+
+
+class TestCustomAllocatorZeroCopy:
+    """Exercise the custom-allocator + zero-copy + signal-locked path.
+
+    This is the configuration the original stall regressed under: a
+    Python-callback allocator (cudaHostAlloc, libc.malloc through
+    ctypes, anything that takes the GIL) combined with zero-copy
+    delivery, under sustained signal-locked load. The SDK input
+    pipeline calls ``AllocateVideoBuffer`` mid-stream when its
+    auto-pool runs short; without ``prefill`` to seat buffers on the
+    free-list, that call hits the SLOW path on the SDK input thread,
+    blocks on the GIL, and the pipeline stalls.
+
+    The test asserts three invariants:
+
+    * **Frames are delivered.** The original bug stalled within the
+      first signal-locked frame; a non-zero capture count proves the
+      input thread didn't lock up.
+    * **The free-list recycles.** ``recycled_count`` should climb
+      steadily — every consumer-released wrapper returns its
+      ``ManagedBuffer`` to the free-list, and the SDK's next
+      ``AllocateVideoBuffer`` pops it back FAST. ``recycled_count > 0``
+      proves the cycle is closed.
+    * **The pool doesn't grow during streaming.** ``allocated_count``
+      should stay flat after the prefill; any growth means the SLOW
+      path ran on the SDK thread, which is the failure mode this test
+      guards against.
+
+    Uses ``libc.malloc`` / ``libc.free`` via ctypes as a stand-in for
+    a real pinning allocator. Faster than ``cudaHostAlloc`` but
+    exhibits the same threading/GIL characteristics — the original
+    stall reproduced identically with both, so this avoids a CUDA
+    dependency in the test suite while still exercising the failure
+    mode.
+    """
+
+    def test_zero_copy_streams_with_custom_allocator(self, output_device, input_device):
+        """Stream signal-locked frames through a custom allocator,
+        verify recycle behavior."""
+        libc = ctypes.CDLL("libc.so.6")
+        libc.malloc.restype = ctypes.c_void_p
+        libc.malloc.argtypes = [ctypes.c_size_t]
+        libc.free.argtypes = [ctypes.c_void_p]
+
+        def py_alloc(size: int) -> int:
+            ptr = libc.malloc(size)
+            if not ptr:
+                raise MemoryError("libc.malloc returned NULL")
+            return ptr
+
+        def py_free(ptr: int, _size: int) -> None:
+            libc.free(ctypes.c_void_p(ptr))
+
+        provider = pydecklink.VideoBufferAllocatorProvider(
+            alloc=py_alloc,
+            free=py_free,
+        )
+
+        # Set up output side (provides the SDI signal we'll capture back).
+        output_device.enable_video_output(MODE)
+        preroll = 15
+        output_device.create_frame_pool(
+            preroll + 5, WIDTH, HEIGHT, ROW_BYTES, PIXEL_FORMAT
+        )
+
+        def schedule_pattern(display_time: int) -> None:
+            mf = output_device.acquire_output_frame(timeout_ms=1000)
+            mf.data[:] = 0x80
+            output_device.schedule_output_frame(
+                mf,
+                display_time=display_time,
+                duration=FRAME_DURATION,
+                timescale=TIMESCALE,
+            )
+
+        # Set up input side with the custom allocator.
+        input_device.enable_video_input_with_allocator(
+            mode=MODE,
+            pixel_format=PIXEL_FORMAT,
+            flags=pydecklink.VideoInputFlag(0),
+            allocator_provider=provider,
+            zero_copy=True,
+            input_queue_depth=1,
+        )
+
+        # Prefill before start_streams so the SDK input thread never
+        # hits the SLOW path under signal-locked load.
+        in_alloc = provider.get_allocator(
+            buffer_size=FRAME_BYTES,
+            width=WIDTH,
+            height=HEIGHT,
+            row_bytes=ROW_BYTES,
+            pixel_format=PIXEL_FORMAT,
+        )
+        in_alloc.prefill(4)
+        allocated_after_prefill = in_alloc.allocated_count
+
+        try:
+            input_device.start_streams()
+
+            # Pre-roll output and start playback.
+            for i in range(preroll):
+                schedule_pattern(i * FRAME_DURATION)
+            output_device.start_scheduled_playback(start_time=0, timescale=TIMESCALE)
+            display_time = preroll * FRAME_DURATION
+
+            # Drain no-signal frames until signal locks.
+            signal_acquired = False
+            for _ in range(200):
+                f = input_device.pop_capture_frame_ref(timeout_ms=1000)
+                if f is not None and f.has_signal:
+                    signal_acquired = True
+                    break
+
+            assert signal_acquired, (
+                "Input never acquired signal — SDI loopback cable connected?"
+            )
+
+            # Stream signal-locked frames. The capture count is the
+            # core "did the SDK input thread stall?" signal.
+            target = 30
+            captured = 1  # the acquisition frame counts
+            for _ in range(target + 30):
+                f = input_device.pop_capture_frame_ref(timeout_ms=1000)
+                if f is None or not f.has_signal:
+                    continue
+                captured += 1
+                schedule_pattern(display_time)
+                display_time += FRAME_DURATION
+                if captured >= target:
+                    break
+
+            assert captured >= target, (
+                f"Only captured {captured}/{target} signal-locked frames "
+                f"with custom allocator — input thread may be stalling"
+            )
+            assert in_alloc.recycled_count > 0, (
+                f"recycled_count={in_alloc.recycled_count} after streaming "
+                f"{captured} frames — buffers are not being returned to the "
+                f"free-list, recycling path is broken"
+            )
+            assert in_alloc.allocated_count == allocated_after_prefill, (
+                f"allocated_count grew from {allocated_after_prefill} to "
+                f"{in_alloc.allocated_count} during streaming — the SDK "
+                f"input thread hit the SLOW (Python callback) path, which "
+                f"means prefill was insufficient or the recycle path is "
+                f"broken"
+            )
+        finally:
+            with contextlib.suppress(RuntimeError):
+                output_device.stop_scheduled_playback()
+            with contextlib.suppress(RuntimeError):
+                input_device.stop_streams()
+            with contextlib.suppress(RuntimeError):
+                input_device.disable_video_input()
+            with contextlib.suppress(RuntimeError):
+                output_device.disable_video_output()
