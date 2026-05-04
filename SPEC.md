@@ -737,6 +737,13 @@ The system shall:
   allowlist file with an expiry date and a one-line justification.
   An expired suppression re-fails CI; a suppression without a date
   is rejected by the scanner config.
+- Reject any pull request whose `.github/workflows/**` introduces
+  an external Action reference (`uses: owner/repo@ref`) not pinned
+  by 40-character commit SHA, with a `# vX.Y.Z` point-version
+  comment trailing the SHA for human review. Floating major tags
+  (`@v4`), branch refs, and missing or non-point version comments
+  are rejected. Local workflow references (`uses: ./...`) are not
+  external and are unaffected.
 
 ### Why scanning, in addition to bumping
 
@@ -789,6 +796,42 @@ LOW. Two reasons:
 Threshold is configured in one place (the scanner config) and
 referenced from both the PR-time gate and the scheduled audit so
 the two stay in sync.
+
+### Why SHA-pin shape, in addition to vulnerability scanning
+
+The Actions marketplace has no registry-level integrity layer.
+`uses: owner/repo@ref` resolves to a Git ref, and tags are
+mutable by default. A maintainer (or compromised account) can
+`git tag -f v4.2.2 && git push --force --tags`, and every
+consumer pinned to `@v4.2.2` silently picks up new bytes on the
+next workflow run. PyPI, npm, and crates.io refuse re-publishes
+under an existing version; the Actions marketplace does not. SHA
+pinning encodes bit-exact provenance directly into the workflow
+YAML — the workflow file *is* the lockfile.
+
+Vulnerability scanning catches *known* CVEs against parsed
+version strings. It does not catch a maintainer compromise that
+ships malicious code under an existing tag before any advisory
+is written, and it depends on the OSV.dev feed having coverage
+for the action in question. Pin-shape enforcement catches the
+structural defect regardless of whether an advisory exists, runs
+offline, and fails on the same PR that introduced the regression.
+
+GitHub's "immutable releases" feature would close this at the
+registry level once universally adopted, but adoption is partial
+(of the actions used here, only `astral-sh/setup-uv` has opted
+in), the feature only freezes point-release tags — floating
+major tags like `@v4` are not Release objects and remain mutable
+by design — and attestation proves the maintainer published the
+bytes, not that the bytes are safe. SHA-pinning is the durable
+defense; attestation, where available, layers on as a sanity
+check at bump time.
+
+The trailing `# vX.Y.Z` comment is mandatory because a 40-char
+hex string carries no human-readable signal at review time. The
+comment lets a reviewer assess whether a bump is plausibly
+intentional ("v6.0.2 → v7.0.1, breaking change check the
+release notes") without resolving the SHA.
 
 ### Why allowlist suppressions must expire
 
