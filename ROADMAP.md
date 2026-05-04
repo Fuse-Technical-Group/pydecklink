@@ -22,11 +22,12 @@ Derived from [SPEC.md](SPEC.md). Sections are in build-dependency order.
 
 ## Supply chain
 
-Closes SPEC §10. Build-order rationale: Dependabot is independent
-of scanning, lowest risk, can land first. The PR-time gate proves
-the `osv-scanner.toml` severity threshold and suppression policy
+Closes SPEC §10. Build-order rationale: Dependabot and the
+pin-shape lint are both independent of scanning and lowest risk;
+either can land first. The PR-time gate proves the
+`osv-scanner.toml` severity threshold and suppression policy
 end-to-end against a real PR; the scheduled audit reuses that
-config so it lands second. `dependency-review-action` is a UX
+config so it lands next. `dependency-review-action` is a UX
 refinement on top of the working gate. `scorecard-action` is a
 separate axis (self-audit, not dep-scan) and lowest priority.
 
@@ -34,6 +35,16 @@ separate axis (self-audit, not dep-scan) and lowest priority.
   `pip` and `github-actions` ecosystems on a weekly cadence,
   grouping patch/minor updates. No scanning involved — this is the
   bumping arm. §spec:10
+- **actions-pin-shape-lint**: Add a `pin-shape` step to
+  `lint-docs.yml` that fails the workflow if any external `uses:`
+  reference under `.github/workflows/**.yml` does not match the
+  shape `<owner>/<repo>@<40-char-sha>` followed by a `# vX.Y.Z`
+  point-version comment. Local references (`uses: ./...`) are
+  exempt. Implementation is a single shell step (grep + awk, no
+  new dependency) and runs in well under a second. Independent of
+  vulnerability scanning — catches structural drift back toward
+  floating major tags regardless of whether the action has an
+  advisory. §spec:10
 - **osv-scanner-pr-gate**: Add a PR-time `google/osv-scanner-action`
   job to `ci-linux.yml`, running parallel to the existing
   `lint`/`compile` jobs. Scans the `uv.lock` Python closure and
@@ -61,9 +72,14 @@ separate axis (self-audit, not dep-scan) and lowest priority.
   rather than "are pydecklink's deps vulnerable?". Lowest priority
   in the section. §spec:10
 
-**Verify:** End-to-end coverage of §10 is observable via four
+**Verify:** End-to-end coverage of §10 is observable via five
 surfaces:
 
+- *Pin-shape lint.* Open a PR that adds an external Action
+  reference of the form `actions/checkout@v5` (no SHA) to any
+  workflow. The `pin-shape` lint job fails with a pointer to the
+  offending file:line. Replacing the reference with
+  `actions/checkout@<sha> # v5.x.y` restores green.
 - *PR-time gate.* Open a PR that adds a known-vulnerable Python or
   Action reference (e.g. pin `requests==2.19.0` for the test, then
   remove). The `osv-scanner` CI job fails with an advisory ID
