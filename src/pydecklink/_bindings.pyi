@@ -724,9 +724,6 @@ class MutableFrame:
     def data(self) -> Annotated[NDArray[numpy.uint8], dict(shape=(None,))]:
         """Writeable numpy uint8 view of the frame buffer."""
 
-    def end_access(self) -> None:
-        """Release buffer access (called automatically on frame use)."""
-
 def clock_us() -> int:
     """Return monotonic time in microseconds."""
 
