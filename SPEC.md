@@ -711,3 +711,199 @@ how `get_attribute_int` already behaves.
   *input* status is exposed (§5.11).
 - **Video conversion.** No color space conversion, scaling. The SDK
   has some hardware conversion modes; exposing them is deferred.
+
+## 10. Supply Chain Security
+
+*Status: not started*
+
+The build pulls in third-party code from two ecosystems: PyPI
+(numpy, scikit-build-core, nanobind, dev/test tooling) and the
+GitHub Actions marketplace (seven external actions across six
+workflows). Both are mutable dependency surfaces with documented
+real-world compromises (tj-actions/changed-files, March 2025,
+~23k repos; multiple PyPI typosquat campaigns annually). Without
+ongoing surveillance, advisories published *after* a dep has been
+adopted are invisible until they break something.
+
+The system shall:
+
+- Fail PR CI when a pull request introduces a dependency
+  (PyPI package or GitHub Action) with a known advisory at the
+  configured severity threshold or higher.
+- Report — without failing CI — advisories newly published against
+  already-adopted dependencies, on a recurring schedule. Reports
+  surface as GitHub Security tab entries, not silent logs.
+- Allow individual advisories to be suppressed only via a tracked
+  allowlist file with an expiry date and a one-line justification.
+  An expired suppression re-fails CI; a suppression without a date
+  is rejected by the scanner config.
+- Reject any pull request whose `.github/workflows/**` introduces
+  an external Action reference (`uses: owner/repo@ref`) not pinned
+  by 40-character commit SHA, with a `# vX.Y.Z` point-version
+  comment trailing the SHA for human review. Floating major tags
+  (`@v4`), branch refs, and missing or non-point version comments
+  are rejected. Local workflow references (`uses: ./...`) are not
+  external and are unaffected.
+
+### Why scanning, in addition to bumping
+
+GitHub's Dependabot already opens version-bump and security-update
+PRs, but it operates at the level of "version X.Y.Z is available"
+or "version X.Y.Z fixes CVE-N." It does not gate merges. A PR can
+land a known-vulnerable transitive dependency, or a freshly forked
+GitHub Action that has no advisory but minimal hygiene, before
+Dependabot has anything to say about it. Scanning closes that gap
+by gating *introduction*; bumping covers *response*. The two are
+complementary, not redundant.
+
+### Why one scanner across both ecosystems
+
+`osv-scanner` (Google, Apache-2.0) consults the OSV.dev advisory
+database, which federates GitHub Security Advisories, PyPA, and
+the GitHub Actions ecosystem in a single feed. Using one tool
+across both ecosystems avoids divergent severity definitions, two
+sets of suppression files, and two code paths in CI. The
+alternatives (`pip-audit` for PyPI only; `actions/dependency-review`
+for Actions delta only) are narrower and would require a second
+tool for the surface they don't cover.
+
+`actions/dependency-review-action` runs in addition to
+`osv-scanner` on pull-request events specifically — it surfaces
+the *delta* introduced by the PR (new package vs. existing
+package) directly in the PR review UI, which is more actionable
+for reviewers than a full scan diff. It does not replace
+`osv-scanner`, which still gates the full closure.
+
+### Why pin severity threshold at HIGH
+
+The system shall block merges on advisories of severity HIGH or
+CRITICAL, and report (without blocking) advisories of MEDIUM or
+LOW. Two reasons:
+
+- **Signal-to-noise.** PyPI and the Actions ecosystem accumulate
+  LOW/MEDIUM advisories continuously; gating on those produces
+  daily CI failures unrelated to anything the PR author touched,
+  trains reviewers to ignore the gate, and erodes its value
+  against the failures that matter.
+- **Severity calibration.** OSV.dev severity scores derive from
+  CVSS where available. CVSS HIGH/CRITICAL maps to "remote code
+  execution," "privilege escalation," or "credential exposure" —
+  outcomes worth blocking a merge for. MEDIUM/LOW typically maps
+  to "information disclosure under specific conditions" or
+  "denial of service against the affected component" — worth
+  reporting but not worth a hard gate.
+
+Threshold is configured in one place (the scanner config) and
+referenced from both the PR-time gate and the scheduled audit so
+the two stay in sync.
+
+### Why SHA-pin shape, in addition to vulnerability scanning
+
+The Actions marketplace has no registry-level integrity layer.
+`uses: owner/repo@ref` resolves to a Git ref, and tags are
+mutable by default. A maintainer (or compromised account) can
+`git tag -f v4.2.2 && git push --force --tags`, and every
+consumer pinned to `@v4.2.2` silently picks up new bytes on the
+next workflow run. PyPI, npm, and crates.io refuse re-publishes
+under an existing version; the Actions marketplace does not. SHA
+pinning encodes bit-exact provenance directly into the workflow
+YAML — the workflow file *is* the lockfile.
+
+Vulnerability scanning catches *known* CVEs against parsed
+version strings. It does not catch a maintainer compromise that
+ships malicious code under an existing tag before any advisory
+is written, and it depends on the OSV.dev feed having coverage
+for the action in question. Pin-shape enforcement catches the
+structural defect regardless of whether an advisory exists, runs
+offline, and fails on the same PR that introduced the regression.
+
+GitHub's "immutable releases" feature would close this at the
+registry level once universally adopted, but adoption is partial
+(of the actions used here, only `astral-sh/setup-uv` has opted
+in), the feature only freezes point-release tags — floating
+major tags like `@v4` are not Release objects and remain mutable
+by design — and attestation proves the maintainer published the
+bytes, not that the bytes are safe. SHA-pinning is the durable
+defense; attestation, where available, layers on as a sanity
+check at bump time.
+
+The trailing `# vX.Y.Z` comment is mandatory because a 40-char
+hex string carries no human-readable signal at review time. The
+comment lets a reviewer assess whether a bump is plausibly
+intentional ("v6.0.2 → v7.0.1, breaking change check the
+release notes") without resolving the SHA.
+
+### Why allowlist suppressions must expire
+
+Permanent suppressions silently rot. A suppression added because
+"the vulnerable code path isn't reachable in our usage" stops
+being true the moment someone refactors. An expiring suppression
+forces a re-check on the calendar boundary the reviewer chose, at
+which point either the upstream has shipped a fix, or the
+maintainer reaffirms the analysis with fresh evidence. The
+mechanism is `osv-scanner`'s native `osv-scanner.toml` ignore
+list, with `expires` field required by repo policy.
+
+### Why scheduled scans, in addition to PR-time
+
+Most advisories affecting a repo are published *after* the
+vulnerable dep is already merged. PR-time gating only catches
+*new* introductions. A weekly scheduled scan against the current
+main branch's full closure surfaces advisories that dropped
+during the week so they're triaged on a regular cadence rather
+than discovered when something breaks.
+
+### Why Dependabot is enabled alongside
+
+Dependabot is the bumping mechanism: it opens PRs for outdated
+deps and for deps that gain a security advisory after merge.
+Scanning is the gating mechanism: it blocks new introductions
+and surfaces advisories on the existing closure. They cover
+different points in the dep lifecycle. The system shall include
+a `.github/dependabot.yml` covering the `pip` and
+`github-actions` ecosystems on a weekly cadence, grouping
+patch/minor updates to keep PR volume manageable.
+
+### Why self-scorecard is in scope, separately
+
+`ossf/scorecard-action` runs the OpenSSF Scorecard checks
+against this repository on a schedule and reports findings to
+the GitHub Security tab. It answers "is *pydecklink* a
+well-hardened consumer of OSS?" — a different question from
+"are pydecklink's deps vulnerable?" Worth running because the
+checks (branch protection, signed releases, token permissions,
+pinned dependencies) catch hygiene regressions in our own
+workflows, and the score is visible to downstream consumers
+deciding whether to depend on pydecklink. Lower priority than
+the scanning itself; see roadmap sequencing.
+
+### Constraints
+
+- **PR-time scan budget.** The PR-time scan shall complete in
+  under 30 seconds on the hot path. `osv-scanner` against the
+  Python lockfile and `.github/workflows/` finishes in single
+  digits of seconds in practice (the bottleneck is action
+  startup, not scan work). It runs as a parallel job in
+  `ci-linux.yml`, not serialized with the build/test jobs.
+- **No paid services.** All scanners and feeds shall be
+  free-tier. OSV.dev, OpenSSF Scorecard, GHSA, and Dependabot
+  satisfy this. Snyk, Socket.dev (paid tiers), and Mend.io are
+  rejected on this constraint.
+- **Actionable output.** A CI failure shall name a specific
+  advisory ID (e.g., `GHSA-xxxx-yyyy-zzzz` or `CVE-N`), the
+  affected package, and the fixed version. "Something is
+  vulnerable" without a pointer is rejected.
+
+### Scope boundaries
+
+- System packages installed via `apt-get`/`brew` (cmake,
+  ninja-build, build-essential) are out of scope. Their
+  vulnerability surface belongs to the runner image's
+  maintainer, not this project.
+- Vendored DeckLink SDK headers are out of scope. The vendor
+  ships them under a header license that permits redistribution;
+  no advisory feed covers them and updates ride the SDK release
+  cycle.
+- The C++ extension's link-time deps (`libDeckLinkAPI.so`) are
+  out of scope. They're host-installed at runtime; advisories
+  against them are the host operator's concern.
