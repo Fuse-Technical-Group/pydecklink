@@ -149,30 +149,83 @@ private:
 };
 
 /// Python-visible wrapper around IDeckLinkMutableVideoFrame.
+///
+/// Per SDK §2.5.53.2, ``StartAccess(ReadAndWrite)`` /
+/// ``EndAccess(ReadAndWrite)`` is the access-synchronization
+/// primitive — it bounds the interval the producer is reading and
+/// writing the buffer's contents, independent of the COM refcount.
+///
+/// Mirrors the input-side ``CaptureFrameRef`` lifetime model: the
+/// access window opens when the frame is handed to Python (acquired
+/// from the pool, or freshly created), and closes either when the
+/// frame is scheduled (ownership transfers to the SDK) or when the
+/// wrapper is dropped. Allocators with non-trivial access semantics
+/// (mapped GPU memory, macOS XPC-marshaled, dmabuf) depend on the
+/// pairing — ``BufferHandle`` makes both calls no-ops, but we honour
+/// the contract regardless.
+///
+/// Move-only: the access window is a non-copyable resource. After a
+/// move, the source no longer owns the window.
 struct MutableFrame {
     ComPtr<IDeckLinkMutableVideoFrame> frame;
     ComPtr<IDeckLinkVideoBuffer> buffer;
+    bool access_open = false;  // True if we owe an EndAccess(ReadAndWrite).
+
+    MutableFrame() = default;
+    MutableFrame(const MutableFrame&) = delete;
+    MutableFrame& operator=(const MutableFrame&) = delete;
+
+    MutableFrame(MutableFrame&& o) noexcept
+        : frame(std::move(o.frame)),
+          buffer(std::move(o.buffer)),
+          access_open(o.access_open) {
+        o.access_open = false;
+    }
+
+    MutableFrame& operator=(MutableFrame&& o) noexcept {
+        if (this != &o) {
+            close_access();
+            frame = std::move(o.frame);
+            buffer = std::move(o.buffer);
+            access_open = o.access_open;
+            o.access_open = false;
+        }
+        return *this;
+    }
+
+    ~MutableFrame() { close_access(); }
 
     long width() const { return frame->GetWidth(); }
     long height() const { return frame->GetHeight(); }
     long row_bytes() const { return frame->GetRowBytes(); }
 
+    /// Open the read/write access window. Call once after the wrapper
+    /// adopts a frame; idempotent if already open.
+    void open_access() {
+        if (access_open || !buffer) return;
+        if (buffer->StartAccess(bmdBufferAccessReadAndWrite) == S_OK) {
+            access_open = true;
+        }
+    }
+
+    /// Close the access window. Called by ``schedule_output_frame``
+    /// before handing the frame to the SDK, and by the destructor for
+    /// frames the user drops without scheduling.
+    void close_access() {
+        if (access_open && buffer) {
+            buffer->EndAccess(bmdBufferAccessReadAndWrite);
+        }
+        access_open = false;
+    }
+
     void* get_data_ptr() {
         if (!buffer)
             throw std::runtime_error("Frame has no video buffer");
         void* bytes = nullptr;
-        buffer->StartAccess(bmdBufferAccessReadAndWrite);
         buffer->GetBytes(&bytes);
-        if (!bytes) {
-            buffer->EndAccess(bmdBufferAccessReadAndWrite);
+        if (!bytes)
             throw std::runtime_error("Failed to get frame buffer bytes");
-        }
         return bytes;
-    }
-
-    void end_access() {
-        if (buffer)
-            buffer->EndAccess(bmdBufferAccessReadAndWrite);
     }
 };
 
