@@ -721,3 +721,161 @@ how `get_attribute_int` already behaves.
   *input* status is exposed (§5.11).
 - **Video conversion.** No color space conversion, scaling. The SDK
   has some hardware conversion modes; exposing them is deferred.
+
+## Latency Characterization §spec:latency-characterization
+
+*Status: not started*
+
+### Problem
+
+Capture-side delivery latency is instrumented
+(`CaptureFrameRef.callback_arrived_us` to consumer release in
+`examples/cuda_pinned_pipelined.py`), but no measurement crosses the
+cable. Consumers building real-time passthrough cannot answer:
+
+- Does the pipeline contain hidden buffering — driver queue, SDK
+  input queue, output preroll — that adds frames of latency?
+- How much GPU kernel time can a consumer spend before the pipeline
+  forces an extra frame of headroom or starts dropping?
+
+Without numbers, consumers over-provision headroom or accept blind
+drift.
+
+### Behavior
+
+A CUDA loopback fingerprint benchmark
+(`examples/cuda_loopback_latency.py`) operates two DeckLink devices
+wired in loopback and reports:
+
+- **Round-trip latency** in microseconds and in frame periods, by
+  stamping a sequence number into the active video region of each
+  output frame and recovering it from the corresponding capture.
+- **Kernel time** measured separately at sub-microsecond resolution,
+  decomposing total cable-to-cable cost into a fixed ex-kernel
+  component (cable + DeckLink + queue + DMA) and a variable kernel
+  component. A consumer's projected RTT for any kernel = ex-kernel +
+  measured kernel time.
+- **Output health**: `OutputStatus.completed / late / dropped /
+  underrun` correlated with the active configuration.
+
+Configurable per run:
+
+- **Output clock source**: free-running (card crystal) or input-locked
+  (output pixel clock derived from SDI input).
+- **Headroom**: integer frame periods between input frame N's arrival
+  and the scheduled display time of the corresponding output frame.
+- **Phase offset**: sub-frame timing offset between input and output
+  VBI, applied when the output clock is input-locked.
+- **Preroll depth**: frames queued before `start_scheduled_playback`.
+
+Sweep mode reports the minimum stable configuration — the smallest
+(headroom, phase_offset, preroll) combination that holds zero
+`late + dropped + underrun` over a sustained run.
+
+### Why fingerprint pixels
+
+The SDK exposes input-side timestamps but no output-side egress
+timestamp — `schedule_output_frame` records queue insertion, not SDI
+clock-out. Round-trip latency must be measured by stamping a known
+value into output pixel data and recovering it on capture. Recovery
+happens in the same pinned buffer used for H2D, with no extra device
+transfers.
+
+### Why decompose kernel time from ex-kernel cost
+
+A consumer's effective latency depends on their kernel. The fixed
+ex-kernel cost is what no consumer can change; the kernel time is
+what they control. With a no-op fingerprint kernel, the benchmark
+measures the floor; consumers add their own measured kernel time to
+project total RTT for their workload. The decomposition is what
+makes the benchmark useful as a planning input rather than a single
+opaque number.
+
+### Why lock to input rather than to genlock
+
+Genlock — locking to an external reference (REF BNC tri-level / black
+burst) — synchronizes input and output to a third-party clock. The
+phase between input arrival and the next output VBI is then fixed by
+the genlock signal, not by the input itself. For a passthrough loop
+this adds latency without adding determinism.
+
+Locking the output clock to the input clock collapses the
+input-to-output phase to a value the system controls. Combined with
+sub-frame phase offset, output VBI can be placed at any phase relative
+to input VBI, allowing the scheduled display time of frame N+1 to
+track input frame N+1 with no clock-domain jitter.
+
+Tradeoff: the output SDI signal is not phase-aligned to facility
+genlock. Downstream gear that expects a referenced source sees this
+output as free-running. Acceptable for closed-loop measurement
+between paired DeckLink cards; not appropriate for facility
+integration.
+
+### Why phase adjust matters
+
+Without sub-frame phase control, headroom is integer frame periods. A
+kernel running in 0.3 frame periods still requires a full frame of
+headroom in the integer model — 0.7 frames (~12ms at 60p) wasted to
+alignment. With phase offset, output VBI shifts forward by the
+kernel's worst-case duration plus a safety margin, recovering the
+wasted phase as latency reduction.
+
+### Why a sweep, not a fixed configuration
+
+Preroll establishes the initial queue depth at
+`start_scheduled_playback`; steady-state headroom is the gap between
+current playback time and the scheduled display time of new frames.
+Both contribute to latency, both have empirical floors bounded by GPU
+jitter and SDK queue draining. The floor is hardware-, driver-, and
+mode-specific. The sweep finds it by reducing knobs until
+`late + dropped + underrun` first becomes nonzero over a sustained
+run, then backing off one step. A fixed configuration would either
+leave latency on the table or fail intermittently in the field.
+
+### Why CUDA-only (initial scope)
+
+The fingerprint approach generalizes to any GPU framework, but the
+immediate consumer is the existing CUDA pinned-memory pipeline
+(`examples/cuda_pinned_pipelined.py`). HIP and Level Zero variants
+become reasonable when the corresponding consumer examples exist;
+until then they would test paths nobody runs.
+
+### API surface impact
+
+The benchmark is an example, not a public API. It surfaces small
+additions justified by the same need any latency-sensitive consumer
+faces:
+
+- `ConfigInt.ReferenceOutputMode` — selects input-locked output
+  clock. Without it, consumers pass raw FourCC values to
+  `set_config_int`.
+- `ConfigInt.ReferenceInputTimingOffset` — sub-frame timing offset.
+  Same justification.
+
+Existing surface used by the benchmark:
+`CaptureFrameRef.callback_arrived_us`, `OutputStatus`, `clock_us()`,
+`schedule_output_frame`, `pop_capture_frame_ref`, `set_config_int`.
+No helper for input-driven scheduling is added here; if the pattern
+proves common a future spec section may propose one.
+
+### Scope
+
+- One pixel format and frame rate per run. Primary characterization
+  mode: 1080p60 8-bit YUV 4:2:2 (`bmdFormat8BitYUV` / UYVY). Other
+  modes parameterized; fingerprint encoding is mode-aware.
+- Two DeckLink devices wired in loopback. Single-card sub-device
+  loopback is not initially exercised.
+- No HDR, audio, ancillary data. Fingerprint occupies active video
+  only.
+- Genlock (REF BNC) configuration is not exercised by the benchmark.
+  Users who want facility-genlocked output configure it via existing
+  `set_config_int`.
+
+### Citations
+
+- §4 Device Model — buffer recycling and queue depth context.
+- §5.5 Playout — scheduled playback semantics.
+- §5.7 Configuration — config-int surface this section extends.
+- §5.11 Device Status — soft dependency. `ReferenceStatus.locked` is
+  useful for interpreting whether input-locked output mode actually
+  engaged, but the benchmark does not require §5.11 to ship.
