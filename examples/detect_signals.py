@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """Walk all DeckLink inputs and report which ones have an active signal.
 
-Includes physical SDI connector labels where known. The DeckLink SDK does
-not expose a programmatic physical-port query — the mapping is derived from
-the table on page 31 of the DeckLink SDK 15.3 manual and varies by card
-model and active profile.
+Annotates each device with its physical SDI connector label via
+``Device.connector_label`` — see ``pydecklink._connectors`` for the
+underlying lookup table.
 """
 
 from __future__ import annotations
@@ -13,47 +12,10 @@ import sys
 
 import pydecklink
 
-# Physical SDI connector labels by (model_prefix, profile, sub_device_index).
-# Sourced from DeckLink SDK 15.3 manual, Section 2.4.11, page 31.
-_SDI_LABEL: dict[tuple[str, str, int], str] = {
-    # DeckLink 8K Pro — 4 sub-devices half-duplex
-    ("DeckLink 8K Pro", "FourSubDevicesHalfDuplex", 0): "SDI 1",
-    ("DeckLink 8K Pro", "FourSubDevicesHalfDuplex", 1): "SDI 3",
-    ("DeckLink 8K Pro", "FourSubDevicesHalfDuplex", 2): "SDI 2",
-    ("DeckLink 8K Pro", "FourSubDevicesHalfDuplex", 3): "SDI 4",
-    # DeckLink 8K Pro — 2 sub-devices full-duplex
-    ("DeckLink 8K Pro", "TwoSubDevicesFullDuplex", 0): "SDI 1+2",
-    ("DeckLink 8K Pro", "TwoSubDevicesFullDuplex", 1): "SDI 3+4",
-    # DeckLink Quad 2 — 2 sub-devices half-duplex (8 sub-devices visible)
-    ("DeckLink Quad 2", "TwoSubDevicesHalfDuplex", 0): "SDI 1",
-    ("DeckLink Quad 2", "TwoSubDevicesHalfDuplex", 1): "SDI 3",
-    ("DeckLink Quad 2", "TwoSubDevicesHalfDuplex", 2): "SDI 5",
-    ("DeckLink Quad 2", "TwoSubDevicesHalfDuplex", 3): "SDI 7",
-    ("DeckLink Quad 2", "TwoSubDevicesHalfDuplex", 4): "SDI 2",
-    ("DeckLink Quad 2", "TwoSubDevicesHalfDuplex", 5): "SDI 4",
-    ("DeckLink Quad 2", "TwoSubDevicesHalfDuplex", 6): "SDI 6",
-    ("DeckLink Quad 2", "TwoSubDevicesHalfDuplex", 7): "SDI 8",
-    # DeckLink Duo 2 — 2 sub-devices half-duplex
-    ("DeckLink Duo 2", "TwoSubDevicesHalfDuplex", 0): "SDI 1",
-    ("DeckLink Duo 2", "TwoSubDevicesHalfDuplex", 1): "SDI 3",
-    ("DeckLink Duo 2", "TwoSubDevicesHalfDuplex", 2): "SDI 2",
-    ("DeckLink Duo 2", "TwoSubDevicesHalfDuplex", 3): "SDI 4",
-}
-
 
 def _physical_label(dev: pydecklink.Device) -> str:
     """Return the physical SDI connector label, or '?' if unknown."""
-    model = dev.model_name
-    try:
-        profile = dev.active_profile().name
-        sub_idx = dev.get_attribute_int(pydecklink.AttributeID.SubDeviceIndex)
-    except RuntimeError:
-        return "?"
-
-    for prefix, prof, idx in _SDI_LABEL:
-        if model.startswith(prefix) and prof == profile and idx == sub_idx:
-            return _SDI_LABEL[(prefix, prof, idx)]
-    return "?"
+    return pydecklink.connector_label(dev) or "?"
 
 
 def _profile_info(dev: pydecklink.Device) -> str:

@@ -698,6 +698,78 @@ generic `get_status_flag` / `get_status_int` accessors do not gate;
 they surface the SDK's `HRESULT` failure as `RuntimeError`, matching
 how `get_attribute_int` already behaves.
 
+### 5.12 Connector Labeling
+
+*Status: complete*
+
+Multi-sub-device DeckLinks (8K Pro, Quad 2, Duo 2) expose each
+SDI connector as a distinct `IDeckLink` device. The SDK
+enumerates them in a logical order — `BMDDeckLinkSubDeviceIndex`
+runs 0..N-1 — that does not match the SDI port labels printed
+on the card. On a DeckLink 8K Pro in
+`bmdProfileFourSubDevicesHalfDuplex`, sub-device 1 maps to SDI 3
+and sub-device 2 maps to SDI 2 — the two are transposed
+relative to logical numbering.
+
+The parenthesized number in `IDeckLink::GetDisplayName` (e.g.
+"DeckLink 8K Pro (3)") tracks the sub-device index, *not* the
+SDI port label. Naïve `display_name` parsing lands on the wrong
+connector for any card whose mapping is non-identity.
+
+The SDK provides no programmatic physical-port query. The
+binding ships a static lookup table sourced from BMD's SDK 15.3
+manual section 2.4.11, exposed as:
+
+- `pydecklink.connector_label(device) → str | None` — returns
+  the printed SDI port label (e.g. `"SDI 1"`, `"SDI 1+2"`) for
+  known `(model, profile, sub_device_index)` tuples; returns
+  `None` for unmapped cards or profiles. The function reads the
+  device's current state on each call, so a runtime profile
+  switch is reflected on the next call without device re-open.
+
+A module-level function rather than a `Device` property because
+the lookup is package-side data (a hand-maintained table from
+BMD's manual), not an SDK-derived attribute. Keeping it
+explicit avoids confusion at the call site about what the SDK
+exposes versus what the binding interpolates, and avoids
+monkey-patching the nanobind-generated `Device` class — which
+breaks stub generation.
+
+The system shall:
+
+- Return the correct printed SDI port label for every device
+  whose `(model_name_prefix, profile, sub_device_index)` tuple
+  matches an entry in the static table.
+- Return `None` (not raise) for any tuple not in the table, so
+  callers can fall back to raw attributes
+  (`get_attribute_int(AttributeID.SubDeviceIndex)`,
+  `display_name`).
+- Re-evaluate on every call so a runtime profile switch is
+  reflected without device re-open.
+
+### Why a static table
+
+The SDK's silence on this is structural: the connector mapping
+is hardware-internal, not surfaced by any attribute or interface.
+Reverse-engineering it by parsing `display_name` is unsafe (the
+parenthesized number is logical, not physical) and would silently
+land on the wrong port for any card with non-identity mapping.
+
+Maintenance cost is small: BMD ships at most a handful of
+multi-sub-device cards per year, and additions are mechanical
+(consult the manual, append a row). Returning `None` for
+unmapped cards keeps the API honest — the binding never
+synthesizes a guess from a partial signal.
+
+### Scope boundaries
+
+- `connector_label` covers SDI ports only. HDMI, optical SDI,
+  and analog connectors on hybrid cards are not labeled — those
+  cards are typically single-sub-device and the question does
+  not arise.
+- The reverse mapping (`label → device`) is left to the caller:
+  `next(d for d in (Device(i) for i in range(device_count())) if connector_label(d) == "SDI 3")`.
+
 ## 9. Explicit Non-Goals (Phase 1)
 
 - **GPU RDMA.** The allocator infrastructure, free-list recycling,
