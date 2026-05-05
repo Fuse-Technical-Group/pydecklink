@@ -77,8 +77,17 @@ def main() -> None:
             }
         )
 
-    headers = ["idx", "display_name", "model", "sub", "n_sub",
-               "profile", "duplex", "io", "persistent_id"]
+    headers = [
+        "idx",
+        "display_name",
+        "model",
+        "sub",
+        "n_sub",
+        "profile",
+        "duplex",
+        "io",
+        "persistent_id",
+    ]
     widths = {h: max(len(h), max(len(str(r[h])) for r in rows)) for h in headers}
 
     print("  ".join(h.ljust(widths[h]) for h in headers))
