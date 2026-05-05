@@ -33,14 +33,18 @@ void init_decklink_output(nb::module_& m, nb::class_<Device>& device) {
         .def_prop_ro("height", &MutableFrame::height)
         .def_prop_ro("row_bytes", &MutableFrame::row_bytes)
         .def_prop_ro("data", [](nb::handle self) {
+            // The write access window is opened when the wrapper is
+            // constructed (acquire_output_frame / create_video_frame)
+            // and closed by schedule_output_frame or the destructor —
+            // see SDK §2.5.53.2 and the MutableFrame class doc. We
+            // just hand back a numpy view; the access window covers
+            // the entire lifetime, so any number of writes is valid.
             auto& mf = nb::cast<MutableFrame&>(self);
             void* bytes = mf.get_data_ptr();
             size_t total = static_cast<size_t>(mf.row_bytes()) * mf.height();
             return nb::ndarray<nb::numpy, uint8_t, nb::ndim<1>>(
                 bytes, {total}, self);
-        }, "Writeable numpy uint8 view of the frame buffer.")
-        .def("end_access", &MutableFrame::end_access,
-             "Release buffer access (called automatically on frame use).");
+        }, "Writeable numpy uint8 view of the frame buffer.");
 
     // -- Device output methods (added to existing Device class) --
 
@@ -100,6 +104,7 @@ void init_decklink_output(nb::module_& m, nb::class_<Device>& device) {
             MutableFrame mf;
             mf.frame = ComPtr<IDeckLinkMutableVideoFrame>(raw);
             raw->QueryInterface(IID_IDeckLinkVideoBuffer, (void**)mf.buffer.put());
+            mf.open_access();
             return mf;
         },
         nb::arg("timeout_ms") = 1000,
@@ -112,9 +117,10 @@ void init_decklink_output(nb::module_& m, nb::class_<Device>& device) {
                 throw std::runtime_error("Video output not enabled");
             if (!mf.frame)
                 throw std::runtime_error("MutableFrame has no frame");
-            // End buffer access before scheduling.
-            if (mf.buffer)
-                mf.buffer->EndAccess(bmdBufferAccessReadAndWrite);
+            // Close the access window before handing the frame to the
+            // SDK; ownership of the access state transfers with the
+            // schedule call.
+            mf.close_access();
             HRESULT hr = self.output_->ScheduleVideoFrame(
                 mf.frame.get(), display_time, duration, timescale);
             if (hr != S_OK)
@@ -155,6 +161,7 @@ void init_decklink_output(nb::module_& m, nb::class_<Device>& device) {
             if (hr != S_OK || !mf.frame)
                 throw std::runtime_error("CreateVideoFrame failed (HRESULT " + std::to_string(hr) + ")");
             mf.frame->QueryInterface(IID_IDeckLinkVideoBuffer, (void**)mf.buffer.put());
+            mf.open_access();
             return mf;
         },
         nb::arg("width"), nb::arg("height"), nb::arg("row_bytes"),
