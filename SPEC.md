@@ -246,14 +246,24 @@ DeckLink DMA and GPU copies must not overlap on the same buffer:
 
 The SDK exposes `IDeckLinkVideoBuffer::StartAccess` /
 `EndAccess` as the access-synchronization primitive — independent
-of COM refcount. The binding opens a read access window on each
-delivered frame's `ManagedBuffer` in `InputCallback::VideoInputFrameArrived`
-and closes it in the `CaptureFrameRef` destructor. Allocators
-with non-trivial access semantics (mapped GPU memory, macOS
-XPC-marshaled buffers, dmabuf) implement these as real
-preparation/coherency operations; `ManagedBuffer` makes them
-no-ops because cudaHostAlloc-backed memory is always
-CPU-accessible.
+of COM refcount. The binding opens an access window for the full
+lifetime of the Python wrapper, on both directions:
+
+- Input: `StartAccess(Read)` opens in
+  `InputCallback::VideoInputFrameArrived`, closes in the
+  `CaptureFrameRef` destructor.
+- Output: `StartAccess(ReadAndWrite)` opens in
+  `acquire_output_frame` and `create_video_frame`, closes in
+  `schedule_output_frame` (when the SDK takes over) or in the
+  `MutableFrame` destructor (when the wrapper is dropped without
+  scheduling).
+
+Both wrappers are move-only so the access window transfers
+cleanly without aliasing. Allocators with non-trivial access
+semantics (mapped GPU memory, macOS XPC-marshaled buffers, dmabuf)
+implement these as real preparation/coherency operations;
+`ManagedBuffer` makes them no-ops because cudaHostAlloc-backed
+memory is always CPU-accessible.
 
 #### cudaHostAlloc flags
 
