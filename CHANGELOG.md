@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.3](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.2.2...v0.2.3) (2026-05-05)
+
+
+### Added
+
+* **connectors:** expose pydecklink.connector_label() — printed SDI port label ([69d475a](https://github.com/Fuse-Technical-Group/pydecklink/commit/69d475a1f932a7c7817fdc2a2ff9ba95a0d95aa7))
+* **connectors:** expose pydecklink.connector_label() — printed SDI port label ([447d7cb](https://github.com/Fuse-Technical-Group/pydecklink/commit/447d7cbe212c9c2261d6d5e85c536ed1c15184fa))
+
 ## [0.2.2](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.2.1...v0.2.2) (2026-05-05)
 
 
