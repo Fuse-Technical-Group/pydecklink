@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.2](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.2.1...v0.2.2) (2026-05-05)
+
+
+### Fixed
+
+* **output:** pair StartAccess/EndAccess across MutableFrame lifetime ([9aa0703](https://github.com/Fuse-Technical-Group/pydecklink/commit/9aa0703e7c714f58f462713f7e868abec4134911))
+* **output:** pair StartAccess/EndAccess across MutableFrame lifetime ([76fa936](https://github.com/Fuse-Technical-Group/pydecklink/commit/76fa9365e2ef330de8f5739656459b6fea75118a))
+
 ## [0.2.1](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.2.0...v0.2.1) (2026-05-02)
 
 
