@@ -853,6 +853,54 @@ value into output pixel data and recovering it on capture. Recovery
 happens in the same pinned buffer used for H2D, with no extra device
 transfers.
 
+### Why GPU-only fingerprint touches
+
+The CPU does not read or write framebuffers on either the output
+or the input path. A real consumer pipeline runs cable → DeckLink
+DMA → pinned host → CUDA H2D DMA → kernel → CUDA D2H DMA → pinned
+host → DeckLink DMA → cable, with no CPU-side pixel work; the
+benchmark mirrors that path so the floor it reports is meaningful
+to such consumers.
+
+- Output: a small device staging buffer holds two v210 groups
+  (32 bytes) carrying the 8-byte sequence number across 8 luma
+  slots. A CUDA kernel writes it; `cudaMemcpyAsync` D2H copies
+  those 32 bytes into the pinned output frame at the start of
+  active video. `schedule_output_frame` triggers SDK DMA
+  host→wire.
+- Input: SDK DMA wire→pinned host (existing path).
+  `cudaMemcpyAsync` H2D copies the frame to a device pool slot.
+  A decode kernel reads the fingerprint groups from the device
+  pointer, extracts the 8 luma slots, and writes the recovered
+  sequence number to a small result buffer. `cudaMemcpyAsync`
+  D2H lifts the result back. Events bracket the decode kernel
+  for sub-µs kernel-time measurement.
+
+The decode kernel is also the timed kernel for ex-kernel
+decomposition — it does real work (parse v210 bit-packing, read
+8 luma values, write the recovered uint64), so `kernel_us`
+reflects a genuine GPU operation rather than the event-pair
+overhead floor.
+
+### Why 10-bit YUV (v210), not 8-bit
+
+The fingerprint is written into the luma slots of a 10-bit YUV
+4:2:2 buffer in v210 packing. v210 is the standard production
+capture format on this card (matches the default in
+`cuda_pinned_pipelined.py`); running the latency benchmark on a
+different pixel format would measure the wrong DMA path. SDI
+transmission of v210 is bit-exact on the wire — no format
+conversion at either the output or the input — so the 10-bit
+luma values written by the encode kernel arrive intact at the
+decode kernel.
+
+Encoding: each byte of the 64-bit sequence is placed in the low
+8 bits of a 10-bit luma slot (top 2 bits zero), spanning 8 of
+the 12 luma slots across 2 v210 groups (32 bytes of buffer
+touched, no chroma slot disturbed). Decoding inverts: read those
+8 luma slots, take the low 8 bits of each, reassemble the
+uint64.
+
 ### Why decompose kernel time from ex-kernel cost
 
 A consumer's effective latency depends on their kernel. The fixed
@@ -933,10 +981,18 @@ proves common a future spec section may propose one.
 ### Scope
 
 - One pixel format and frame rate per run. Primary characterization
-  mode: 1080p60 8-bit YUV 4:2:2 (`bmdFormat8BitYUV` / UYVY). Other
-  modes parameterized; fingerprint encoding is mode-aware.
-- Two DeckLink devices wired in loopback. Single-card sub-device
-  loopback is not initially exercised.
+  mode: 4K UHD 59.94p 10-bit YUV 4:2:2 (`Mode4K2160p5994` /
+  `Format10BitYUV` / v210). 4K59.94 + v210 is the repo-wide
+  default for examples and benchmarks (see
+  `cuda_pinned_pipelined.py`) and matches standard production
+  capture; the latency benchmark inherits both. Other modes
+  parameterized; fingerprint encoding is mode-aware.
+- Two DeckLink sub-devices wired in physical loopback (BNC jumper
+  between SDI ports). Sub-devices on the same card in half-duplex
+  profile are valid — the SDK exposes them as independent
+  `IDeckLink` interfaces, one configured for output and one for
+  input. Genuine two-card configurations are also supported but
+  not required.
 - No HDR, audio, ancillary data. Fingerprint occupies active video
   only.
 - Genlock (REF BNC) configuration is not exercised by the benchmark.
