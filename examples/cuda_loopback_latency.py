@@ -11,9 +11,9 @@ Pipeline (no CPU pixel touch on either path):
 
     [device staging buf] --(encode kernel)-> [device staging buf]
                                               |
-                                  D2H 16 bytes |
+                                  D2H 32 bytes |
                                               v
-                                    [pinned output frame[0:16]]
+                                  [pinned output frame[0:32]]
                                               |
                               schedule_output |
                                               v
@@ -37,13 +37,18 @@ Pipeline (no CPU pixel touch on either path):
                                               v
                                        [pinned result]
 
-The decode kernel is bracketed by CUDA events; ``kernel_us`` is the
-GPU-timeline elapsed time. ``ex_kernel_us = RTT_us - kernel_us`` is
-the floor a real consumer's pipeline would see if their kernel ran in
-zero time. Real consumers project total RTT as ``ex_kernel_us +
-their_kernel_us``.
+The decode kernel is bracketed by CUDA events ``ev_start``/``ev_end``;
+``kernel_us`` is the GPU-timeline elapsed time. A separate ``ev_done``
+records after the result D2H so the consumer thread can sync on it
+before reading ``result_host`` — without that event, the consumer
+would race the D2H against ``ev_end`` (kernel-done) and read stale
+bytes for ~all frames.
 
-Defaults: 4K UHD 59.94p, 8-bit YUV 4:2:2 (UYVY), output device 0,
+``ex_kernel_us = RTT_us - kernel_us`` is the floor a real consumer's
+pipeline would see if their kernel ran in zero time. Real consumers
+project total RTT as ``ex_kernel_us + their_kernel_us``.
+
+Defaults: 4K UHD 59.94p, 10-bit YUV 4:2:2 (v210), output device 0,
 input device 2, 1000 frames or 30s.
 
 Usage:
@@ -146,9 +151,16 @@ __global__ void encode_fingerprint(unsigned char* dst, unsigned long long seq) {
     // Eight luma slots Y0..Y7 carry seq[0..7]; chroma neutral. Group 0
     // word layout: (Cb0, Y0, Cr0), (Y1, Cb2, Y2), (Cr2, Y3, Cb4),
     //              (Y4, Cr4, Y5).
+    //
+    // Encoded luma = byte | 0x100 — keeps every 10-bit luma value in
+    // [256, 511], well clear of the SMPTE-reserved sync codes
+    // (0x000-0x003 and 0x3FC-0x3FF). DeckLink hardware silently
+    // rewrites in-band sync codes to 0x004, which collapses any
+    // zero-valued seq byte to 0x04 on capture and corrupts the
+    // recovered seq for all frames where some byte is < 4.
     unsigned int y[8];
     for (int i = 0; i < 8; ++i) {
-        y[i] = (unsigned int)((seq >> (i * 8)) & 0xFFu);
+        y[i] = (unsigned int)((seq >> (i * 8)) & 0xFFu) | 0x100u;
     }
     // Group 0.
     w[0] = v210_word(V210_CHROMA_NEUTRAL, y[0], V210_CHROMA_NEUTRAL);
@@ -205,9 +217,13 @@ def _v210_unpack(word: int) -> tuple[int, int, int]:
 
 def _encode_fingerprint_cpu(buf: bytearray, seq: int) -> None:
     """Reference for the encode kernel. Writes the 32-byte v210 pattern
-    at ``buf[0:32]`` carrying ``seq`` in 8 luma slots across two groups."""
+    at ``buf[0:32]`` carrying ``seq`` in 8 luma slots across two groups.
+
+    Each seq byte is OR'd with 0x100 to lift it above the SMPTE-reserved
+    sync-code range (0x000-0x003); without this, DeckLink hardware
+    rewrites zero-valued bytes to 0x04 in flight."""
     seq_bytes = seq.to_bytes(8, "little", signed=False)
-    y = [b for b in seq_bytes]  # 8 luma values, low-8-bits-of-10
+    y = [b | 0x100 for b in seq_bytes]  # luma value in [256, 511]
     cn = _V210_CHROMA_NEUTRAL
     yn = _V210_LUMA_NEUTRAL
     words = [
@@ -354,8 +370,9 @@ class _OutputDriver:
         self._lock = threading.Lock()
 
     def _encode_into(self, host_ptr: int, seq: int) -> None:
-        """Run encode kernel and D2H 16 bytes into ``host_ptr``.
-        Synchronizes the stream so the SDK can DMA the frame safely."""
+        """Run encode kernel and D2H 32 bytes (two v210 groups) into
+        ``host_ptr``. Synchronizes the stream so the SDK can DMA the
+        frame safely."""
         cuda = self._cuda
         cudart = self._cudart
         # Pack args: (uint8_t* dst, unsigned long long seq).
@@ -414,19 +431,21 @@ class _OutputDriver:
 
 
 class _Slot:
-    __slots__ = ("d_ptr", "ev_end", "ev_start", "result_dptr", "result_host")
+    __slots__ = ("d_ptr", "ev_done", "ev_end", "ev_start", "result_dptr", "result_host")
 
     def __init__(
         self,
         d_ptr: int,
         ev_start: object,
         ev_end: object,
+        ev_done: object,
         result_dptr: int,
         result_host: ctypes.Array[ctypes.c_uint8],
     ) -> None:
         self.d_ptr = d_ptr
         self.ev_start = ev_start
         self.ev_end = ev_end
+        self.ev_done = ev_done
         self.result_dptr = result_dptr
         self.result_host = result_host
 
@@ -477,6 +496,8 @@ class _InputPipeline:
             _check_cuda(err, "cudaEventCreate(start)")
             err, ev_end = cudart.cudaEventCreate()
             _check_cuda(err, "cudaEventCreate(end)")
+            err, ev_done = cudart.cudaEventCreate()
+            _check_cuda(err, "cudaEventCreate(done)")
             # 8-byte page-locked host buffer for D2H of decoded seq.
             err, h_ptr = cudart.cudaHostAlloc(8, cudart.cudaHostAllocDefault)
             _check_cuda(err, "cudaHostAlloc(result)")
@@ -486,6 +507,7 @@ class _InputPipeline:
                     d_ptr=int(d_ptr),
                     ev_start=ev_start,
                     ev_end=ev_end,
+                    ev_done=ev_done,
                     result_dptr=int(result_dptr),
                     result_host=host_arr,
                 )
@@ -500,6 +522,7 @@ class _InputPipeline:
         for s in self._slots:
             cudart.cudaEventDestroy(s.ev_start)
             cudart.cudaEventDestroy(s.ev_end)
+            cudart.cudaEventDestroy(s.ev_done)
             cudart.cudaFree(s.d_ptr)
             cudart.cudaFree(s.result_dptr)
             cudart.cudaFreeHost(int(ctypes.addressof(s.result_host)))
@@ -560,6 +583,12 @@ class _InputPipeline:
                 self._stream,
             )
             _check_cuda(err, "cudaMemcpyAsync(D2H)")
+            # ev_done fires after the result D2H completes — the consumer
+            # syncs on this before reading result_host. Without it, the
+            # consumer races the D2H against ev_end (kernel-done) and
+            # reads stale bytes.
+            (err,) = cudart.cudaEventRecord(slot.ev_done, self._stream)
+            _check_cuda(err, "cudaEventRecord(done)")
             try:
                 self.in_flight.put_nowait(
                     _CapturedFrame(
@@ -580,7 +609,9 @@ class _InputPipeline:
                 frame = self.in_flight.get(timeout=0.1)
             except queue.Empty:
                 continue
-            (err,) = cudart.cudaEventSynchronize(frame.slot.ev_end)
+            # Sync on ev_done (post-D2H) so result_host is guaranteed
+            # populated before we read it.
+            (err,) = cudart.cudaEventSynchronize(frame.slot.ev_done)
             _check_cuda(err, "cudaEventSynchronize")
             err, kernel_ms = cudart.cudaEventElapsedTime(
                 frame.slot.ev_start, frame.slot.ev_end
@@ -692,7 +723,7 @@ def run_loopback(
             err, decode_fn = cuda.cuModuleGetFunction(module, b"decode_fingerprint")
             _check_driver(err, "cuModuleGetFunction(decode)")
 
-            # Output staging buffer (16 bytes on device).
+            # Output staging buffer (32 bytes on device — two v210 groups).
             err, staging_dptr = cudart.cudaMalloc(_FINGERPRINT_BYTES)
             _check_cuda(err, "cudaMalloc(staging)")
             try:

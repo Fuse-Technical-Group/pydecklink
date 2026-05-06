@@ -895,11 +895,19 @@ luma values written by the encode kernel arrive intact at the
 decode kernel.
 
 Encoding: each byte of the 64-bit sequence is placed in the low
-8 bits of a 10-bit luma slot (top 2 bits zero), spanning 8 of
-the 12 luma slots across 2 v210 groups (32 bytes of buffer
-touched, no chroma slot disturbed). Decoding inverts: read those
-8 luma slots, take the low 8 bits of each, reassemble the
-uint64.
+8 bits of a 10-bit luma slot OR'd with `0x100`, putting every
+encoded luma value in `[256, 511]`. Spans 8 of the 12 luma slots
+across 2 v210 groups (32 bytes of buffer touched, no chroma slot
+disturbed). Decoding inverts: read those 8 luma slots, take the
+low 8 bits of each, reassemble the uint64.
+
+The `| 0x100` lift is required: SMPTE 425M reserves luma values
+`0x000-0x003` and `0x3FC-0x3FF` as in-band sync codes, and the
+DeckLink hardware silently rewrites any reserved code that
+appears in active video to `0x004`. Without the lift, a sequence
+byte of zero (common — every seq < 256 has seven zero bytes)
+would arrive on capture as 4, corrupting the recovery for
+nearly every frame.
 
 ### Why decompose kernel time from ex-kernel cost
 

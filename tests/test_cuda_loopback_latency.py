@@ -122,6 +122,33 @@ def test_v210_word_top_two_bits_zero() -> None:
 # -- Fingerprint encode / decode (pure-Python reference) ----------------------
 
 
+def test_encode_lifts_luma_above_sdi_sync_range() -> None:
+    """Every encoded luma slot must have bit 0x100 set, so the 10-bit
+    luma value is in [256, 511] — clear of the SMPTE-reserved sync
+    codes (0x000-0x003) that DeckLink hardware rewrites to 0x004 in
+    flight. Without this, any seq byte equal to 0 round-trips as 4.
+    """
+    mod = _load()
+    buf = bytearray(64)
+    mod._encode_fingerprint_cpu(buf, 0)  # pathological: all bytes zero
+    words = [int.from_bytes(buf[4 * i : 4 * i + 4], "little") for i in range(8)]
+    luma_slots = []
+    _, y, _ = mod._v210_unpack(words[0])
+    luma_slots.append(y)
+    y1, _, y2 = mod._v210_unpack(words[1])
+    luma_slots += [y1, y2]
+    _, y, _ = mod._v210_unpack(words[2])
+    luma_slots.append(y)
+    y4, _, y5 = mod._v210_unpack(words[3])
+    luma_slots += [y4, y5]
+    _, y, _ = mod._v210_unpack(words[4])
+    luma_slots.append(y)
+    y7, _, _ = mod._v210_unpack(words[5])
+    luma_slots.append(y7)
+    for slot in luma_slots:
+        assert slot >= 0x100, f"luma {slot:#x} not lifted above SDI sync range"
+
+
 def test_encode_writes_seq_into_v210_luma_slots() -> None:
     """Each byte of a 64-bit little-endian sequence number lands in the
     low 8 bits of one of the first 8 v210 luma slots, spread across
