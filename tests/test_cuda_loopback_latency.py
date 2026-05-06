@@ -289,6 +289,14 @@ def test_wait_for_input_signal_skips_unsignaled_frames() -> None:
     assert mod._wait_for_input_signal(dev, timeout_s=2.0) is True
 
 
+# This example deliberately does NOT auto-detect the input mode. The
+# example controls both ends of the loopback wire, so detection adds
+# no functional value while the chicken-and-egg dance (start output →
+# detect input → re-enable input) introduces a half-frame measurement
+# bias and output queue underruns. Auto-detection lives only on the
+# external-source examples (see test_examples_cuda.py).
+
+
 # -- NVRTC kernels -------------------------------------------------------------
 
 
