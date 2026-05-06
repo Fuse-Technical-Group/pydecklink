@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import importlib.util
 import inspect
+import time
 from pathlib import Path
 
 import numpy as np
@@ -233,6 +234,59 @@ def test_percentiles_known_distribution() -> None:
     assert out[50.0] == pytest.approx(49.5, abs=1.0)
     assert out[95.0] == pytest.approx(94.05, abs=1.0)
     assert out[99.0] == pytest.approx(98.01, abs=1.0)
+
+
+# -- Input signal-lock probe --------------------------------------------------
+
+
+class _FakeCfr:
+    __slots__ = ("has_signal",)
+
+    def __init__(self, has_signal: bool) -> None:
+        self.has_signal = has_signal
+
+
+class _FakeDev:
+    """Minimal stand-in for ``pydecklink.Device`` exposing only
+    ``pop_capture_frame_ref``. Each call pops the next item from
+    ``frames``; ``None`` simulates a pop timeout (and sleeps for
+    ``timeout_ms`` so probe wall time matches reality)."""
+
+    def __init__(self, frames: list[object | None]) -> None:
+        self._frames = list(frames)
+        self.calls = 0
+
+    def pop_capture_frame_ref(self, timeout_ms: int) -> object | None:
+        self.calls += 1
+        if not self._frames:
+            time.sleep(timeout_ms / 1000.0)
+            return None
+        cfr = self._frames.pop(0)
+        if cfr is None:
+            time.sleep(timeout_ms / 1000.0)
+        return cfr
+
+
+def test_wait_for_input_signal_returns_true_on_first_locked_frame() -> None:
+    mod = _load()
+    dev = _FakeDev([_FakeCfr(False), _FakeCfr(False), _FakeCfr(True), _FakeCfr(False)])
+    assert mod._wait_for_input_signal(dev, timeout_s=2.0) is True
+    assert dev.calls == 3  # stops as soon as a locked frame arrives
+
+
+def test_wait_for_input_signal_returns_false_on_timeout() -> None:
+    mod = _load()
+    dev = _FakeDev([])  # nothing arrives — every pop times out
+    started = time.monotonic()
+    assert mod._wait_for_input_signal(dev, timeout_s=0.3) is False
+    elapsed = time.monotonic() - started
+    assert 0.25 <= elapsed < 1.0
+
+
+def test_wait_for_input_signal_skips_unsignaled_frames() -> None:
+    mod = _load()
+    dev = _FakeDev([_FakeCfr(False), None, _FakeCfr(False), _FakeCfr(True)])
+    assert mod._wait_for_input_signal(dev, timeout_s=2.0) is True
 
 
 # -- NVRTC kernels -------------------------------------------------------------
