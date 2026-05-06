@@ -11,9 +11,7 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 
-EXAMPLE_PATH = (
-    Path(__file__).resolve().parent.parent / "examples" / "passthrough.py"
-)
+EXAMPLE_PATH = Path(__file__).resolve().parent.parent / "examples" / "passthrough.py"
 
 
 def _load():
@@ -143,9 +141,7 @@ class _FakeOutDev:
 
 def test_preroll_schedules_count_frames_at_consecutive_times() -> None:
     mod = _load()
-    cap = _FakeCapDev(
-        frames=[_FakeFrame(True), _FakeFrame(True), _FakeFrame(True)]
-    )
+    cap = _FakeCapDev(frames=[_FakeFrame(True), _FakeFrame(True), _FakeFrame(True)])
     out = _FakeOutDev()
     mod._preroll_capture_to_output(
         cap_dev=cap,
