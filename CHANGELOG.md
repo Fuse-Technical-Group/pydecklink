@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.2.4](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.2.3...v0.2.4) (2026-05-06)
+
+
+### Added
+
+* **examples:** cuda_loopback_latency.py — fingerprint loopback benchmark ([bb094ab](https://github.com/Fuse-Technical-Group/pydecklink/commit/bb094ab0f557e5e96e82101f4541166a97b2e1fa))
+* **examples:** cuda_loopback_latency.py — fingerprint loopback benchmark (§road:fingerprint-loopback) ([3e2473e](https://github.com/Fuse-Technical-Group/pydecklink/commit/3e2473e9d4f635dfbb90fcfd9f0164fe338a28f0))
+
+
+### Fixed
+
+* **loopback:** fail fast when input never locks onto SDI signal ([e8ff39a](https://github.com/Fuse-Technical-Group/pydecklink/commit/e8ff39a328aed029021fa1b153a55005c7ca2198))
+* **loopback:** lift fingerprint luma above SDI sync-code range + post-D2H sync ([891fa05](https://github.com/Fuse-Technical-Group/pydecklink/commit/891fa059faa8a26d87c15b32b656252c9c3e108d))
+
 ## [0.2.3](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.2.2...v0.2.3) (2026-05-05)
 
 
