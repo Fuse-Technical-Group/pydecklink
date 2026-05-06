@@ -54,6 +54,10 @@ _DEFAULT_PIXEL_FORMAT = pydecklink.PixelFormat.Format10BitYUV
 # will replace this poll with an IDeckLinkStatus query.
 _LOCK_TIMEOUT_S = 2.0
 
+# Bound the format-detection pre-flight. Same root cause as the lock
+# timeout — a missing source manifests as an indefinite wait without it.
+_DETECTION_TIMEOUT_S = 2.0
+
 
 def _check(err: object, op: str) -> None:
     code = getattr(err, "value", err)
@@ -80,18 +84,59 @@ def _wait_for_input_signal(in_dev: object, timeout_s: float) -> bool:
     return False
 
 
+def _detect_input_mode(
+    dev: object,
+    pixel_format: pydecklink.PixelFormat,
+    timeout_s: float,
+) -> pydecklink.DisplayMode:
+    """Enable input with ``EnableFormatDetection``, poll until the SDK
+    reports a known display mode, then disable input. Returns the
+    detected mode; raises ``RuntimeError`` on timeout. The caller
+    re-enables input with the returned mode for the actual capture
+    path."""
+    # _DEFAULT_MODE as placeholder — the SDK swaps to the detected mode
+    # regardless of the placeholder, but it must be a mode the device
+    # actually supports.
+    dev.enable_video_input(
+        _DEFAULT_MODE,
+        pixel_format,
+        pydecklink.VideoInputFlag.EnableFormatDetection,
+    )
+    dev.start_streams()
+    try:
+        deadline = time.monotonic() + timeout_s
+        while time.monotonic() < deadline:
+            frame = dev.pop_capture_frame(timeout_ms=100)
+            if frame is None or not frame.has_signal:
+                continue
+            fmt = dev.current_input_format
+            if fmt is not None and fmt.mode != pydecklink.DisplayMode.Unknown:
+                return fmt.mode
+    finally:
+        dev.stop_streams()
+        dev.disable_video_input()
+    raise RuntimeError(
+        f"no SDI signal detected on capture device within "
+        f"{timeout_s:.1f}s. Check the BNC connection and source."
+    )
+
+
 def run_register(
     device_index: int = 0,
-    mode: pydecklink.DisplayMode = _DEFAULT_MODE,
+    mode: pydecklink.DisplayMode | None = None,
     pixel_format: pydecklink.PixelFormat = _DEFAULT_PIXEL_FORMAT,
     frame_count: int = 60,
 ) -> None:
     """Open input, capture ``frame_count`` valid frames, register each
     unique buffer pointer with CUDA on first sight, and unregister all
-    on shutdown."""
+    on shutdown. ``mode=None`` (default) auto-detects the input mode
+    via the SDK's FormatDetection."""
     from cuda.bindings import runtime as cudart
 
     dev = pydecklink.Device(index=device_index)
+    if mode is None:
+        mode = _detect_input_mode(dev, pixel_format, _DETECTION_TIMEOUT_S)
+        print(f"[register] detected input mode={mode.name}", flush=True)
     dev.enable_video_input(
         mode=mode,
         pixel_format=pixel_format,
@@ -105,9 +150,8 @@ def run_register(
         dev.disable_video_input()
         raise RuntimeError(
             f"no SDI signal locked on capture device {device_index} "
-            f"within {_LOCK_TIMEOUT_S:.1f}s of starting streams. "
-            f"Check the BNC connection and that the source is "
-            f"configured for {mode.name}."
+            f"within {_LOCK_TIMEOUT_S:.1f}s of starting streams "
+            f"for detected mode {mode.name}."
         )
 
     registered: dict[int, int] = {}  # ptr -> size
