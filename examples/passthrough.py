@@ -30,6 +30,11 @@ import pydecklink
 # spin. SPEC §5.11 will replace this poll with an IDeckLinkStatus query.
 _DETECTION_TIMEOUT_S = 2.0
 
+# Bound the preroll loop. Detection succeeded so signal was present
+# moments ago, but a brief carrier glitch (source mid-resync, etc.)
+# could otherwise stall the preroll loop indefinitely.
+_PREROLL_TIMEOUT_S = 2.0
+
 
 def _poll_for_format_detection(
     dev: pydecklink.Device,
@@ -46,6 +51,40 @@ def _poll_for_format_detection(
         if fmt_info is not None and fmt_info.mode != pydecklink.DisplayMode.Unknown:
             return fmt_info.mode
     return None
+
+
+def _preroll_capture_to_output(
+    cap_dev: pydecklink.Device,
+    out_dev: pydecklink.Device,
+    preroll_count: int,
+    frame_duration: int,
+    frame_timescale: int,
+    timeout_s: float,
+) -> None:
+    """Capture ``preroll_count`` signal-bearing frames and schedule
+    each for output at consecutive display times. Raises
+    ``RuntimeError`` if the full count isn't reached within
+    ``timeout_s`` — guards against a brief carrier drop after detection
+    that would otherwise stall the loop indefinitely."""
+    deadline = time.monotonic() + timeout_s
+    scheduled = 0
+    while scheduled < preroll_count:
+        if time.monotonic() > deadline:
+            raise RuntimeError(
+                f"only prerolled {scheduled}/{preroll_count} frames "
+                f"before {timeout_s:.1f}s timeout. The source may have "
+                f"dropped between format detection and preroll."
+            )
+        frame = cap_dev.pop_capture_frame_ref(timeout_ms=200)
+        if frame is None or not frame.has_signal:
+            continue
+        out_dev.schedule_capture_frame(
+            frame,
+            scheduled * frame_duration,
+            frame_duration,
+            frame_timescale,
+        )
+        scheduled += 1
 
 
 def detect_input(
@@ -139,18 +178,15 @@ def main() -> None:
 
     # -- Pre-roll with live captured frames ------------------------------------
     print("Pre-rolling...", end="", flush=True)
-    scheduled = 0
-    while scheduled < preroll_count:
-        frame = cap_dev.pop_capture_frame_ref(timeout_ms=1000)
-        if frame is None or not frame.has_signal:
-            continue
-        out_dev.schedule_capture_frame(
-            frame,
-            scheduled * frame_duration,
-            frame_duration,
-            frame_timescale,
-        )
-        scheduled += 1
+    _preroll_capture_to_output(
+        cap_dev,
+        out_dev,
+        preroll_count,
+        frame_duration,
+        frame_timescale,
+        _PREROLL_TIMEOUT_S,
+    )
+    scheduled = preroll_count
 
     out_dev.start_scheduled_playback(
         start_time=0,

@@ -104,6 +104,109 @@ def test_poll_returns_none_on_timeout() -> None:
     assert 0.25 <= elapsed < 1.0
 
 
+# -- _preroll_capture_to_output -----------------------------------------------
+
+
+class _FakeCapDev:
+    """Stand-in for ``pydecklink.Device`` exposing only
+    ``pop_capture_frame_ref``."""
+
+    def __init__(self, frames: list[object | None]) -> None:
+        self._frames = list(frames)
+
+    def pop_capture_frame_ref(self, timeout_ms: int) -> object | None:
+        if not self._frames:
+            time.sleep(timeout_ms / 1000.0)
+            return None
+        f = self._frames.pop(0)
+        if f is None:
+            time.sleep(timeout_ms / 1000.0)
+        return f
+
+
+class _FakeOutDev:
+    """Stand-in for ``pydecklink.Device`` exposing only
+    ``schedule_capture_frame``. Records each call."""
+
+    def __init__(self) -> None:
+        self.scheduled: list[tuple[int, int, int]] = []
+
+    def schedule_capture_frame(
+        self,
+        frame: object,
+        display_time: int,
+        duration: int,
+        timescale: int,
+    ) -> None:
+        self.scheduled.append((display_time, duration, timescale))
+
+
+def test_preroll_schedules_count_frames_at_consecutive_times() -> None:
+    mod = _load()
+    cap = _FakeCapDev(
+        frames=[_FakeFrame(True), _FakeFrame(True), _FakeFrame(True)]
+    )
+    out = _FakeOutDev()
+    mod._preroll_capture_to_output(
+        cap_dev=cap,
+        out_dev=out,
+        preroll_count=3,
+        frame_duration=1000,
+        frame_timescale=60000,
+        timeout_s=2.0,
+    )
+    assert out.scheduled == [
+        (0, 1000, 60000),
+        (1000, 1000, 60000),
+        (2000, 1000, 60000),
+    ]
+
+
+def test_preroll_skips_unsignaled_frames() -> None:
+    mod = _load()
+    cap = _FakeCapDev(
+        frames=[
+            _FakeFrame(False),
+            None,
+            _FakeFrame(False),
+            _FakeFrame(True),
+            _FakeFrame(True),
+        ]
+    )
+    out = _FakeOutDev()
+    mod._preroll_capture_to_output(
+        cap_dev=cap,
+        out_dev=out,
+        preroll_count=2,
+        frame_duration=1000,
+        frame_timescale=60000,
+        timeout_s=2.0,
+    )
+    assert len(out.scheduled) == 2
+
+
+def test_preroll_raises_on_timeout() -> None:
+    mod = _load()
+    cap = _FakeCapDev(frames=[])  # nothing ever arrives
+    out = _FakeOutDev()
+    started = time.monotonic()
+    try:
+        mod._preroll_capture_to_output(
+            cap_dev=cap,
+            out_dev=out,
+            preroll_count=3,
+            frame_duration=1000,
+            frame_timescale=60000,
+            timeout_s=0.3,
+        )
+        raise AssertionError("expected RuntimeError")
+    except RuntimeError as exc:
+        assert "0/3 frames" in str(exc)
+    elapsed = time.monotonic() - started
+    assert 0.25 <= elapsed < 1.0
+    assert out.scheduled == []
+
+
 def test_poll_skips_unknown_format_until_known_arrives() -> None:
     """A signaled frame whose ``current_input_format.mode`` is Unknown
     is not enough — keep polling until format detection completes."""
