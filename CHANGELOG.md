@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.5](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.2.4...v0.2.5) (2026-05-06)
+
+
+### Fixed
+
+* **release:** create draft, build wheels, then publish ([6c9928f](https://github.com/Fuse-Technical-Group/pydecklink/commit/6c9928f8e6c92abac9173acc1b69651a48db7fe1))
+* **release:** draft → build wheels → publish (immutable releases) ([1903e86](https://github.com/Fuse-Technical-Group/pydecklink/commit/1903e86ce7af2f57caada369b118a8204b307a3e))
+
 ## [0.2.4](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.2.3...v0.2.4) (2026-05-06)
 
 
