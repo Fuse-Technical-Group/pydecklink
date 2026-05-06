@@ -794,6 +794,153 @@ synthesizes a guess from a partial signal.
 - **Video conversion.** No color space conversion, scaling. The SDK
   has some hardware conversion modes; exposing them is deferred.
 
+## Canonical GPU Passthrough §spec:canonical-gpu-passthrough
+
+*Status: not started*
+
+### Problem
+
+The headline deliverable consumers expect from pydecklink is:
+SDI cable → GPU kernel → SDI cable, at frame rate, with the most
+performant IO the library can provide. The library has all the
+building blocks — pinned-allocator capture
+(§spec:gpu-pinned-memory), scheduled playback with custom
+allocators (§4), zero-copy frame relay (§5), latency floor
+characterization (§spec:latency-characterization) — but no single
+example ties them together as a consumer-facing recipe.
+
+Today a consumer who wants this shape must compose pieces from
+three separate examples:
+
+- `cuda_pinned_pipelined.py` shows the capture half but has no
+  playout side.
+- `passthrough.py` shows the playout half but does no GPU work.
+- `cuda_loopback_latency.py` shows both halves end-to-end but
+  hardcodes a fingerprint-encode/decode kernel as a benchmark
+  payload, not as a consumer slot.
+
+Each composition decision a consumer makes — threading model,
+preroll depth, output queue depth, format detection sequencing,
+allocator wiring, GC tuning, signal-loss recovery — is independent
+and easy to get wrong. Wrong choices manifest as elevated latency,
+output drops, or silent stalls. The components are sufficient;
+the recipe is not. Consumers should be able to drop in their CUDA
+kernel and inherit the project's best IO shape, not rebuild it.
+
+This extends the Target Workflow (§6), which described a CPU
+passthrough pipeline because it predates GPU-direct DMA support.
+
+### Behavior
+
+A new example, `examples/cuda_passthrough.py`, ships an end-to-end
+SDI → CUDA → SDI loop. The example owns every operational
+decision; the consumer owns only the kernel.
+
+- **Input**: capture from a configurable input device into pinned
+  CUDA memory via `cuda_host_alloc` allocator callbacks. Mode is
+  auto-detected; pixel format defaults to v210 (10-bit YUV) and is
+  configurable.
+- **Processing**: a Python callable invoked once per captured
+  frame on a CUDA stream, with a stable signature
+  `kernel(stream, d_input, d_output, width, height, frame_bytes)
+  -> None`. Default implementation is identity —
+  `cudaMemcpyAsync` device-to-device on the stream — producing a
+  true passthrough that consumers can run unchanged to verify
+  their wiring.
+- **Output**: the kernel's output buffer is staged into a pinned
+  output frame and scheduled for playout on a configurable output
+  device. Output mode matches input mode by construction.
+- **Threading**: capture, kernel-dispatch, and consumer-release on
+  separate threads with bounded queues. Same shape as
+  `cuda_pinned_pipelined.py`; the consumer doesn't see it.
+- **Format selection**: input auto-detects with the bounded probe
+  pattern (§spec:latency-characterization). Output configured to
+  match. No CLI mode flag in the default invocation.
+- **Failure modes**: bounded waits on signal lock and format
+  detection; clear `RuntimeError` with device indices and detected
+  mode on misconfiguration. No silent multi-minute spins.
+- **Reporting**: per-frame end-to-end latency (input callback →
+  output egress) and output health counters
+  (`OutputStatus.late + dropped + underrun`) printed at exit.
+- **CLI surface**:
+  `python examples/cuda_passthrough.py --input <N> --output <M>
+  [--pixel-format 8bit|10bit] [--frames|--duration]`. Consumers
+  replace the kernel by editing the function or by importing the
+  example as a module and passing their own callable to
+  `run_passthrough`.
+
+### Why an example, not a library API
+
+Locking the recipe into the library would over-constrain
+consumers who legitimately need different shapes — multi-card
+configs, asymmetric in/out modes, NUMA-pinned threading,
+non-CUDA frameworks. An example documents the canonical recipe
+while leaving the library surface unconstrained. The
+canonical-ness is editorial, not enforced by the API.
+
+### Why a Python callable seam, not a kernel-source string
+
+Consumer kernels arrive in many shapes — NVRTC-compiled source
+strings, cupy `RawKernel` objects, numba CUDA functions,
+hand-launched kernels via `cuLaunchKernel`. Wrapping the seam as
+a Python callable that operates on a CUDA stream + device pointers
+covers all of them with a small per-frame Python call (~µs
+overhead, negligible against frame period). A kernel-source-only
+seam would foreclose cupy and numba consumers; an
+NVRTC-compile-and-launch seam would foreclose pre-compiled or
+hand-managed launches.
+
+### Why bidirectional in one example, not separate halves
+
+Latency, queue depth, and preroll decisions span both halves —
+splitting them invites recomposition errors of the kind §6
+already warned against (CPU↔GPU copies, triple-buffer
+synchronization). The headline value of the recipe is the loop,
+not either half in isolation. Consumers who need only one half
+already have `cuda_pinned_pipelined.py` (capture) or future
+playout-only examples; they can compose their own.
+
+### Why CUDA-only initial scope (no CPU fallback)
+
+A CPU fallback would dilute what the example demonstrates: the
+GPU-passthrough latency floor and integration shape. CPU-touching
+of frame data adds 5–15ms at 4K10-bit, which would swamp the
+SDI/SDK contribution and produce a different benchmark with
+different audience. Consumers without CUDA already have
+`passthrough.py` (zero-copy SDI → SDI, no GPU touch); the
+canonical CPU recipe and canonical GPU recipe are distinct
+deliverables.
+
+HIP and Level Zero variants become reasonable once consumer
+demand exists; the underlying `VideoBufferAllocator` /
+`VideoBufferAllocatorProvider` surface is framework-agnostic
+(§spec:gpu-pinned-memory), so they're additive examples, not API
+changes.
+
+### Tradeoffs accepted
+
+- **Opinionated defaults.** Threading model, preroll depth, queue
+  sizes, GC tuning are baked. Consumers with different operating
+  points compose from lower-level CUDA examples.
+- **Per-frame Python call overhead.** The kernel callable is
+  invoked from Python on the hot path. Microsecond-scale; verified
+  by the existing `cuda_pinned_pipelined.py` capture-loop pattern.
+  Consumers with stricter latency budgets can fork the example
+  and inline.
+- **Single CUDA stream.** The example uses one stream end-to-end.
+  Consumers wanting overlapped compute + copy across multiple
+  streams compose their own from `cuda_pinned_pipelined.py`'s
+  pattern.
+
+### API surface impact
+
+The example is purely additive — no library API changes. It
+consumes the existing `VideoBufferAllocator` /
+`VideoBufferAllocatorProvider` / `schedule_capture_frame` /
+`create_frame_pool_pinned` surface. README's quick-start should
+add a pointer alongside the existing `passthrough.py` reference;
+exact wording deferred to the example PR.
+
 ## Latency Characterization §spec:latency-characterization
 
 *Status: in progress*
