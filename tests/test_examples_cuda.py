@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import importlib.util
 import inspect
+import time
 from pathlib import Path
 
 import pytest
@@ -83,6 +84,64 @@ def test_register_run_function_exists() -> None:
     assert hasattr(mod, "run_register"), "run_register() missing"
     sig = inspect.signature(mod.run_register)
     assert {"device_index", "frame_count"}.issubset(sig.parameters.keys())
+
+
+# -- Input signal-lock probe (shared shape across both examples) -------------
+
+
+class _FakeCfr:
+    __slots__ = ("has_signal",)
+
+    def __init__(self, has_signal: bool) -> None:
+        self.has_signal = has_signal
+
+
+class _FakeDev:
+    """Minimal stand-in for ``pydecklink.Device`` exposing only
+    ``pop_capture_frame_ref``. Each call pops the next item from
+    ``frames``; ``None`` simulates a pop timeout (and sleeps for
+    ``timeout_ms`` so probe wall time matches reality)."""
+
+    def __init__(self, frames: list[object | None]) -> None:
+        self._frames = list(frames)
+        self.calls = 0
+
+    def pop_capture_frame_ref(self, timeout_ms: int) -> object | None:
+        self.calls += 1
+        if not self._frames:
+            time.sleep(timeout_ms / 1000.0)
+            return None
+        cfr = self._frames.pop(0)
+        if cfr is None:
+            time.sleep(timeout_ms / 1000.0)
+        return cfr
+
+
+@pytest.mark.parametrize("path", [PIPELINED_PATH, REGISTER_PATH])
+def test_wait_for_input_signal_returns_true_on_first_locked_frame(
+    path: Path,
+) -> None:
+    mod = _load(path)
+    dev = _FakeDev([_FakeCfr(False), _FakeCfr(False), _FakeCfr(True), _FakeCfr(False)])
+    assert mod._wait_for_input_signal(dev, timeout_s=2.0) is True
+    assert dev.calls == 3
+
+
+@pytest.mark.parametrize("path", [PIPELINED_PATH, REGISTER_PATH])
+def test_wait_for_input_signal_returns_false_on_timeout(path: Path) -> None:
+    mod = _load(path)
+    dev = _FakeDev([])
+    started = time.monotonic()
+    assert mod._wait_for_input_signal(dev, timeout_s=0.3) is False
+    elapsed = time.monotonic() - started
+    assert 0.25 <= elapsed < 1.0
+
+
+@pytest.mark.parametrize("path", [PIPELINED_PATH, REGISTER_PATH])
+def test_wait_for_input_signal_skips_unsignaled_frames(path: Path) -> None:
+    mod = _load(path)
+    dev = _FakeDev([_FakeCfr(False), None, _FakeCfr(False), _FakeCfr(True)])
+    assert mod._wait_for_input_signal(dev, timeout_s=2.0) is True
 
 
 # -- _SelfSource lifecycle (only in the pipelined example) -------------------

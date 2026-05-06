@@ -72,6 +72,26 @@ _PIPELINE_DEPTH = 3
 # 4 is a small safety margin.
 _PREFILL = 4
 
+# Bound the wait for the input device to lock onto the SDI signal after
+# start_streams. Without this, a missing BNC or wrong device index
+# manifests as a silent indefinite "waiting for signal" spin. SPEC §5.11
+# will replace this poll with an IDeckLinkStatus query.
+_LOCK_TIMEOUT_S = 2.0
+
+
+def _wait_for_input_signal(in_dev: object, timeout_s: float) -> bool:
+    """Drain captures until one arrives with ``has_signal=True``, or the
+    deadline passes. Returns whether the input locked. Probed frames are
+    discarded; the caller owns the post-lock capture path."""
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        cfr = in_dev.pop_capture_frame_ref(timeout_ms=100)
+        if cfr is None:
+            continue
+        if cfr.has_signal:
+            return True
+    return False
+
 
 def _check(err: object, op: str) -> None:
     """Raise on a non-zero CUDA error code."""
@@ -433,6 +453,21 @@ def run_pipelined(
         dev.start_streams()
         if src is not None:
             src.start_playback()
+
+        if not _wait_for_input_signal(dev, _LOCK_TIMEOUT_S):
+            dev.stop_streams()
+            dev.disable_video_input()
+            src_hint = (
+                f"--source-device {source_device_index}"
+                if source_device_index is not None
+                else "external SDI source"
+            )
+            raise RuntimeError(
+                f"no SDI signal locked on capture device {device_index} "
+                f"within {_LOCK_TIMEOUT_S:.1f}s of starting streams. "
+                f"Check the BNC connection ({src_hint}) and that the "
+                f"source is configured for {mode.name}."
+            )
 
         # ----- GC tuning for the hot loop -----
         # Allocations in the threads are bounded (Slot/Frame dataclasses

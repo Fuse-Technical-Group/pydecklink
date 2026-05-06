@@ -58,7 +58,7 @@ for mode in pydecklink.display_modes():
     print(f"{mode.name}: {mode.width}x{mode.height} @ {mode.fps:.2f}")
 ```
 
-See `examples/passthrough_decklink.py` for a capture → playout loop.
+See `examples/passthrough.py` for a capture → playout loop.
 
 ## Running hardware tests
 

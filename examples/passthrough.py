@@ -9,8 +9,8 @@ Requires two DeckLink sub-devices (or two cards) connected via SDI.
 Default: device 3 captures, device 1 plays out.
 
 Usage:
-    python examples/passthrough_decklink.py
-    python examples/passthrough_decklink.py --capture 3 --playout 1
+    python examples/passthrough.py
+    python examples/passthrough.py --capture 3 --playout 1
 """
 
 from __future__ import annotations
@@ -21,15 +21,40 @@ import queue
 import signal
 import sys
 import threading
+import time
 
 import pydecklink
+
+# Bound the format-detection wait. Without this, a missing BNC or wrong
+# capture-device index manifests as an indefinite "Waiting for signal..."
+# spin. SPEC §5.11 will replace this poll with an IDeckLinkStatus query.
+_DETECTION_TIMEOUT_S = 2.0
+
+
+def _poll_for_format_detection(
+    dev: pydecklink.Device,
+    timeout_s: float,
+) -> pydecklink.DisplayMode | None:
+    """Poll captures until one arrives with signal AND a known display
+    mode. Returns the detected mode, or None if the timeout expires."""
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        frame = dev.pop_capture_frame(timeout_ms=100)
+        if frame is None or not frame.has_signal:
+            continue
+        fmt_info = dev.current_input_format
+        if fmt_info is not None and fmt_info.mode != pydecklink.DisplayMode.Unknown:
+            return fmt_info.mode
+    return None
 
 
 def detect_input(
     dev: pydecklink.Device,
     pixel_format: pydecklink.PixelFormat,
+    timeout_s: float = _DETECTION_TIMEOUT_S,
 ) -> pydecklink.DisplayMode:
-    """Enable input with format detection and wait for a valid signal."""
+    """Enable input with format detection and wait for a valid signal,
+    raising ``RuntimeError`` if no signal locks within ``timeout_s``."""
     dev.enable_video_input(
         pydecklink.DisplayMode.HD1080p25,
         pixel_format,
@@ -38,14 +63,16 @@ def detect_input(
     dev.start_streams()
 
     print("Waiting for signal...", end="", flush=True)
-    while True:
-        frame = dev.pop_capture_frame(timeout_ms=500)
-        if frame is not None and frame.has_signal:
-            fmt_info = dev.current_input_format
-            if fmt_info is not None and fmt_info.mode != pydecklink.DisplayMode.Unknown:
-                print(f" detected {fmt_info.mode!r}")
-                return fmt_info.mode
-        print(".", end="", flush=True)
+    mode = _poll_for_format_detection(dev, timeout_s)
+    if mode is None:
+        print(" timed out.")
+        raise RuntimeError(
+            f"no SDI signal detected on capture device within "
+            f"{timeout_s:.1f}s of starting streams. Check the BNC "
+            f"connection and that the source is emitting."
+        )
+    print(f" detected {mode!r}")
+    return mode
 
 
 def main() -> None:

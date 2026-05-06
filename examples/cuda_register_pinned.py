@@ -48,6 +48,12 @@ import pydecklink
 _DEFAULT_MODE = pydecklink.DisplayMode.Mode4K2160p5994
 _DEFAULT_PIXEL_FORMAT = pydecklink.PixelFormat.Format10BitYUV
 
+# Bound the wait for the input device to lock onto the SDI signal after
+# start_streams. Without this, a missing BNC or wrong device index
+# manifests as a silent indefinite "waiting for signal" spin. SPEC §5.11
+# will replace this poll with an IDeckLinkStatus query.
+_LOCK_TIMEOUT_S = 2.0
+
 
 def _check(err: object, op: str) -> None:
     code = getattr(err, "value", err)
@@ -58,6 +64,20 @@ def _check(err: object, op: str) -> None:
 def _print_status(line: str) -> None:
     sys.stdout.write(f"\r{line}\033[K")
     sys.stdout.flush()
+
+
+def _wait_for_input_signal(in_dev: object, timeout_s: float) -> bool:
+    """Drain captures until one arrives with ``has_signal=True``, or the
+    deadline passes. Returns whether the input locked. Probed frames are
+    discarded; the caller owns the post-lock capture path."""
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        cfr = in_dev.pop_capture_frame_ref(timeout_ms=100)
+        if cfr is None:
+            continue
+        if cfr.has_signal:
+            return True
+    return False
 
 
 def run_register(
@@ -79,6 +99,16 @@ def run_register(
         input_queue_depth=1,
     )
     dev.start_streams()
+
+    if not _wait_for_input_signal(dev, _LOCK_TIMEOUT_S):
+        dev.stop_streams()
+        dev.disable_video_input()
+        raise RuntimeError(
+            f"no SDI signal locked on capture device {device_index} "
+            f"within {_LOCK_TIMEOUT_S:.1f}s of starting streams. "
+            f"Check the BNC connection and that the source is "
+            f"configured for {mode.name}."
+        )
 
     registered: dict[int, int] = {}  # ptr -> size
     stop = [False]
