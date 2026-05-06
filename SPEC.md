@@ -796,7 +796,7 @@ synthesizes a guess from a partial signal.
 
 ## Latency Characterization §spec:latency-characterization
 
-*Status: not started*
+*Status: in progress*
 
 ### Problem
 
