@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import importlib.util
 import inspect
+import time
 from pathlib import Path
 
 import pytest
@@ -83,6 +84,152 @@ def test_register_run_function_exists() -> None:
     assert hasattr(mod, "run_register"), "run_register() missing"
     sig = inspect.signature(mod.run_register)
     assert {"device_index", "frame_count"}.issubset(sig.parameters.keys())
+
+
+# -- Input signal-lock probe (shared shape across both examples) -------------
+
+
+class _FakeCfr:
+    __slots__ = ("has_signal",)
+
+    def __init__(self, has_signal: bool) -> None:
+        self.has_signal = has_signal
+
+
+class _FakeDev:
+    """Minimal stand-in for ``pydecklink.Device`` exposing only
+    ``pop_capture_frame_ref``. Each call pops the next item from
+    ``frames``; ``None`` simulates a pop timeout (and sleeps for
+    ``timeout_ms`` so probe wall time matches reality)."""
+
+    def __init__(self, frames: list[object | None]) -> None:
+        self._frames = list(frames)
+        self.calls = 0
+
+    def pop_capture_frame_ref(self, timeout_ms: int) -> object | None:
+        self.calls += 1
+        if not self._frames:
+            time.sleep(timeout_ms / 1000.0)
+            return None
+        cfr = self._frames.pop(0)
+        if cfr is None:
+            time.sleep(timeout_ms / 1000.0)
+        return cfr
+
+
+@pytest.mark.parametrize("path", [PIPELINED_PATH, REGISTER_PATH])
+def test_wait_for_input_signal_returns_true_on_first_locked_frame(
+    path: Path,
+) -> None:
+    mod = _load(path)
+    dev = _FakeDev([_FakeCfr(False), _FakeCfr(False), _FakeCfr(True), _FakeCfr(False)])
+    assert mod._wait_for_input_signal(dev, timeout_s=2.0) is True
+    assert dev.calls == 3
+
+
+@pytest.mark.parametrize("path", [PIPELINED_PATH, REGISTER_PATH])
+def test_wait_for_input_signal_returns_false_on_timeout(path: Path) -> None:
+    mod = _load(path)
+    dev = _FakeDev([])
+    started = time.monotonic()
+    assert mod._wait_for_input_signal(dev, timeout_s=0.3) is False
+    elapsed = time.monotonic() - started
+    assert 0.25 <= elapsed < 1.0
+
+
+@pytest.mark.parametrize("path", [PIPELINED_PATH, REGISTER_PATH])
+def test_wait_for_input_signal_skips_unsignaled_frames(path: Path) -> None:
+    mod = _load(path)
+    dev = _FakeDev([_FakeCfr(False), None, _FakeCfr(False), _FakeCfr(True)])
+    assert mod._wait_for_input_signal(dev, timeout_s=2.0) is True
+
+
+# -- Input mode auto-detection (shared shape across both examples) -----------
+
+
+class _FakeFrame:
+    __slots__ = ("has_signal",)
+
+    def __init__(self, has_signal: bool) -> None:
+        self.has_signal = has_signal
+
+
+class _DetectingFakeDev:
+    """Stand-in for ``pydecklink.Device`` exposing the surface that
+    ``_detect_input_mode`` calls: enable/start/pop/format/stop/disable.
+    Records lifecycle calls so tests can assert teardown ran."""
+
+    def __init__(
+        self,
+        frames: list[object | None],
+        format_mode: object | None = None,
+    ) -> None:
+        self._frames = list(frames)
+        self.calls: list[str] = []
+        self._format_mode = format_mode
+
+    def enable_video_input(
+        self, mode: object, pixel_format: object, flags: object = None
+    ) -> None:
+        self.calls.append("enable")
+
+    def start_streams(self) -> None:
+        self.calls.append("start_streams")
+
+    def stop_streams(self) -> None:
+        self.calls.append("stop_streams")
+
+    def disable_video_input(self) -> None:
+        self.calls.append("disable")
+
+    def pop_capture_frame(self, timeout_ms: int) -> object | None:
+        self.calls.append("pop")
+        if not self._frames:
+            time.sleep(timeout_ms / 1000.0)
+            return None
+        f = self._frames.pop(0)
+        if f is None:
+            time.sleep(timeout_ms / 1000.0)
+        return f
+
+    @property
+    def current_input_format(self) -> object | None:
+        if self._format_mode is None:
+            return None
+
+        class _Fmt:
+            mode = self._format_mode
+
+        return _Fmt()
+
+
+@pytest.mark.parametrize("path", [PIPELINED_PATH, REGISTER_PATH])
+def test_detect_input_mode_returns_format_when_signal_locks(path: Path) -> None:
+    import pydecklink as _pdl
+
+    mod = _load(path)
+    dev = _DetectingFakeDev(
+        frames=[_FakeFrame(False), _FakeFrame(True)],
+        format_mode=_pdl.DisplayMode.HD1080p5994,
+    )
+    result = mod._detect_input_mode(dev, _pdl.PixelFormat.Format10BitYUV, 2.0)
+    assert result == _pdl.DisplayMode.HD1080p5994
+    # Lifecycle ran in order: enable → start → pop... → stop → disable.
+    assert dev.calls[0] == "enable"
+    assert dev.calls[1] == "start_streams"
+    assert dev.calls[-2:] == ["stop_streams", "disable"]
+
+
+@pytest.mark.parametrize("path", [PIPELINED_PATH, REGISTER_PATH])
+def test_detect_input_mode_raises_on_timeout(path: Path) -> None:
+    import pydecklink as _pdl
+
+    mod = _load(path)
+    dev = _DetectingFakeDev(frames=[], format_mode=None)
+    with pytest.raises(RuntimeError, match="no SDI signal"):
+        mod._detect_input_mode(dev, _pdl.PixelFormat.Format10BitYUV, 0.3)
+    # Teardown still runs on the timeout path.
+    assert dev.calls[-2:] == ["stop_streams", "disable"]
 
 
 # -- _SelfSource lifecycle (only in the pipelined example) -------------------

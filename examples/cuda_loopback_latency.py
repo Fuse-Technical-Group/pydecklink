@@ -102,6 +102,14 @@ _PIPELINE_DEPTH = 3
 # index, or mode mismatch otherwise manifests as a silent multi-minute
 # "waiting for signal" spin. SPEC §5.11 will replace this poll with a
 # direct IDeckLinkStatus query once the binding lands.
+#
+# Output and input are both hardcoded to _DEFAULT_MODE in this example
+# (unlike the cuda capture examples, which auto-detect the input). The
+# example controls both ends, so input auto-detection adds no functional
+# value while the chicken-and-egg dance (start output → detect input →
+# re-enable input) introduces a half-frame measurement bias and output
+# queue underruns during the detection window. Pure latency benchmarks
+# can't afford that tax.
 _LOCK_TIMEOUT_S = 2.0
 
 # Fingerprint occupies the first 32 bytes of v210 active video —

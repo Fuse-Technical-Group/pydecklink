@@ -943,7 +943,7 @@ exact wording deferred to the example PR.
 
 ## Latency Characterization §spec:latency-characterization
 
-*Status: not started*
+*Status: in progress*
 
 ### Problem
 

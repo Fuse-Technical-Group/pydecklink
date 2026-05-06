@@ -72,6 +72,66 @@ _PIPELINE_DEPTH = 3
 # 4 is a small safety margin.
 _PREFILL = 4
 
+# Bound the wait for the input device to lock onto the SDI signal after
+# start_streams. Without this, a missing BNC or wrong device index
+# manifests as a silent indefinite "waiting for signal" spin. SPEC §5.11
+# will replace this poll with an IDeckLinkStatus query.
+_LOCK_TIMEOUT_S = 2.0
+
+# Bound the format-detection pre-flight (external-source mode only).
+_DETECTION_TIMEOUT_S = 2.0
+
+
+def _wait_for_input_signal(in_dev: object, timeout_s: float) -> bool:
+    """Drain captures until one arrives with ``has_signal=True``, or the
+    deadline passes. Returns whether the input locked. Probed frames are
+    discarded; the caller owns the post-lock capture path."""
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        cfr = in_dev.pop_capture_frame_ref(timeout_ms=100)
+        if cfr is None:
+            continue
+        if cfr.has_signal:
+            return True
+    return False
+
+
+def _detect_input_mode(
+    dev: object,
+    pixel_format: pydecklink.PixelFormat,
+    timeout_s: float,
+) -> pydecklink.DisplayMode:
+    """Enable input with ``EnableFormatDetection``, poll until the SDK
+    reports a known display mode, then disable input. Returns the
+    detected mode; raises ``RuntimeError`` on timeout. The caller
+    re-enables input with the returned mode + allocator + zero-copy
+    for the actual capture path."""
+    # _DEFAULT_MODE as placeholder — the SDK swaps to the detected mode
+    # regardless of the placeholder, but it must be a mode the device
+    # actually supports.
+    dev.enable_video_input(
+        _DEFAULT_MODE,
+        pixel_format,
+        pydecklink.VideoInputFlag.EnableFormatDetection,
+    )
+    dev.start_streams()
+    try:
+        deadline = time.monotonic() + timeout_s
+        while time.monotonic() < deadline:
+            frame = dev.pop_capture_frame(timeout_ms=100)
+            if frame is None or not frame.has_signal:
+                continue
+            fmt = dev.current_input_format
+            if fmt is not None and fmt.mode != pydecklink.DisplayMode.Unknown:
+                return fmt.mode
+    finally:
+        dev.stop_streams()
+        dev.disable_video_input()
+    raise RuntimeError(
+        f"no SDI signal detected on capture device within "
+        f"{timeout_s:.1f}s. Check the BNC connection and source."
+    )
+
 
 def _check(err: object, op: str) -> None:
     """Raise on a non-zero CUDA error code."""
@@ -369,7 +429,7 @@ class _Pipeline:
 
 def run_pipelined(
     device_index: int = 0,
-    mode: pydecklink.DisplayMode = _DEFAULT_MODE,
+    mode: pydecklink.DisplayMode | None = None,
     pixel_format: pydecklink.PixelFormat = _DEFAULT_PIXEL_FORMAT,
     frame_count: int = 0,
     duration_seconds: float = 0.0,
@@ -378,6 +438,11 @@ def run_pipelined(
     """Run the pipeline until ``frame_count`` frames are captured (if
     > 0) or ``duration_seconds`` elapse (if > 0), or SIGINT is
     received. Either bound is the first to fire.
+
+    ``mode=None`` (default) auto-detects the input mode via the SDK's
+    FormatDetection. With ``--source self``, auto-detection is skipped
+    because the example controls both ends — the source drives at
+    ``_DEFAULT_MODE`` and the input is configured to match.
     """
     from cuda.bindings import runtime as cudart
 
@@ -394,6 +459,17 @@ def run_pipelined(
         alloc=cuda_host_alloc,
         free=cuda_free_host,
     )
+
+    dev = pydecklink.Device(index=device_index)
+    if mode is None:
+        if source_device_index is not None:
+            # Self-loopback: the example drives output at _DEFAULT_MODE,
+            # so the input is known to match. Skip detection.
+            mode = _DEFAULT_MODE
+        else:
+            mode = _detect_input_mode(dev, pixel_format, _DETECTION_TIMEOUT_S)
+            print(f"[pipelined] detected input mode={mode.name}", flush=True)
+
     frame_bytes = pydecklink.get_frame_bytes(mode, pixel_format)
     width = pydecklink.get_mode_width(mode)
     height = pydecklink.get_mode_height(mode)
@@ -410,7 +486,6 @@ def run_pipelined(
     )
 
     with src_cm as src:
-        dev = pydecklink.Device(index=device_index)
         dev.enable_video_input_with_allocator(
             mode=mode,
             pixel_format=pixel_format,
@@ -433,6 +508,21 @@ def run_pipelined(
         dev.start_streams()
         if src is not None:
             src.start_playback()
+
+        if not _wait_for_input_signal(dev, _LOCK_TIMEOUT_S):
+            dev.stop_streams()
+            dev.disable_video_input()
+            src_hint = (
+                f"--source-device {source_device_index}"
+                if source_device_index is not None
+                else "external SDI source"
+            )
+            raise RuntimeError(
+                f"no SDI signal locked on capture device {device_index} "
+                f"within {_LOCK_TIMEOUT_S:.1f}s of starting streams. "
+                f"Check the BNC connection ({src_hint}) and that the "
+                f"source is configured for {mode.name}."
+            )
 
         # ----- GC tuning for the hot loop -----
         # Allocations in the threads are bounded (Slot/Frame dataclasses
