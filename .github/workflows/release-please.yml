@@ -51,6 +51,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: write
     steps:
       - uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
         id: app-token
@@ -63,3 +64,20 @@ jobs:
           GH_REPO: ${{ github.repository }}
           TAG: ${{ needs.release-please.outputs.tag_name }}
         run: gh release edit "$TAG" --draft=false
+
+      # Re-run release-please-action to refresh the next-release PR.
+      # The first invocation (in the release-please job) opened a PR
+      # whose contents reflect a state where the just-cut release was
+      # still a draft — release-please-action v5.0.0 does not count
+      # drafts as "released", so it walks back to the previous
+      # non-draft release and includes every commit since, often
+      # spuriously bumping the version. Now that the just-cut release
+      # has been promoted, this run sees it as the latest non-draft
+      # release and either closes the stale PR (when there are no new
+      # commits) or refreshes it to the correct delta. Idempotent: no
+      # new release is created because the tag already exists.
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
