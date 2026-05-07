@@ -58,7 +58,9 @@ for mode in pydecklink.display_modes():
     print(f"{mode.name}: {mode.width}x{mode.height} @ {mode.fps:.2f}")
 ```
 
-See `examples/passthrough.py` for a capture → playout loop.
+See `examples/passthrough.py` for a zero-copy capture → playout
+loop, or `examples/cuda_passthrough.py` for the canonical SDI →
+CUDA kernel → SDI recipe (drop in your own kernel callable).
 
 ## Running hardware tests
 
