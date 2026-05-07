@@ -2,6 +2,25 @@
 
 Derived from [SPEC.md](SPEC.md). Sections are in build-dependency order.
 
+## Canonical GPU passthrough
+
+### §road:cuda-passthrough-example
+
+Build a canonical SDI → CUDA → SDI passthrough example in
+`examples/cuda_passthrough.py` (with corresponding
+`tests/test_examples_cuda_passthrough.py`) that captures into pinned
+CUDA memory, dispatches each frame through a Python-callable kernel
+slot, and schedules the result for output.
+§spec:canonical-gpu-passthrough.
+
+**Verify:** With two DeckLink sub-devices wired in physical loopback
+(output 0 → input 2) at 4K59.94 / 10-bit YUV, run
+`uv run examples/cuda_passthrough.py --input 2 --output 0 --duration 5`.
+The example auto-detects the input mode and prints it at startup,
+runs at 59.94 fps with the default identity kernel, and reports
+per-frame end-to-end latency plus `OutputStatus` health counters at
+exit. `OutputStatus.late + dropped + underrun` is zero across the run.
+
 ## Input-locked output
 
 ### §road:config-reference-output-mode
