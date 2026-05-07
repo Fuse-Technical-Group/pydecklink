@@ -65,19 +65,36 @@ jobs:
           TAG: ${{ needs.release-please.outputs.tag_name }}
         run: gh release edit "$TAG" --draft=false
 
-      # Re-run release-please-action to refresh the next-release PR.
-      # The first invocation (in the release-please job) opened a PR
-      # whose contents reflect a state where the just-cut release was
-      # still a draft — release-please-action v5.0.0 does not count
-      # drafts as "released", so it walks back to the previous
+      # Close any release-PR opened by the first release-please-action
+      # call. When a release is being cut (this job's gate), the first
+      # call computed the next-release PR while its just-created
+      # release was still a draft — release-please-action v5.0.0
+      # treats drafts as not-released, so it walks back to the previous
       # non-draft release and includes every commit since, often
-      # spuriously bumping the version. Now that the just-cut release
-      # has been promoted, this run sees it as the latest non-draft
-      # release and either closes the stale PR (when there are no new
-      # commits) or refreshes it to the correct delta. Idempotent: no
-      # new release is created because the tag already exists.
-      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
-        with:
-          token: ${{ steps.app-token.outputs.token }}
-          config-file: release-please-config.json
-          manifest-file: .release-please-manifest.json
+      # spuriously bumping the version (#136 wanted 0.3.0 with the
+      # entire pre-v0.2.6 history attached). Closing the wrong PR
+      # here lets the next push to main re-trigger the workflow's
+      # first call with correct visibility (the just-cut release is
+      # now non-draft) and reopen a correct PR.
+      #
+      # On normal-day pushes (no release cut), this job is skipped via
+      # the `if: needs.release-please.outputs.releases_created` gate,
+      # so the first call's release-PR — which is correct in that case
+      # — survives untouched.
+      - name: Close stale next-release PR
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          PR_NUM=$(gh pr list \
+            --head release-please--branches--main \
+            --state open \
+            --json number \
+            --jq '.[0].number // empty')
+          if [ -n "${PR_NUM:-}" ]; then
+            gh pr close "$PR_NUM" --comment \
+              "Auto-closed by release-please.yml: this PR was opened during the same workflow run that just cut the release, when the release was still in draft state. release-please-action v5.0.0 does not count draft releases as released, so the contents of this PR walk back past the just-cut release and are wrong. The next push to main will re-trigger release-please-action with correct visibility and (if there are unreleased commits) reopen a correct PR."
+          else
+            echo "No open release-please PR to close."
+          fi
