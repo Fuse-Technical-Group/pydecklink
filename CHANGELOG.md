@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.7](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.2.6...v0.2.7) (2026-05-07)
+
+
+### Fixed
+
+* **release:** close stale release-PR after cutting a release ([18bc753](https://github.com/Fuse-Technical-Group/pydecklink/commit/18bc753c08583147441afdeef55f01a2acc552f3))
+* **release:** close stale release-PR after cutting a release ([8e752e8](https://github.com/Fuse-Technical-Group/pydecklink/commit/8e752e8b573bf6db3a42996357ffd3cdbea11a46))
+
 ## [0.2.6](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.2.5...v0.2.6) (2026-05-07)
 
 
