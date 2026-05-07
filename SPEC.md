@@ -1162,3 +1162,80 @@ proves common a future spec section may propose one.
 - §5.11 Device Status — soft dependency. `ReferenceStatus.locked` is
   useful for interpreting whether input-locked output mode actually
   engaged, but the benchmark does not require §5.11 to ship.
+
+## API Information §spec:api-information
+
+*Status: not started*
+
+### Problem
+
+pydecklink loads the Blackmagic Desktop Video runtime but does not
+surface which version of that runtime is loaded. Support diagnostics,
+bug reports, and CI fingerprints have to ask the user to run a
+separate Blackmagic CLI to recover what is already inside the
+process. The SDK header version is pinned at build time (15.3,
+vendored); the running driver version is opaque from Python.
+
+### Behavior
+
+`pydecklink.api_version() -> APIVersion` returns the running Desktop
+Video runtime version, sourced from `IDeckLinkAPIInformation` via
+`CreateDeckLinkAPIInformationInstance()`.
+
+`APIVersion` exposes:
+
+- `string -> str` — formatted version (e.g. `"15.3.0"`); also
+  produced by `__str__` and `__repr__`.
+- `major -> int`, `minor -> int`, `sub -> int`, `extra -> int` —
+  the four bytes of the packed value, high to low.
+- `packed -> int` — the raw 32-bit value as returned by the SDK.
+
+When `CreateDeckLinkAPIInformationInstance()` returns null — Desktop
+Video is not installed or its shared library cannot be loaded —
+`api_version()` raises `RuntimeError` with the same install guidance
+the device-enumeration path already uses.
+
+### Why module-level, not per-device
+
+`IDeckLinkAPIInformation` is a process-global singleton, not a
+per-`IDeckLink` interface. The version reflects the loaded
+`libDeckLinkAPI.so` / CoreFoundation plug-in / COM server, not any
+specific device. A module-level function matches what is being
+queried, mirroring `device_count()` and `list_devices()` which
+expose process-global SDK state. Attaching it to `Device` would
+imply the version varies per-device.
+
+### Why a structured return, not a bare string
+
+Diagnostic loggers want a string; consumers who later need to gate
+on a threshold want the parts. Returning both views in one value
+avoids forcing the caller to re-parse the version they just
+received, and costs nothing — the SDK exposes both as separate
+reads on the same singleton. A bare string locks future callers
+out of the parts; a bare tuple is unfriendly to logs.
+
+### Why RuntimeError on absent runtime
+
+When Desktop Video is missing,
+`CreateDeckLinkAPIInformationInstance()` returns null. Returning
+`None` would conflate "we don't know the version" with "we cannot
+talk to the SDK at all" — and the latter is what the caller needs
+to act on. The existing device-enumeration path
+(`bind_device.h`) already raises `RuntimeError` with install
+guidance for the same failure; matching that shape keeps one
+failure idiom across the binding.
+
+### Scope
+
+- Reads `BMDDeckLinkAPIVersion` only — the only attribute
+  `BMDDeckLinkAPIInformationID` defines in SDK 15.3.
+- The reported version is the runtime, not the vendored SDK
+  headers pydecklink builds against. Detecting mismatch between
+  the two is left to consumers.
+
+### Citations
+
+- §2 Development Environment — vendored SDK header version (15.3)
+  that this surface complements at runtime.
+- §5.1 Device — module-level enumeration pattern
+  (`device_count()`, `list_devices()`) this function follows.
