@@ -167,26 +167,6 @@ def _make_identity_kernel(cudart: object) -> KernelFn:
     return _identity
 
 
-def _identity_kernel(
-    stream: object,
-    d_input: int,
-    d_output: int,
-    width: int,
-    height: int,
-    frame_bytes: int,
-) -> None:
-    """Module-level identity-kernel stub for signature documentation
-    and tests. The runtime kernel is bound via ``_make_identity_kernel``
-    once cudart is imported (which the unit tests don't require). This
-    stub raises if anyone tries to call it directly without the live
-    binding."""
-    del stream, d_input, d_output, width, height, frame_bytes
-    raise NotImplementedError(
-        "_identity_kernel is a signature reference; the runtime kernel "
-        "is built in _make_identity_kernel(cudart) inside run_passthrough."
-    )
-
-
 # ---------------------------------------------------------------------------
 # Bounded probes (signal lock + format detection). Same shape as the
 # capture-only CUDA examples; a missing source must surface as a clear

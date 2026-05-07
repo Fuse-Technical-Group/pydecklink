@@ -94,17 +94,47 @@ def test_run_passthrough_function_exists() -> None:
     assert expected.issubset(sig.parameters.keys())
 
 
-def test_kernel_default_is_identity_callable() -> None:
-    """Per §spec:canonical-gpu-passthrough, the default kernel is an
-    identity copy. ``run_passthrough.kernel`` must default to a
-    callable that accepts the spec'd 6-arg signature."""
+def test_kernel_type_alias_matches_documented_signature() -> None:
+    """Per §spec:canonical-gpu-passthrough, the kernel callable's
+    signature is ``(stream, d_input, d_output, width, height,
+    frame_bytes) -> None``. The exported ``KernelFn`` type alias
+    encodes that contract — six positional args, ``None`` return."""
+    import typing
+
+    mod = _load()
+    assert hasattr(mod, "KernelFn"), "KernelFn type alias missing"
+    args = typing.get_args(mod.KernelFn)
+    # Callable[[T1, ..., T6], R] -> (T1, ..., T6, R) under get_args.
+    assert len(args) == 7, f"expected 6 args + return type, got {args!r}"
+    assert args[-1] is type(None), "kernel must return None"
+
+
+def test_run_passthrough_default_kernel_is_none() -> None:
+    """``kernel=None`` triggers the identity-kernel default at runtime
+    (built inside ``run_passthrough`` once cudart is imported). Keeping
+    the parameter default ``None`` avoids importing cuda-python at
+    module-load time, which would break the unit-test harness on hosts
+    without it."""
     mod = _load()
     sig = inspect.signature(mod.run_passthrough)
-    default = sig.parameters["kernel"].default
-    # Default may be None (resolved internally to the identity kernel)
-    # or the identity function itself; either way the resolved callable
-    # must accept the documented signature.
-    fn = default if callable(default) else mod._identity_kernel
+    assert sig.parameters["kernel"].default is None
+
+
+def test_make_identity_kernel_returns_six_arg_callable() -> None:
+    """``_make_identity_kernel(cudart)`` produces the runtime identity
+    closure. Verify the returned callable's signature matches the
+    documented seam — six args, no return — using a stub cudart."""
+
+    class _StubCudart:
+        class cudaMemcpyKind:
+            cudaMemcpyDeviceToDevice = 3
+
+        @staticmethod
+        def cudaMemcpyAsync(*_args: object) -> tuple[int]:
+            return (0,)
+
+    mod = _load()
+    fn = mod._make_identity_kernel(_StubCudart())
     fn_sig = inspect.signature(fn)
     assert {
         "stream",
@@ -113,10 +143,7 @@ def test_kernel_default_is_identity_callable() -> None:
         "width",
         "height",
         "frame_bytes",
-    }.issubset(fn_sig.parameters.keys()), (
-        "kernel callable does not match the documented "
-        "(stream, d_input, d_output, width, height, frame_bytes) signature"
-    )
+    }.issubset(fn_sig.parameters.keys())
 
 
 # -- Input signal-lock probe (shared shape with other CUDA examples) ----------
