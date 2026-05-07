@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.6](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.2.5...v0.2.6) (2026-05-07)
+
+
+### Fixed
+
+* **release:** refresh next-release PR after promoting from draft ([77a213e](https://github.com/Fuse-Technical-Group/pydecklink/commit/77a213e235fd99641957c8f4a6d645b25b53bf37))
+* **release:** refresh next-release PR after promoting from draft ([dfb98fd](https://github.com/Fuse-Technical-Group/pydecklink/commit/dfb98fdfdfbe010cab6e54013c2c940eee63beee))
+
 ## [0.2.5](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.2.4...v0.2.5) (2026-05-06)
 
 
