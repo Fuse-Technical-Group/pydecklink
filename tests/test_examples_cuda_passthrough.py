@@ -103,10 +103,13 @@ def test_kernel_type_alias_matches_documented_signature() -> None:
 
     mod = _load()
     assert hasattr(mod, "KernelFn"), "KernelFn type alias missing"
-    args = typing.get_args(mod.KernelFn)
-    # Callable[[T1, ..., T6], R] -> (T1, ..., T6, R) under get_args.
-    assert len(args) == 7, f"expected 6 args + return type, got {args!r}"
-    assert args[-1] is type(None), "kernel must return None"
+    # typing.get_args(Callable[[T1..Tn], R]) -> ([T1..Tn], R): a 2-tuple
+    # of (arg-type list, return type).
+    arg_types, return_type = typing.get_args(mod.KernelFn)
+    assert len(arg_types) == 6, f"expected 6 arg types, got {arg_types!r}"
+    # ``get_args`` may report the return type as the literal ``None`` or
+    # as ``type(None)`` depending on the Python version; accept either.
+    assert return_type in (None, type(None)), "kernel must return None"
 
 
 def test_run_passthrough_default_kernel_is_none() -> None:
