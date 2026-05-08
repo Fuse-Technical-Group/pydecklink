@@ -831,7 +831,7 @@ class VideoBufferAllocator:
         passes through C++). Wrap your setup in a function so the
         allocator and its callbacks are local variables and the
         cycle is reclaimed when that function returns. Both
-        examples (``cuda_pinned_pipelined.py``,
+        examples (``cuda_passthrough.py``,
         ``cuda_register_pinned.py``) follow this pattern.
         """
 
@@ -876,8 +876,8 @@ class VideoBufferAllocatorProvider:
         ``func.__globals__`` that Python's GC cannot break (it
         passes through C++). Wrap your setup in a function so the
         provider and its callbacks are local variables and the
-        cycle is reclaimed when that function returns. The pipelined
-        example (``cuda_pinned_pipelined.py``) follows this pattern.
+        cycle is reclaimed when that function returns. The passthrough
+        example (``cuda_passthrough.py``) follows this pattern.
         """
 
     def get_allocator(self, buffer_size: int, width: int, height: int, row_bytes: int, pixel_format: PixelFormat) -> VideoBufferAllocator:

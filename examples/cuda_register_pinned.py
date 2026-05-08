@@ -1,6 +1,6 @@
 """Retroactive CUDA pinning of SDK-allocated capture buffers.
 
-Alternative to ``cuda_pinned_pipelined.py`` for consumers who can't (or
+Alternative to ``cuda_passthrough.py`` for consumers who can't (or
 don't want to) plug in a custom allocator. The SDK allocates buffers
 with its default malloc as usual; on the first time we see each
 buffer pointer we call ``cudaHostRegister`` to retroactively pin it
@@ -15,17 +15,17 @@ When to prefer this over the allocator pattern:
 * You don't control the buffer count up front (cudaHostRegister is
   per-pointer, on demand).
 
-When to prefer ``cuda_pinned_pipelined.py`` instead:
+When to prefer ``cuda_passthrough.py`` instead:
 
 * You want full control over allocation (alignment, NUMA placement,
   write-combining, cudaHostAllocPortable / cudaHostAllocMapped flags).
 * You want to know exactly how many pinned-memory buffers exist
   (a custom allocator gives you this; pin-on-sight does not).
-* You want the multi-threaded capture pipeline pattern.
+* You want the bidirectional SDI → CUDA → SDI pipeline.
 
 This example is intentionally minimal: synchronous, no profiling, no
-threading. For production-shaped capture see
-``cuda_pinned_pipelined.py``.
+threading. For the production-shaped pipeline see
+``cuda_passthrough.py``.
 
 Install:
     pip install pydecklink[cuda-examples]
