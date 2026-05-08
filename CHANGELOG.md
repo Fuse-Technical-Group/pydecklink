@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.2.8](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.2.7...v0.2.8) (2026-05-08)
+
+
+### Added
+
+* **examples:** cuda_passthrough.py — canonical SDI → CUDA → SDI recipe ([4cd93fe](https://github.com/Fuse-Technical-Group/pydecklink/commit/4cd93fe859ac84f47d1609443912a27ceb0069d4))
+* **examples:** cuda_passthrough.py — canonical SDI → CUDA → SDI recipe ([68b9dc1](https://github.com/Fuse-Technical-Group/pydecklink/commit/68b9dc107795445c6eed6d3d10335a90786fc546))
+
+
+### Fixed
+
+* **test:** unpack typing.get_args(Callable) as (arg_list, return) ([d375ef9](https://github.com/Fuse-Technical-Group/pydecklink/commit/d375ef9823750657ed3aca942d9a3a28c7deb5ff))
+
 ## [0.2.7](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.2.6...v0.2.7) (2026-05-07)
 
 
