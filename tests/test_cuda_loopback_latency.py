@@ -230,7 +230,7 @@ def test_percentiles_known_distribution() -> None:
     mod = _load()
     samples = list(range(100))  # 0..99
     out = mod._percentiles(samples, (50.0, 95.0, 99.0))
-    # Nearest-rank style percentile (matches cuda_pinned_pipelined helper).
+    # Nearest-rank style percentile.
     assert out[50.0] == pytest.approx(49.5, abs=1.0)
     assert out[95.0] == pytest.approx(94.05, abs=1.0)
     assert out[99.0] == pytest.approx(98.01, abs=1.0)

@@ -227,10 +227,11 @@ buffers after allocation. Intel Level Zero has no equivalent.
 The register path is a consumer-side pattern that requires no
 pydecklink changes — see `examples/cuda_register_pinned.py`.
 
-`examples/cuda_pinned_pipelined.py` is the production-shaped
-recipe for the allocator path: capture and consumer on separate
-threads, GPU buffer pool, GC tuned for the hot loop, end-to-end
-delivery latency reported.
+`examples/cuda_passthrough.py` is the production-shaped recipe
+for the allocator path: capture, kernel dispatch, and consumer
+release on separate threads with bounded queues, pinned input
+plus pinned output buffer pools, GC tuned for the hot loop,
+end-to-end latency reported.
 
 #### Synchronization contract
 
@@ -870,8 +871,8 @@ Latency, queue depth, and preroll decisions span both halves —
 splitting them invites recomposition errors of the kind §6
 already warned against. The headline value of the recipe is the
 loop, not either half in isolation. Consumers who need only one
-half use `cuda_pinned_pipelined.py` (capture) and compose their
-own playout side.
+half read the corresponding half of `cuda_passthrough.py` and
+elide the other.
 
 ### Why CUDA-only initial scope (no CPU fallback)
 
@@ -916,7 +917,7 @@ the existing `VideoBufferAllocator` /
 
 Capture-side delivery latency is instrumented
 (`CaptureFrameRef.callback_arrived_us` to consumer release in
-`examples/cuda_pinned_pipelined.py`), but no measurement crosses the
+`examples/cuda_passthrough.py`), but no measurement crosses the
 cable. Consumers building real-time passthrough cannot answer:
 
 - Does the pipeline contain hidden buffering — driver queue, SDK
@@ -1001,7 +1002,7 @@ overhead floor.
 The fingerprint is written into the luma slots of a 10-bit YUV
 4:2:2 buffer in v210 packing. v210 is the standard production
 capture format on this card (matches the default in
-`cuda_pinned_pipelined.py`); running the latency benchmark on a
+`cuda_passthrough.py`); running the latency benchmark on a
 different pixel format would measure the wrong DMA path. SDI
 transmission of v210 is bit-exact on the wire — no format
 conversion at either the output or the input — so the 10-bit
@@ -1078,7 +1079,7 @@ leave latency on the table or fail intermittently in the field.
 
 The fingerprint approach generalizes to any GPU framework, but the
 immediate consumer is the existing CUDA pinned-memory pipeline
-(`examples/cuda_pinned_pipelined.py`). HIP and Level Zero variants
+(`examples/cuda_passthrough.py`). HIP and Level Zero variants
 become reasonable when the corresponding consumer examples exist;
 until then they would test paths nobody runs.
 
@@ -1106,7 +1107,7 @@ proves common a future spec section may propose one.
   mode: 4K UHD 59.94p 10-bit YUV 4:2:2 (`Mode4K2160p5994` /
   `Format10BitYUV` / v210). 4K59.94 + v210 is the repo-wide
   default for examples and benchmarks (see
-  `cuda_pinned_pipelined.py`) and matches standard production
+  `cuda_passthrough.py`) and matches standard production
   capture; the latency benchmark inherits both. Other modes
   parameterized; fingerprint encoding is mode-aware.
 - Two DeckLink sub-devices wired in physical loopback (BNC jumper

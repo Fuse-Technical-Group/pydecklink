@@ -577,7 +577,7 @@ def run_passthrough(
                 f"for detected mode {mode.name}. Check the BNC connection."
             )
 
-        # GC tuning for the hot loop (matches cuda_pinned_pipelined.py).
+        # GC tuning for the hot loop.
         gc.collect()
         gc.freeze()
         gc.disable()
