@@ -13,7 +13,8 @@
 
   "containerEnv": {
     "SSH_AUTH_SOCK": "/tmp/ssh-agent.sock",
-    "DECKLINK_SDK_DIR": "/workspaces/pydecklink/vendor/Blackmagic DeckLink SDK 15.3/Linux/include"
+    "DECKLINK_SDK_DIR": "/workspaces/pydecklink/vendor/Blackmagic DeckLink SDK 15.3/Linux/include",
+    "PATH": "/var/lib/blackmagic/bin:${containerEnv:PATH}"
   },
 
   "features": {
