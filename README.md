@@ -49,6 +49,15 @@ A VS Code devcontainer provides a ready-to-code environment. It
 bind-mounts the host's Desktop Video libraries and DeckLink device
 nodes for hardware testing inside the container.
 
+The container exposes Blackmagic's firmware tooling on `PATH` via
+`/var/lib/blackmagic/bin`. `BlackmagicFirmwareUpdater` and
+`DesktopVideoUpdateTool` are the same multi-call binary dispatched
+on `argv[0]`; prefer `DesktopVideoUpdateTool` for scripted
+invocations — its flag interface (`--list`, `--device ID`,
+`--all`, `--quiet`) is the automation-friendly surface.
+`BlackmagicFirmwareUpdater` is the interactive shorthand (`status`,
+`update [device]`).
+
 ## Quick start
 
 ```python
