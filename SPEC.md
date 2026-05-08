@@ -909,6 +909,186 @@ the existing `VideoBufferAllocator` /
 `VideoBufferAllocatorProvider` / `create_frame_pool_pinned` /
 `schedule_output_frame` surface.
 
+## Synchronized Output Fanout §spec:synchronized-output-fanout
+
+*Status: not started*
+
+### Problem
+
+Live SDI distribution requires N output ports to present the same
+frame at the same wall-clock instant — drift between ports defeats
+the purpose of distribution. The canonical CUDA passthrough recipe
+(§spec:canonical-gpu-passthrough) drives a single output. A consumer
+who wants to fan one captured input out to multiple synchronized
+outputs must either run N independent passthrough pipelines (which
+free-run against each other) or compose their own threading harness
+around the SDK's sync-group feature with no reference for how it
+integrates with the GPU passthrough path.
+
+The Blackmagic SDK exposes a sync-group mechanism
+(`BMDDeckLinkSupportsSynchronizeToPlaybackGroup` capability,
+`bmdDeckLinkConfigPlaybackGroup` int config, and the
+`bmdVideoOutputSynchronizeToPlaybackGroup` enable flag) that aligns
+scheduled-playback timing across all outputs assigned to the same
+group. pydecklink already exposes the enable flag
+(`VideoOutputFlag.SynchronizeToPlaybackGroup`) but does not bind the
+config key needed to assign a group ID, so the feature is unreachable
+from Python today.
+
+### Behavior
+
+`examples/cuda_passthrough.py` auto-fans the kernel result out to
+every sub-device on the host other than the input. With a 4-sub-device
+card, that yields 1 input + 3 synchronized outputs; with a 2-sub-device
+card, 1 input + 1 output (the sync group degenerates and is not
+configured). The example caps at the available hardware — there is no
+CLI knob for output selection.
+
+When fanout is engaged (≥ 2 outputs), the example:
+
+1. Verifies each output device exposes the
+   `SupportsSynchronizeToPlaybackGroup` capability; raises
+   `RuntimeError` early if any does not.
+2. Picks a process-unique playback group ID derived from the PID.
+3. Calls `set_config_int(ConfigurationID.PlaybackGroup, group_id)`
+   on each output before `enable_video_output(mode,
+   VideoOutputFlag.SynchronizeToPlaybackGroup)`.
+4. Builds N pinned output pools (one per output device) using the
+   existing `VideoBufferAllocator` / `create_frame_pool_pinned`
+   surface.
+5. Capture thread submits H2D + kernel + N parallel D2H copies on
+   the CUDA stream into the N pinned output frames; records one
+   event after the last D2H.
+6. Consumer thread synchronizes on the post-D2H event and schedules
+   all N output frames at the same display time.
+
+The CLI loses `--output`. The CLI surface becomes:
+
+```text
+uv run examples/cuda_passthrough.py --input <N> [--frames|--duration]
+                                    [--pixel-format 8bit|10bit]
+```
+
+Per-frame end-to-end latency reports remain on the input → primary
+output path. Each output reports its `OutputStatus` health counters
+in the final summary; cross-output drift is observable as divergence
+between counters.
+
+### Why drop on any output stall, treated as anomaly
+
+A sync group makes all grouped outputs present each scheduled frame
+at the same instant; in steady state they release pinned buffers in
+lockstep and equal-depth pools refill in lockstep. One output's pool
+starving while the others have free slots is incoherent in a working
+sync group. It indicates one of: the group is misconfigured or never
+engaged, an output's underlying device has lost its signal lock or
+hit a hardware fault, or pool depths are not equal across outputs.
+
+The example responds to that condition by:
+
+1. Dropping the captured frame across **all** outputs (no partial
+   scheduling — partial scheduling would create a permanent timing
+   offset on the starved output that the SDK does not auto-correct).
+2. Emitting a `WARNING` to stderr on the **first** occurrence per
+   run, naming the starved device and listing the three likely
+   causes above. Subsequent occurrences increment a counter without
+   re-spamming stderr.
+3. Surfacing the count in the final report under an explicit
+   `[anomaly]` section labelled "sync-group starvation events," not
+   the normal `dropped=` line — these drops are not equivalent to
+   "consumer behind" or "no signal."
+
+The condition is non-fatal: the run continues so the operator can
+collect a full sample. An invariant-violation abort would be more
+disruptive than diagnostic for an example whose primary purpose is
+to demonstrate the working steady state.
+
+### Why no CLI selection of outputs
+
+This is an example, not a configurable application. The example's
+job is to demonstrate one canonical recipe end-to-end on the user's
+hardware; "which sub-devices to use" is a deployment concern that
+belongs in consumer code, not example flags. Auto-discovery
+(`device_count()` minus the input index) covers the typical
+workstation topology — one DeckLink card, one input cable, the
+remaining sub-devices fanned out — without any user configuration.
+Consumers with multi-card or selective-output deployments adapt
+the example to their own enumeration.
+
+### Why N D2H copies, not one D2H plus CPU fanout
+
+Two alternatives for getting kernel output into N pinned buffers:
+
+1. **N D2H copies on the CUDA stream** (chosen). Per output, one
+   `cudaMemcpyAsync(host_out_i, slot.d_output, ...)` after the
+   kernel. N independent DMA transactions on the same stream. One
+   device output buffer regardless of N. N pinned host buffers,
+   each owned by its output's pool.
+2. **One D2H + N CPU memcpys.** Single D2H into a staging pinned
+   buffer, then `mf.data[:] = staging` on each output's acquired
+   frame. CPU memcpy on the hot path costs 5–15 ms for 4K10-bit
+   per output, blowing the per-frame budget at 4K59.94p.
+
+The canonical recipe explicitly avoids CPU pixel touches
+(§spec:canonical-gpu-passthrough). The N-D2H approach inherits that
+property and scales linearly in PCIe bandwidth.
+
+### Why a per-process group ID, not a fixed constant
+
+The group ID is an opaque integer the SDK uses to associate outputs.
+A fixed constant works for a single example process but breaks when
+two consumer processes run on the same machine — both groups
+collide in the SDK and timing becomes undefined. Each
+`run_passthrough` invocation derives a group ID from `os.getpid()`
+truncated to the SDK's `int64_t` range. Same-process retries reuse
+the PID; cross-process invocations get distinct IDs.
+
+### Tradeoffs accepted
+
+- **Auto-discovery, no CLI flag for outputs.** The example uses
+  every non-input sub-device the host exposes. Operators with
+  selective deployments compose their own caller around
+  `run_passthrough`.
+- **Single CUDA stream.** Inherits the canonical recipe's
+  single-stream choice. N D2H copies serialize on the same stream
+  the kernel runs on; overlapping kernel/copy across multiple
+  streams is a future enhancement.
+- **Same mode and pixel format on all outputs.** The sync group
+  requires a common cadence; mixed-rate fanout is out of scope.
+  Outputs inherit the auto-detected input mode.
+- **No cross-card fanout.** The example assumes all sub-devices
+  share a clock domain (one card). Multi-card sync requires genlock
+  via the REF input and is out of scope for this section (§5.11
+  territory).
+
+### API surface impact
+
+Two additive enum values:
+
+- `ConfigurationID.PlaybackGroup` — wraps
+  `bmdDeckLinkConfigPlaybackGroup`. Used by `set_config_int` to
+  assign each output to a shared group before
+  `enable_video_output`.
+- `AttributeID.SupportsSynchronizeToPlaybackGroup` — wraps
+  `BMDDeckLinkSupportsSynchronizeToPlaybackGroup`. Used by the
+  example to detect hardware support and fail fast on devices that
+  cannot participate in a playback group.
+
+`VideoOutputFlag.SynchronizeToPlaybackGroup` is already exposed.
+No changes to the signatures of `enable_video_output`,
+`set_config_int`, `get_attribute_flag`, or
+`schedule_output_frame`.
+
+### Citations
+
+- Blackmagic DeckLink SDK 15.3 ReadMe — "SynchronizedPlayback"
+  sample, `bmdVideoOutputSynchronizeToPlaybackGroup`,
+  `bmdDeckLinkConfigPlaybackGroup`,
+  `BMDDeckLinkSupportsSynchronizeToPlaybackGroup`.
+- §spec:canonical-gpu-passthrough — the single-output recipe this
+  section extends.
+- §spec:gpu-pinned-memory — the allocator pattern reused per output.
+
 ## Latency Characterization §spec:latency-characterization
 
 *Status: in progress*
