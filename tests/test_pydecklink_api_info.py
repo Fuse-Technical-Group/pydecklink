@@ -6,17 +6,31 @@ four byte-sized parts (major.minor.sub.extra, high to low). When
 Desktop Video is not installed, ``api_version()`` raises
 ``RuntimeError``; that path is covered by the install-guidance string in
 ``bind_api_info.cpp`` but is not faked here — every host that runs the
-populated-path tests has the runtime loaded, and CI without the SDK
-skips the whole module.
+populated-path tests has the runtime loaded.
+
+The whole module is gated on actual runtime availability, not the
+build-time ``HAS_SDK`` flag. Hosted CI runners build *with* the SDK
+headers (vendored) but *without* Desktop Video installed — exactly
+the case where ``api_version()`` raises by design — so a HAS_SDK
+gate would let the populated-path tests run on a host that cannot
+satisfy them.
 """
 
 import pytest
 
 import pydecklink
 
+try:
+    pydecklink.api_version()
+    _RUNTIME_AVAILABLE = True
+except (RuntimeError, AttributeError):
+    # RuntimeError: Desktop Video runtime not installed.
+    # AttributeError: built without SDK headers — api_version absent.
+    _RUNTIME_AVAILABLE = False
+
 pytestmark = pytest.mark.skipif(
-    not getattr(pydecklink, "HAS_SDK", False),
-    reason="Built without DeckLink SDK headers",
+    not _RUNTIME_AVAILABLE,
+    reason="Desktop Video runtime not installed",
 )
 
 
