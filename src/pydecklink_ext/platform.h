@@ -47,6 +47,28 @@ inline ComPtr<IDeckLinkIterator> CreateDeckLinkIteratorInstance() {
     return iter;
 }
 
+// IDeckLinkAPIInformation is a process-global singleton.  Linux/macOS
+// expose a free-function ``CreateDeckLinkAPIInformationInstance`` from
+// DeckLinkAPIDispatch.cpp; Windows requires CoCreateInstance on
+// CLSID_CDeckLinkAPIInformation.  The CO init mirrors the iterator
+// path — same MTA requirement, same diagnostic if the thread is STA.
+inline IDeckLinkAPIInformation* CreateDeckLinkAPIInformationInstance() {
+    HRESULT co_hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    if (co_hr == RPC_E_CHANGED_MODE) {
+        PyErr_WarnEx(PyExc_RuntimeWarning,
+            "COM already initialized as STA on this thread. "
+            "pydecklink requires MTA (COINIT_MULTITHREADED). "
+            "DeckLink operations may fail.", 1);
+    }
+    IDeckLinkAPIInformation* info = nullptr;
+    HRESULT hr = CoCreateInstance(
+        CLSID_CDeckLinkAPIInformation, nullptr, CLSCTX_ALL,
+        IID_IDeckLinkAPIInformation, reinterpret_cast<void**>(&info));
+    if (FAILED(hr))
+        return nullptr;
+    return info;
+}
+
 // DeckLink string type on Windows is BSTR (wide string).
 // Helper to convert BSTR -> std::string and free it.
 inline std::string DeckLinkStringToStd(BSTR bstr) {
