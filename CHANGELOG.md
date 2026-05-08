@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.2.9](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.2.8...v0.2.9) (2026-05-08)
+
+
+### Added
+
+* batch — surface Desktop Video runtime version (§road:api-version) ([6764e61](https://github.com/Fuse-Technical-Group/pydecklink/commit/6764e61631b89c8451b5141467996ab1fd771ba4))
+* **devcontainer:** expose Blackmagic firmware tools on PATH ([e0de420](https://github.com/Fuse-Technical-Group/pydecklink/commit/e0de420894e9c073a42d8ed1b30ee3f5f9fdb48c))
+
+
+### Fixed
+
+* **test:** gate api_version tests on runtime availability, not HAS_SDK ([8a9369f](https://github.com/Fuse-Technical-Group/pydecklink/commit/8a9369f50355c05147fee4036d54d7b2fc7efe80))
+
 ## [0.2.8](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.2.7...v0.2.8) (2026-05-08)
 
 
