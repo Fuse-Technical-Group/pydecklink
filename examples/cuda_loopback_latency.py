@@ -867,7 +867,7 @@ def _run_inner(
 
         in_dev.start_streams()
 
-        # GC tuning for the hot loop (matches cuda_pinned_pipelined.py).
+        # GC tuning for the hot loop.
         gc.collect()
         gc.freeze()
         gc.disable()
