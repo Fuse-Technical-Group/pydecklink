@@ -884,3 +884,37 @@ class VideoBufferAllocatorProvider:
         """Get or create a VideoBufferAllocator for the given parameters."""
 
     def __repr__(self) -> str: ...
+
+class APIVersion:
+    @property
+    def string(self) -> str:
+        """Formatted version string reported by the SDK (e.g. "15.3.0")."""
+
+    @property
+    def packed(self) -> int:
+        """Raw 32-bit packed version as returned by the SDK."""
+
+    @property
+    def major(self) -> int:
+        """Major version (high byte of packed)."""
+
+    @property
+    def minor(self) -> int:
+        """Minor version (second byte of packed)."""
+
+    @property
+    def sub(self) -> int:
+        """Sub version (third byte of packed)."""
+
+    @property
+    def extra(self) -> int:
+        """Extra version (low byte of packed)."""
+
+    def __str__(self) -> str: ...
+
+    def __repr__(self) -> str: ...
+
+def api_version() -> APIVersion:
+    """
+    Return the running Desktop Video runtime version. Raises RuntimeError if Desktop Video is not installed.
+    """
