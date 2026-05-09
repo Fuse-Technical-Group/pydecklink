@@ -1002,9 +1002,6 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    if args.frames == 0 and args.duration == 0.0:
-        args.duration = 30.0  # default: 30 seconds.
-
     devices = pydecklink.list_devices()
     for label, idx in (
         ("--output-device", args.output_device),

@@ -913,9 +913,6 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    if args.frames == 0 and args.duration == 0.0:
-        args.duration = 5.0  # default: 5 seconds.
-
     pixel_format = (
         pydecklink.PixelFormat.Format10BitYUV
         if args.pixel_format == "10bit"
