@@ -911,7 +911,7 @@ the existing `VideoBufferAllocator` /
 
 ## Synchronized Output Fanout §spec:synchronized-output-fanout
 
-*Status: not started*
+*Status: complete*
 
 ### Problem
 
@@ -944,30 +944,14 @@ card, 1 input + 1 output (the sync group degenerates and is not
 configured). The example caps at the available hardware — there is no
 CLI knob for output selection.
 
-When fanout is engaged (≥ 2 outputs), the example:
-
-1. Verifies each output device exposes the
-   `SupportsSynchronizeToPlaybackGroup` capability; raises
-   `RuntimeError` early if any does not.
-2. Picks a process-unique playback group ID derived from the PID.
-3. Calls `set_config_int(ConfigurationID.PlaybackGroup, group_id)`
-   on each output before `enable_video_output(mode,
-   VideoOutputFlag.SynchronizeToPlaybackGroup)`.
-4. Builds N pinned output pools (one per output device) using the
-   existing `VideoBufferAllocator` / `create_frame_pool_pinned`
-   surface.
-5. Capture thread submits H2D + kernel + N parallel D2H copies on
-   the CUDA stream into the N pinned output frames; records one
-   event after the last D2H.
-6. Consumer thread synchronizes on the post-D2H event and schedules
-   all N output frames at the same display time.
-
-The CLI loses `--output`. The CLI surface becomes:
-
-```text
-uv run examples/cuda_passthrough.py --input <N> [--frames|--duration]
-                                    [--pixel-format 8bit|10bit]
-```
+When fanout is engaged (≥ 2 outputs), every output is probed for
+`SupportsSynchronizeToPlaybackGroup` (fail fast on unsupported
+hardware), assigned to a per-process playback group, and enabled
+with the `SynchronizeToPlaybackGroup` flag. The capture thread
+submits one H2D, the kernel, and N parallel D2H copies on the
+CUDA stream into N pinned output frames (one per output); the
+consumer thread waits on the post-D2H event and schedules every
+output at the same display time.
 
 Per-frame end-to-end latency reports remain on the input → primary
 output path. Each output reports its `OutputStatus` health counters
@@ -984,24 +968,15 @@ sync group. It indicates one of: the group is misconfigured or never
 engaged, an output's underlying device has lost its signal lock or
 hit a hardware fault, or pool depths are not equal across outputs.
 
-The example responds to that condition by:
-
-1. Dropping the captured frame across **all** outputs (no partial
-   scheduling — partial scheduling would create a permanent timing
-   offset on the starved output that the SDK does not auto-correct).
-2. Emitting a `WARNING` to stderr on the **first** occurrence per
-   run, naming the starved device and listing the three likely
-   causes above. Subsequent occurrences increment a counter without
-   re-spamming stderr.
-3. Surfacing the count in the final report under an explicit
-   `[anomaly]` section labelled "sync-group starvation events," not
-   the normal `dropped=` line — these drops are not equivalent to
-   "consumer behind" or "no signal."
-
-The condition is non-fatal: the run continues so the operator can
-collect a full sample. An invariant-violation abort would be more
-disruptive than diagnostic for an example whose primary purpose is
-to demonstrate the working steady state.
+Partial scheduling would create a permanent timing offset on the
+starved output that the SDK does not auto-correct, so the example
+drops the captured frame across **all** outputs. The condition is
+non-fatal — the run continues so the operator can collect a full
+sample — but reported under an explicit `[anomaly]` block in the
+final summary distinct from the normal `dropped=` line, because
+these drops are not equivalent to "consumer behind" or "no signal."
+A `WARNING` on stderr fires once per run on first occurrence so a
+human spot-checking output sees it without spam.
 
 ### Why no CLI selection of outputs
 
