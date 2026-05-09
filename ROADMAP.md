@@ -94,33 +94,6 @@ numbers across outputs every frame) shows all three present the
 same frame at the same wall-clock instant. Re-run with `--input 0`
 and confirm the discovered outputs become `[1, 2, 3]`.
 
-## Example default runtime
-
-### §road:examples-default-indefinite
-
-Remove the hardcoded duration autoset in `examples/cuda_passthrough.py`
-(`main()` currently sets `args.duration = 5.0` when both `--frames`
-and `--duration` are zero) and `examples/cuda_loopback_latency.py`
-(same pattern, `args.duration = 30.0`) so that invocations without
-either bound run until SIGINT, matching the existing run-loop
-semantics (`frame_count == 0` and `duration_seconds == 0` is already
-treated as unbounded inside `run_passthrough` /
-`run_loopback`). `examples/cuda_register_pinned.py` uses
-`--frames default=60` as a real argparse default and is out of scope.
-The argparse `help` strings already say "0 = unlimited (use --duration
-or Ctrl-C)" — the autoset contradicts that contract.
-§spec:canonical-gpu-passthrough, §spec:latency-characterization.
-
-**Verify:** Run `uv run examples/cuda_passthrough.py --input 2`
-without `--frames` or `--duration`. The example completes
-input-mode detection, prints `running:` status updates, and keeps
-running past 5 seconds. Send SIGINT (Ctrl-C); the example shuts
-down cleanly and prints the final report. Repeat with
-`uv run examples/cuda_loopback_latency.py --output-device 0
---input-device 2` and confirm it runs past 30 seconds before
-SIGINT. Re-run each with an explicit `--duration 5`; the example
-exits at 5 s, confirming explicit bounds are still honored.
-
 ## Future
 
 - **hdr-metadata**: `IDeckLinkVideoFrameMutableMetadataExtensions`
