@@ -455,6 +455,45 @@ def test_group_id_mask_fits_int64_signed_range() -> None:
     assert mod._GROUP_ID_MASK == (1 << 63) - 1
 
 
+# -- Sync-group leader start (§spec:synchronized-output-fanout) ---------------
+
+
+class _StartFakeDevice:
+    """Stand-in for ``pydecklink.Device`` covering only
+    ``start_scheduled_playback`` — the surface ``_start_sync_group``
+    touches."""
+
+    def __init__(self) -> None:
+        self.start_calls: list[tuple[int, int]] = []
+
+    def start_scheduled_playback(self, start_time: int, timescale: int) -> None:
+        self.start_calls.append((start_time, timescale))
+
+
+def test_start_sync_group_calls_start_only_on_leader() -> None:
+    """Per SDK §2.4.13.2 ``StartScheduledPlayback`` on any one output in
+    a playback group releases the whole group on a common SDI frame
+    boundary; arming additional members returns HRESULT 0x80000008
+    ("group already started"). The example must call start on
+    ``out_devs[0]`` exactly once and skip the rest."""
+    mod = _load()
+    devs = [_StartFakeDevice() for _ in range(3)]
+    mod._start_sync_group(devs, frame_timescale=60000)
+    assert devs[0].start_calls == [(0, 60000)]
+    assert devs[1].start_calls == []
+    assert devs[2].start_calls == []
+
+
+def test_start_sync_group_handles_single_output() -> None:
+    """The single-output (no group engaged) path uses the same helper —
+    starting that one output. There is no fanout, but the leader call
+    is still exactly one ``start_scheduled_playback`` invocation."""
+    mod = _load()
+    devs = [_StartFakeDevice()]
+    mod._start_sync_group(devs, frame_timescale=60000)
+    assert devs[0].start_calls == [(0, 60000)]
+
+
 # -- Sync-group starvation accounting (§spec:synchronized-output-fanout) ------
 
 

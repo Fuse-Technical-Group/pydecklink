@@ -301,6 +301,21 @@ def _configure_sync_group(
         )
 
 
+def _start_sync_group(
+    out_devs: list[pydecklink.Device],
+    frame_timescale: int,
+) -> None:
+    """Start scheduled playback on the group leader (``out_devs[0]``).
+
+    Per SDK §2.4.13.2, ``StartScheduledPlayback`` on any one output in
+    a playback group releases the whole group on a common SDI frame
+    boundary; arming additional members returns HRESULT 0x80000008
+    ("group already started"). The single-output (no group engaged)
+    path uses the same call — there's just nothing to fan out to.
+    """
+    out_devs[0].start_scheduled_playback(start_time=0, timescale=frame_timescale)
+
+
 # ---------------------------------------------------------------------------
 # Pipeline: GPU input/output slots + capture/consumer threads.
 # ---------------------------------------------------------------------------
@@ -819,11 +834,7 @@ def run_passthrough(
             daemon=True,
         )
 
-        # Start playback on every output. With the sync group engaged
-        # all outputs synchronize their first frame; without the group
-        # there's only one output to start.
-        for dev in out_devs:
-            dev.start_scheduled_playback(start_time=0, timescale=frame_timescale)
+        _start_sync_group(out_devs, frame_timescale)
 
         started = time.monotonic()
         capture_thread.start()
