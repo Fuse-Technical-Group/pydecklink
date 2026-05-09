@@ -169,6 +169,12 @@ class TestConfigurationID:
         cfg = pydecklink.ConfigurationID
         assert cfg.ConfigVideoOutputConnection.value == 0x766F636E
 
+    def test_playback_group_value(self):
+        # bmdDeckLinkConfigPlaybackGroup ('plgr') — int config used to
+        # assign outputs to a shared sync group.
+        # §spec:synchronized-output-fanout.
+        assert pydecklink.ConfigurationID.PlaybackGroup.value == 0x706C6772
+
 
 class TestAttributeID:
     """BMDDeckLinkAttributeID enum values (subset)."""
@@ -184,3 +190,12 @@ class TestAttributeID:
         assert pydecklink.AttributeID.VideoIOSupport.value == 0x76696F73
         assert pydecklink.AttributeID.MinimumPrerollFrames.value == 0x6D707266
         assert pydecklink.AttributeID.Duplex.value == 0x64757078
+
+    def test_supports_synchronize_to_playback_group_value(self):
+        # BMDDeckLinkSupportsSynchronizeToPlaybackGroup ('stpg') — flag
+        # capability queried before assigning a device to a sync group.
+        # §spec:synchronized-output-fanout.
+        assert (
+            pydecklink.AttributeID.SupportsSynchronizeToPlaybackGroup.value
+            == 0x73747067
+        )

@@ -201,6 +201,9 @@ void init_decklink_enums(nb::module_& m) {
         .value("ConfigVideoOutputConversionMode", bmdDeckLinkConfigVideoOutputConversionMode)
         .value("ConfigVideoOutputIdleOperation", bmdDeckLinkConfigVideoOutputIdleOperation)
         .value("ConfigSDIOutputLinkConfiguration", bmdDeckLinkConfigSDIOutputLinkConfiguration)
+        // Synchronized playback (assigns outputs to a shared sync group;
+        // see §spec:synchronized-output-fanout).
+        .value("PlaybackGroup", bmdDeckLinkConfigPlaybackGroup)
         // Video input flags
         .value("ConfigUseDedicatedLTCInput", bmdDeckLinkConfigUseDedicatedLTCInput)
         .value("ConfigCapture1080pAsPsF", bmdDeckLinkConfigCapture1080pAsPsF)
@@ -221,6 +224,9 @@ void init_decklink_enums(nb::module_& m) {
         .value("SupportsColorspaceMetadata", BMDDeckLinkSupportsColorspaceMetadata)
         .value("SupportsIdleOutput", BMDDeckLinkSupportsIdleOutput)
         .value("SupportsSMPTELevelAOutput", BMDDeckLinkSupportsSMPTELevelAOutput)
+        // Synchronized playback capability — probed before assigning a
+        // device to a sync group (§spec:synchronized-output-fanout).
+        .value("SupportsSynchronizeToPlaybackGroup", BMDDeckLinkSupportsSynchronizeToPlaybackGroup)
         // Integers
         .value("MaximumAudioChannels", BMDDeckLinkMaximumAudioChannels)
         .value("NumberOfSubDevices", BMDDeckLinkNumberOfSubDevices)
