@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.12](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.2.11...v0.2.12) (2026-05-09)
+
+
+### Fixed
+
+* **examples:** start sync-group on the leader only ([e53e84d](https://github.com/Fuse-Technical-Group/pydecklink/commit/e53e84d7c3f41defb603b565b7527266d63a30ea))
+
 ## [0.2.11](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.2.10...v0.2.11) (2026-05-09)
 
 
