@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.10](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.2.9...v0.2.10) (2026-05-09)
+
+
+### Added
+
+* batch — examples run indefinitely by default (§road:examples-default-indefinite) ([5a3827d](https://github.com/Fuse-Technical-Group/pydecklink/commit/5a3827d11dc42993f6a35b734d8bea63ff46ffe7))
+
+
+### Fixed
+
+* **examples:** run indefinitely when --duration unset ([0c71a87](https://github.com/Fuse-Technical-Group/pydecklink/commit/0c71a87d15ccda08bbddf29cefd8c33499436c4a))
+
 ## [0.2.9](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.2.8...v0.2.9) (2026-05-08)
 
 
