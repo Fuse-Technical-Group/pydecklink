@@ -505,7 +505,6 @@ def _make_pipeline_for_starvation_test(mod: object) -> object:
         cudart=_StubCudart(),
         width=1920,
         height=1080,
-        n_outputs=3,
     )
 
 

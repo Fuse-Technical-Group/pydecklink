@@ -365,14 +365,12 @@ class _Pipeline:
         cudart: object,
         width: int,
         height: int,
-        n_outputs: int,
     ) -> None:
         self._cudart = cudart
         self._frame_bytes = frame_bytes
         self._kernel = kernel
         self._width = width
         self._height = height
-        self._n_outputs = n_outputs
         self.frames_processed = 0
         self.frames_dropped_no_slot = 0
         self.frames_dropped_no_signal = 0
@@ -450,12 +448,13 @@ class _Pipeline:
                 # First output starved with no others tried yet.
                 # Probe remaining outputs non-blocking — if any has
                 # frames, that confirms starvation (asymmetric pools).
+                # Acquired probe-frames go out of scope at loop exit
+                # and return to their pools.
                 for later_dev in out_devs[i + 1 :]:
                     try:
-                        later = later_dev.acquire_output_frame(timeout_ms=0)
+                        later_dev.acquire_output_frame(timeout_ms=0)
                     except RuntimeError:
                         continue
-                    del later  # release back to pool immediately
                     self._note_sync_group_starvation(dev)
                     return None
                 # Every output starved together. Plain consumer-behind,
@@ -619,7 +618,7 @@ class _Pipeline:
             f"              run={run_seconds:.1f}s  "
             f"effective_fps={n / run_seconds:.1f}  "
             f"({self._frame_bytes / 1_000_000:.2f} MB/frame)  "
-            f"outputs={self._n_outputs}"
+            f"outputs={len(out_devs)}"
         )
         print("              min     p50     p95     p99     max     (microseconds)")
         print(
@@ -767,7 +766,6 @@ def run_passthrough(
             cudart=cudart,
             width=width,
             height=height,
-            n_outputs=len(out_devs),
         )
 
         # Pre-roll every output's queue with neutral frames at display
