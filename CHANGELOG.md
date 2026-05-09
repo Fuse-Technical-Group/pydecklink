@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.11](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.2.10...v0.2.11) (2026-05-09)
+
+
+### Added
+
+* batch — synchronized output fanout ([8b248d2](https://github.com/Fuse-Technical-Group/pydecklink/commit/8b248d2a59c37feca2c01409198c3b7c2a8d3316))
+
 ## [0.2.10](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.2.9...v0.2.10) (2026-05-09)
 
 
