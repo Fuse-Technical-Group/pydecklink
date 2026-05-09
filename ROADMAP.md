@@ -54,46 +54,6 @@ show nonzero counters; cells at or above show zero. The benchmark
 exits with a nonzero status if no stable configuration exists in the
 input range.
 
-## Synchronized output fanout
-
-### §road:bindings-playback-group
-
-Add `ConfigurationID.PlaybackGroup` (wraps
-`bmdDeckLinkConfigPlaybackGroup`) and
-`AttributeID.SupportsSynchronizeToPlaybackGroup` (wraps
-`BMDDeckLinkSupportsSynchronizeToPlaybackGroup`) to
-`src/pydecklink_ext/bind_enums.cpp` and the `.pyi` stub. Both are
-additive; no signature changes elsewhere.
-§spec:synchronized-output-fanout.
-
-### §road:cuda-passthrough-fanout
-
-Refactor `examples/cuda_passthrough.py` to auto-discover non-input
-sub-devices, configure them into a shared playback group via
-`device.set_config_int(ConfigurationID.PlaybackGroup, group_id)` plus
-`enable_video_output(mode, VideoOutputFlag.SynchronizeToPlaybackGroup)`,
-and fan the kernel result out to all of them with N D2H copies on
-the CUDA stream into N pinned output pools. Drop the `--output` CLI
-flag (outputs are auto-discovered). Add the stderr WARNING on first
-sync-group starvation event and the `[anomaly]` block in the final
-report. Update `tests/test_examples_cuda_passthrough.py` for the
-changed CLI shape and the new auto-discovery logic. Depends on
-§road:bindings-playback-group. §spec:synchronized-output-fanout.
-
-**Verify:** On a host with a 4-sub-device DeckLink card and an SDI
-source feeding `--input 2`, run
-`uv run examples/cuda_passthrough.py --input 2 --duration 30`. The
-example logs the discovered output indices (e.g. `[fanout]
-outputs=[0, 1, 3]`) at startup, runs at frame rate with the identity
-kernel, and prints `[anomaly] sync-group starvation events: 0` in
-the final report. Per-output `OutputStatus.late + dropped +
-underrun = 0` on every output. Routing the three SDI outputs to a
-multi-viewer (or fingerprinting them per the
-`cuda_loopback_latency.py` pattern and confirming matching sequence
-numbers across outputs every frame) shows all three present the
-same frame at the same wall-clock instant. Re-run with `--input 0`
-and confirm the discovered outputs become `[1, 2, 3]`.
-
 ## Future
 
 - **hdr-metadata**: `IDeckLinkVideoFrameMutableMetadataExtensions`

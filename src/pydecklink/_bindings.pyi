@@ -328,6 +328,8 @@ class ConfigurationID(enum.Enum):
 
     ConfigSDIOutputLinkConfiguration = 1936682083
 
+    PlaybackGroup = 1886152562
+
     ConfigUseDedicatedLTCInput = 1684829283
 
     ConfigCapture1080pAsPsF = 1667657842
@@ -354,6 +356,8 @@ class AttributeID(enum.Enum):
     SupportsIdleOutput = 1768189813
 
     SupportsSMPTELevelAOutput = 1819700321
+
+    SupportsSynchronizeToPlaybackGroup = 1937010791
 
     MaximumAudioChannels = 1835098984
 
