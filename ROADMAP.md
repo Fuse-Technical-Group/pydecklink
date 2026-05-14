@@ -2,22 +2,6 @@
 
 Derived from [SPEC.md](SPEC.md). Sections are in build-dependency order.
 
-## Input-locked output
-
-### §road:config-reference-output-mode
-
-Add `ConfigInt.ReferenceOutputMode` to `src/pydecklink_ext/bind_enums.cpp`
-and the `.pyi` stub, and an `--input-locked` flag to
-`examples/cuda_loopback_latency.py` that selects the SDI input as the
-output clock source. §spec:latency-characterization.
-
-**Verify:** Run `python examples/cuda_loopback_latency.py
---input-locked` for at least 10 minutes against the loopback. RTT
-jitter (p99 − p50 spread) is smaller than the free-running baseline
-(default invocation, no `--input-locked`). The run shows no monotonic
-frame-skip drift between input and output streams.
-`OutputStatus.late + dropped + underrun` remains zero.
-
 ## Sub-frame phase tuning
 
 ### §road:config-reference-input-timing-offset
@@ -26,11 +10,13 @@ Add `ConfigInt.ReferenceInputTimingOffset` to `bind_enums.cpp` and the
 `.pyi` stub, and a `--phase-sweep` mode to
 `examples/cuda_loopback_latency.py` that walks the timing offset across
 one frame period in configurable steps and reports RTT at each step.
-Depends on §road:config-reference-output-mode.
-§spec:latency-characterization.
+Requires REF IN wired to an external reference for the sweep to have
+an anchor; the SDK does not expose locking the output PLL to the SDI
+input clock. §spec:latency-characterization.
 
-**Verify:** Run `python examples/cuda_loopback_latency.py
---input-locked --phase-sweep`. Output prints an offset-vs-RTT table.
+**Verify:** With REF IN connected to an external reference shared with
+the upstream source, run `python examples/cuda_loopback_latency.py
+--ref-locked --phase-sweep`. Output prints an offset-vs-RTT table.
 The minimum RTT across the sweep occurs at a non-zero offset and is
 strictly less than the integer-frame floor of the free-running run.
 Health counters remain zero at the reported optimum.
@@ -46,13 +32,12 @@ sustained run per cell, identifying the configuration floor. Depends
 on §road:config-reference-input-timing-offset.
 §spec:latency-characterization.
 
-**Verify:** Run `python examples/cuda_loopback_latency.py
---input-locked --sweep --duration 60`. Output prints a 2D matrix
-indexed by (headroom, preroll) showing per-cell health counters and
-identifies the minimum stable configuration. Cells below the floor
-show nonzero counters; cells at or above show zero. The benchmark
-exits with a nonzero status if no stable configuration exists in the
-input range.
+**Verify:** Run `python examples/cuda_loopback_latency.py --sweep
+--duration 60`. Output prints a 2D matrix indexed by (headroom,
+preroll) showing per-cell health counters and identifies the minimum
+stable configuration. Cells below the floor show nonzero counters;
+cells at or above show zero. The benchmark exits with a nonzero
+status if no stable configuration exists in the input range.
 
 ## Future
 
