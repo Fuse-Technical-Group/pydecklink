@@ -39,6 +39,32 @@ stable configuration. Cells below the floor show nonzero counters;
 cells at or above show zero. The benchmark exits with a nonzero
 status if no stable configuration exists in the input range.
 
+## Reference input status query
+
+### §road:bind-decklink-status
+
+Bind the `StatusID` enum members for reference-signal status,
+`Device.get_status_flag` / `Device.get_status_int`, and the
+`Device.reference_status → ReferenceStatus` convenience (with
+`HasReferenceInput` gating) in `src/pydecklink_ext/bind_enums.cpp`,
+`src/pydecklink_ext/bind_device.cpp`, and
+`src/pydecklink/_bindings.pyi`. SPEC §5.11.
+
+### §road:detect-signals-report-reference-status
+
+Extend `examples/detect_signals.py` to print per-device reference
+lock state and detected reference mode alongside the existing SDI
+signal row, skipping devices whose `HasReferenceInput` attribute is
+false. Depends on §road:bind-decklink-status. SPEC §5.11.
+
+**Verify:** With at least one device's REF IN connected to an
+external reference, run `python examples/detect_signals.py`. The
+output shows a `ref=` field on each row: `locked@<DisplayMode>` for
+the referenced device, `unlocked` for devices with a REF BNC but no
+reference applied, and `n/a` for devices without a REF BNC.
+Disconnecting the reference between runs flips the corresponding
+row from `locked@…` to `unlocked`.
+
 ## Future
 
 - **hdr-metadata**: `IDeckLinkVideoFrameMutableMetadataExtensions`
@@ -47,3 +73,9 @@ status if no stable configuration exists in the input range.
 - **audio-streams**: Audio capture/playout via
   `ScheduleAudioSamples` / `IDeckLinkAudioInputPacket`.
 - **ancillary-data**: Timecode, closed captions.
+- **status-change-notifications**: Push-based status updates via
+  `IDeckLinkNotification::Subscribe(bmdStatusChanged)` —
+  `device.subscribe_status_changes() → StatusChangeQueue` per
+  SPEC §5.11. Deferred until a long-running monitor surface
+  exists to consume it; the synchronous getter in
+  §road:bind-decklink-status covers one-shot diagnostics.
