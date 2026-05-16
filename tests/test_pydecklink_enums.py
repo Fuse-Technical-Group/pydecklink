@@ -175,6 +175,15 @@ class TestConfigurationID:
         # §spec:synchronized-output-fanout.
         assert pydecklink.ConfigurationID.PlaybackGroup.value == 0x706C6772
 
+    def test_reference_input_timing_offset_value(self):
+        # bmdDeckLinkConfigReferenceInputTimingOffset ('glot') — int
+        # config that adjusts genlock pixel offset between REF VBI and
+        # output VBI. §spec:latency-characterization.
+        assert (
+            pydecklink.ConfigurationID.ConfigReferenceInputTimingOffset.value
+            == 0x676C6F74
+        )
+
 
 class TestAttributeID:
     """BMDDeckLinkAttributeID enum values (subset)."""
@@ -198,4 +207,15 @@ class TestAttributeID:
         assert (
             pydecklink.AttributeID.SupportsSynchronizeToPlaybackGroup.value
             == 0x73747067
+        )
+
+    def test_supports_full_frame_reference_input_timing_offset_value(self):
+        # BMDDeckLinkSupportsFullFrameReferenceInputTimingOffset ('frin')
+        # — flag capability gating the range of
+        # ConfigReferenceInputTimingOffset: true means ± half the
+        # total pixels per frame, false means ±511.
+        # §spec:latency-characterization.
+        assert (
+            pydecklink.AttributeID.SupportsFullFrameReferenceInputTimingOffset.value
+            == 0x6672696E
         )

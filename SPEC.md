@@ -1102,12 +1102,22 @@ wired in loopback and reports:
 
 Configurable per run:
 
-- **Output clock source**: free-running (card crystal) or input-locked
-  (output pixel clock derived from SDI input).
+- **Output clock source**: free-running (card crystal) or REF-locked
+  (output PLL locked to tri-level / black-burst reference at REF IN).
+  The SDK exposes no mechanism to lock the output PLL to the SDI
+  input clock; REF-locked operation requires an externally supplied
+  reference signal at REF IN. For loopback topologies (BNC jumper
+  between two sub-devices) the input clock is the output clock by
+  construction, so free-run mode is sufficient to characterize the
+  kernel-time floor.
 - **Headroom**: integer frame periods between input frame N's arrival
   and the scheduled display time of the corresponding output frame.
-- **Phase offset**: sub-frame timing offset between input and output
-  VBI, applied when the output clock is input-locked.
+- **Phase offset**: sub-frame timing offset between REF VBI and output
+  VBI, via `bmdDeckLinkConfigReferenceInputTimingOffset`. Meaningful
+  only when REF IN is connected. Adjusts where each output frame
+  boundary lands relative to REF, controlling the scheduling slack
+  between an arrived input frame and the next available output frame
+  slot when input and REF share an upstream clock domain.
 - **Preroll depth**: frames queued before `start_scheduled_playback`.
 
 Sweep mode reports the minimum stable configuration — the smallest
@@ -1189,25 +1199,27 @@ project total RTT for their workload. The decomposition is what
 makes the benchmark useful as a planning input rather than a single
 opaque number.
 
-### Why lock to input rather than to genlock
+### Why REF-locked output with phase offset
 
-Genlock — locking to an external reference (REF BNC tri-level / black
-burst) — synchronizes input and output to a third-party clock. The
-phase between input arrival and the next output VBI is then fixed by
-the genlock signal, not by the input itself. For a passthrough loop
-this adds latency without adding determinism.
+The SDK does not expose a path to lock the output PLL to the SDI
+input clock. Documented output PLL sources are limited to the local
+crystal (free-run), REF IN (tri-level / black-burst), and peer
+sub-device PLLs on the 8K Pro. Achieving deterministic
+input-to-output phase therefore requires an external arrangement
+where both the upstream SDI source and the DeckLink's REF IN derive
+from a common clock — a sync generator or facility reference driving
+both. Under that arrangement, `bmdDeckLinkConfigReferenceInputTimingOffset`
+controls where output VBI falls relative to REF, and by transitivity
+relative to input.
 
-Locking the output clock to the input clock collapses the
-input-to-output phase to a value the system controls. Combined with
-sub-frame phase offset, output VBI can be placed at any phase relative
-to input VBI, allowing the scheduled display time of frame N+1 to
-track input frame N+1 with no clock-domain jitter.
-
-Tradeoff: the output SDI signal is not phase-aligned to facility
-genlock. Downstream gear that expects a referenced source sees this
-output as free-running. Acceptable for closed-loop measurement
-between paired DeckLink cards; not appropriate for facility
-integration.
+For the benchmark's physical loopback topology (BNC jumper between
+two DeckLink sub-devices on one card), the input clock is by
+construction the output clock — the cable carries the output's
+serial bitstream straight into the input deserializer. Free-run mode
+is sufficient to characterize the ex-kernel floor and the
+kernel-time component; REF-locked mode with phase offset is
+exercised to measure the achievable sub-frame headroom, which
+requires an external reference driving REF IN.
 
 ### Why phase adjust matters
 
@@ -1244,11 +1256,15 @@ The benchmark is an example, not a public API. It surfaces small
 additions justified by the same need any latency-sensitive consumer
 faces:
 
-- `ConfigInt.ReferenceOutputMode` — selects input-locked output
-  clock. Without it, consumers pass raw FourCC values to
-  `set_config_int`.
-- `ConfigInt.ReferenceInputTimingOffset` — sub-frame timing offset.
-  Same justification.
+- `ConfigInt.ReferenceInputTimingOffset` — sub-frame timing offset
+  between REF and output VBI. Without it, consumers pass raw FourCC
+  values to `set_config_int`.
+- `AttributeFlag.SupportsFullFrameReferenceInputTimingOffset` —
+  capability flag gating the supported range of the offset above.
+  When true, the offset accepts ± half the total pixels in the
+  video frame; when false (or absent), the offset is limited to
+  ±511 pixels. Consumers that compute a sweep range need this to
+  pick a safe upper bound.
 
 Existing surface used by the benchmark:
 `CaptureFrameRef.callback_arrived_us`, `OutputStatus`, `clock_us()`,
@@ -1273,9 +1289,10 @@ proves common a future spec section may propose one.
   not required.
 - No HDR, audio, ancillary data. Fingerprint occupies active video
   only.
-- Genlock (REF BNC) configuration is not exercised by the benchmark.
-  Users who want facility-genlocked output configure it via existing
-  `set_config_int`.
+- REF-locked mode requires the operator to supply an external
+  reference at REF IN. Free-run mode requires no REF wiring; in
+  loopback topologies the input and output share a clock by physical
+  construction.
 
 ### Citations
 

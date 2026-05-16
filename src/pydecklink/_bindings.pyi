@@ -328,6 +328,8 @@ class ConfigurationID(enum.Enum):
 
     ConfigSDIOutputLinkConfiguration = 1936682083
 
+    ConfigReferenceInputTimingOffset = 1735159668
+
     PlaybackGroup = 1886152562
 
     ConfigUseDedicatedLTCInput = 1684829283
@@ -358,6 +360,8 @@ class AttributeID(enum.Enum):
     SupportsSMPTELevelAOutput = 1819700321
 
     SupportsSynchronizeToPlaybackGroup = 1937010791
+
+    SupportsFullFrameReferenceInputTimingOffset = 1718774126
 
     MaximumAudioChannels = 1835098984
 

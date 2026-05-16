@@ -201,6 +201,10 @@ void init_decklink_enums(nb::module_& m) {
         .value("ConfigVideoOutputConversionMode", bmdDeckLinkConfigVideoOutputConversionMode)
         .value("ConfigVideoOutputIdleOperation", bmdDeckLinkConfigVideoOutputIdleOperation)
         .value("ConfigSDIOutputLinkConfiguration", bmdDeckLinkConfigSDIOutputLinkConfiguration)
+        // Genlock pixel-offset between REF VBI and output VBI; range
+        // gated by SupportsFullFrameReferenceInputTimingOffset
+        // (§spec:latency-characterization).
+        .value("ConfigReferenceInputTimingOffset", bmdDeckLinkConfigReferenceInputTimingOffset)
         // Synchronized playback (assigns outputs to a shared sync group;
         // see §spec:synchronized-output-fanout).
         .value("PlaybackGroup", bmdDeckLinkConfigPlaybackGroup)
@@ -227,6 +231,10 @@ void init_decklink_enums(nb::module_& m) {
         // Synchronized playback capability — probed before assigning a
         // device to a sync group (§spec:synchronized-output-fanout).
         .value("SupportsSynchronizeToPlaybackGroup", BMDDeckLinkSupportsSynchronizeToPlaybackGroup)
+        // Gates the range of ConfigReferenceInputTimingOffset: when
+        // true, ± half the total pixels per frame; otherwise ±511
+        // (§spec:latency-characterization).
+        .value("SupportsFullFrameReferenceInputTimingOffset", BMDDeckLinkSupportsFullFrameReferenceInputTimingOffset)
         // Integers
         .value("MaximumAudioChannels", BMDDeckLinkMaximumAudioChannels)
         .value("NumberOfSubDevices", BMDDeckLinkNumberOfSubDevices)
