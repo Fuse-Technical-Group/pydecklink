@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.13](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.2.12...v0.2.13) (2026-05-16)
+
+
+### Added
+
+* **bindings:** expose genlock phase-offset enums ([9c66a02](https://github.com/Fuse-Technical-Group/pydecklink/commit/9c66a0274be2463447a98fd53e71b0fb2be2c8a3))
+* **bindings:** expose genlock phase-offset enums (frin/glot) ([dcd0b9b](https://github.com/Fuse-Technical-Group/pydecklink/commit/dcd0b9ba73dd0b2bffd6f2fc4197513e29693f3e))
+
 ## [0.2.12](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.2.11...v0.2.12) (2026-05-09)
 
 
