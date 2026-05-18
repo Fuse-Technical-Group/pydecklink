@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.14](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.2.13...v0.2.14) (2026-05-18)
+
+
+### Fixed
+
+* **release:** defer release-please when a draft release is in flight ([2aee991](https://github.com/Fuse-Technical-Group/pydecklink/commit/2aee9910d6315910277632d1a4c296f11c7d2058))
+* **release:** defer release-please when a draft release is in flight ([67dd418](https://github.com/Fuse-Technical-Group/pydecklink/commit/67dd41801fdd1e8f0f880a4e8140e15eaf2c8ab4))
+
 ## [0.2.13](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.2.12...v0.2.13) (2026-05-16)
 
 
