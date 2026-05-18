@@ -795,6 +795,62 @@ The integration path is the same as pyntv2's §8: a narrow
 - **Video conversion.** No color space conversion, scaling. The SDK
   has some hardware conversion modes; exposing them is deferred.
 
+## Binding Philosophy §spec:binding-philosophy
+
+*Status: complete*
+
+pydecklink exposes the Blackmagic DeckLink SDK to Python. The binding
+mirrors the SDK surface by default: Python class names, method names,
+and call sequences correspond to SDK counterparts. Deviation requires
+a documented incompatibility with Python's execution model. Convenience
+layers atop the faithful surface are permitted; replacing the faithful
+surface is not.
+
+### Why state the principle
+
+Without it, every spec section re-litigates whether to mirror the SDK
+or invent a Python-shaped alternative. §4 ("Why C++ callback queues")
+and §5.11 ("Why mirror the SDK's push shape") invoke the same GIL
+argument under different framing. Naming the principle gives future
+sections a citation target.
+
+### Documented deviations
+
+| Deviation | Section | Why |
+|---|---|---|
+| COM lifetime hidden behind `ComPtr<T>` | §4 | Python GC is non-deterministic; COM refcounting is not |
+| `IDeckLinkInputCallback` → C++ queue + Python pop | §4, §5.3 | GIL acquisition on the frame-rate thread stalls the SDK |
+| `IDeckLinkVideoOutputCallback` tracked internally | §5.5 | Same as above |
+| `VideoInputFormatChanged` reconfigure done internally | §5.4 | SDK requires synchronous reconfigure from inside the callback |
+| `IDeckLinkNotificationCallback` → queue | §5.11 | Carry of the §4 queue shape; the section's own rationale notes the GIL argument is weaker at sub-Hz event rate |
+
+### When convenience layers are permitted
+
+Both conditions must hold:
+
+- The underlying SDK interface is also bound, so callers retain full
+  expressiveness.
+- The convenience behavior is expressible in terms of the underlying
+  surface.
+
+Example: `Device.set_profile(profile_id)` is a convenience over
+`ProfileManager.get_profile(...).set_active()`. Both layers are bound
+so callers needing peer enumeration or activation-completion
+callbacks are not locked out (§spec:profile-change-notifications).
+
+### Scope
+
+The principle governs the Python surface — class names, methods, call
+sequences, synchronous vs. push shapes. It does not govern internal
+implementation: C++ helpers, thread pools, and buffer pools are chosen
+for correctness and performance, not SDK fidelity.
+
+### Citations
+
+- §4 Device Model, §5.3 Capture — frame-rate queue precedent.
+- §5.11 Device Status — push-shape-via-queue precedent.
+- §spec:profile-change-notifications — first new-direction citation.
+
 ## Canonical GPU Passthrough §spec:canonical-gpu-passthrough
 
 *Status: complete*
