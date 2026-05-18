@@ -22,7 +22,50 @@ jobs:
         with:
           client-id: ${{ secrets.RELEASE_PLEASE_CLIENT_ID }}
           private-key: ${{ secrets.RELEASE_PLEASE_APP_PRIVATE_KEY }}
-      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+
+      # release-please-action v5.0.0 excludes draft releases when
+      # querying GitHub for "the latest release." If a draft is in
+      # flight from a prior workflow run that hasn't yet completed
+      # wheel-build + publish-promotion, a run started during that
+      # window walks back past the draft to the previous non-draft
+      # release and opens a spurious next-release PR with everything
+      # since (e.g. #168 proposed 0.3.0 with the entire pre-v0.2.0
+      # history attached because v0.2.13 was still draft when this
+      # workflow's release-please job started).
+      #
+      # The close-stale step in publish (below) handles the
+      # in-same-run case where release-please-action opens the
+      # spurious PR during the same run that creates the draft. It
+      # does not cover the cross-run case (this run started while
+      # *another* run's draft was in flight) because publish only
+      # fires when *this* run cut a release. Deferring here closes
+      # that cross-run gap by skipping release-please-action when
+      # any draft exists; the next push to main (after publish
+      # promotes the draft) re-triggers with correct visibility.
+      #
+      # If a draft persists because publish failed (e.g., wheel-build
+      # error), release-please pauses until an operator promotes or
+      # deletes the draft. Emergency fixes that need to ship as a new
+      # release require resolving the stuck draft first anyway.
+      - name: Defer if a draft release is in flight
+        id: draft-check
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          DRAFT_TAGS=$(gh release list \
+            --json tagName,isDraft \
+            --jq '[.[] | select(.isDraft == true) | .tagName] | join(",")')
+          if [ -n "$DRAFT_TAGS" ]; then
+            echo "::warning::Deferring release-please: draft release(s) in flight: $DRAFT_TAGS. Next push to main will re-trigger after the draft is promoted or deleted."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.draft-check.outputs.skip != 'true'
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         id: rp
         with:
           token: ${{ steps.app-token.outputs.token }}
@@ -81,6 +124,12 @@ jobs:
       # the `if: needs.release-please.outputs.releases_created` gate,
       # so the first call's release-PR — which is correct in that case
       # — survives untouched.
+      #
+      # This handles the in-same-run case only. The cross-run case
+      # (this run is normal-day, but another run's draft was in
+      # flight when release-please-action queried GitHub) is handled
+      # by the "Defer if a draft release is in flight" step at the
+      # top of the release-please job.
       - name: Close stale next-release PR
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
