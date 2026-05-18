@@ -375,7 +375,7 @@ reference (AddRef, no pixel copy). Same metadata as `CaptureFrame`
 plus `callback_arrived_us` for latency profiling. Can be passed
 directly to `schedule_capture_frame` for zero-copy passthrough.
 
-### Why internal queue (not Python callbacks)
+#### Why internal queue (not Python callbacks)
 
 Exposing `VideoInputFrameArrived` as a Python callback requires
 acquiring the GIL on the SDK's thread at frame rate. If the Python
@@ -500,78 +500,6 @@ Module-level helpers (derived from display mode properties):
   latency profiling against `CaptureFrameRef.callback_arrived_us`.
 - `device.row_bytes_for_pixel_format(pixel_format, width) → int` —
   queries the output device's expected row stride.
-
-## 6. Target Workflow
-
-*Status: complete*
-
-Same goal as pyntv2: an ML inference passthrough pipeline. Capture a
-live SDI signal, process frames on CPU, play out the result — all
-from Python, at frame rate.
-
-The input format is auto-detected. The output is configured to match.
-Frames transfer between the DeckLink card and CPU memory. GPU
-processing requires explicit CPU↔GPU copies (see §4).
-
-## 7. Integration Testing
-
-*Status: complete*
-
-Integration tests require DeckLink hardware. Tests run locally with
-`pytest -m hardware`.
-
-### 7.1 Device enumeration
-
-Verify at least one device is found. Check model name, display name,
-capability flags.
-
-### 7.2 Signal detection
-
-Connect an SDI source. Verify `enable_video_input` with format
-detection resolves the correct mode and pixel format.
-
-### 7.3 Capture
-
-Capture N frames, verify frame data is non-zero, timestamps are
-monotonically increasing, no dropped frames.
-
-### 7.4 Playout
-
-Schedule N frames of a known pattern, verify zero dropped frames and
-stable output status.
-
-### 7.5 Passthrough (loopback)
-
-Capture on one sub-device, play out on another (requires a card with
-both input and output, or two cards). Verify frame data integrity
-end-to-end.
-
-### 7.6 Custom-allocator + zero-copy + signal-locked recycling
-
-Streams signal-locked frames through a custom allocator (Python
-`libc.malloc` / `libc.free` callbacks via ctypes), zero-copy
-delivery, `prefill(4)`. Asserts:
-
-- frames are delivered (input thread didn't stall);
-- `recycled_count > 0` (free-list cycle is closed at runtime);
-- `allocated_count` stable after prefill (no SLOW path during
-  streaming).
-
-Each assertion guards a distinct failure mode of the recycling
-path: stall on slow allocator, broken Release-to-free-list cycle,
-SLOW-path growth on the SDK input thread.
-
-## 8. Secondary Use Case: Test Pattern Generation
-
-*Status: not started*
-
-bmd-signal-gen currently uses a ctypes wrapper for DeckLink output.
-pydecklink replaces that wrapper. Signal-gen's pattern generation
-(solids, gradients, HDR metadata) produces numpy buffers that
-pydecklink can output directly via `display_frame_sync`.
-
-The integration path is the same as pyntv2's §8: a narrow
-`FrameOutput` protocol in signal-gen that either backend can satisfy.
 
 ### 5.10 Custom Buffer Allocators
 
@@ -748,7 +676,7 @@ The system shall:
 - Re-evaluate on every call so a runtime profile switch is
   reflected without device re-open.
 
-### Why a static table
+#### Why a static table
 
 The SDK's silence on this is structural: the connector mapping
 is hardware-internal, not surfaced by any attribute or interface.
@@ -762,7 +690,7 @@ multi-sub-device cards per year, and additions are mechanical
 unmapped cards keeps the API honest — the binding never
 synthesizes a guess from a partial signal.
 
-### Scope boundaries
+#### Scope boundaries
 
 - `connector_label` covers SDI ports only. HDMI, optical SDI,
   and analog connectors on hybrid cards are not labeled — those
@@ -770,6 +698,78 @@ synthesizes a guess from a partial signal.
   not arise.
 - The reverse mapping (`label → device`) is left to the caller:
   `next(d for d in (Device(i) for i in range(device_count())) if connector_label(d) == "SDI 3")`.
+
+## 6. Target Workflow
+
+*Status: complete*
+
+Same goal as pyntv2: an ML inference passthrough pipeline. Capture a
+live SDI signal, process frames on CPU, play out the result — all
+from Python, at frame rate.
+
+The input format is auto-detected. The output is configured to match.
+Frames transfer between the DeckLink card and CPU memory. GPU
+processing requires explicit CPU↔GPU copies (see §4).
+
+## 7. Integration Testing
+
+*Status: complete*
+
+Integration tests require DeckLink hardware. Tests run locally with
+`pytest -m hardware`.
+
+### 7.1 Device enumeration
+
+Verify at least one device is found. Check model name, display name,
+capability flags.
+
+### 7.2 Signal detection
+
+Connect an SDI source. Verify `enable_video_input` with format
+detection resolves the correct mode and pixel format.
+
+### 7.3 Capture
+
+Capture N frames, verify frame data is non-zero, timestamps are
+monotonically increasing, no dropped frames.
+
+### 7.4 Playout
+
+Schedule N frames of a known pattern, verify zero dropped frames and
+stable output status.
+
+### 7.5 Passthrough (loopback)
+
+Capture on one sub-device, play out on another (requires a card with
+both input and output, or two cards). Verify frame data integrity
+end-to-end.
+
+### 7.6 Custom-allocator + zero-copy + signal-locked recycling
+
+Streams signal-locked frames through a custom allocator (Python
+`libc.malloc` / `libc.free` callbacks via ctypes), zero-copy
+delivery, `prefill(4)`. Asserts:
+
+- frames are delivered (input thread didn't stall);
+- `recycled_count > 0` (free-list cycle is closed at runtime);
+- `allocated_count` stable after prefill (no SLOW path during
+  streaming).
+
+Each assertion guards a distinct failure mode of the recycling
+path: stall on slow allocator, broken Release-to-free-list cycle,
+SLOW-path growth on the SDK input thread.
+
+## 8. Secondary Use Case: Test Pattern Generation
+
+*Status: not started*
+
+bmd-signal-gen currently uses a ctypes wrapper for DeckLink output.
+pydecklink replaces that wrapper. Signal-gen's pattern generation
+(solids, gradients, HDR metadata) produces numpy buffers that
+pydecklink can output directly via `display_frame_sync`.
+
+The integration path is the same as pyntv2's §8: a narrow
+`FrameOutput` protocol in signal-gen that either backend can satisfy.
 
 ## 9. Explicit Non-Goals (Phase 1)
 
@@ -794,6 +794,62 @@ synthesizes a guess from a partial signal.
   *input* status is exposed (§5.11).
 - **Video conversion.** No color space conversion, scaling. The SDK
   has some hardware conversion modes; exposing them is deferred.
+
+## Binding Philosophy §spec:binding-philosophy
+
+*Status: complete*
+
+pydecklink exposes the Blackmagic DeckLink SDK to Python. The binding
+mirrors the SDK surface by default: Python class names, method names,
+and call sequences correspond to SDK counterparts. Deviation requires
+a documented incompatibility with Python's execution model. Convenience
+layers atop the faithful surface are permitted; replacing the faithful
+surface is not.
+
+### Why state the principle
+
+Without it, every spec section re-litigates whether to mirror the SDK
+or invent a Python-shaped alternative. §4 ("Why C++ callback queues")
+and §5.11 ("Why mirror the SDK's push shape") invoke the same GIL
+argument under different framing. Naming the principle gives future
+sections a citation target.
+
+### Documented deviations
+
+| Deviation | Section | Why |
+|---|---|---|
+| COM lifetime hidden behind `ComPtr<T>` | §4 | Python GC is non-deterministic; COM refcounting is not |
+| `IDeckLinkInputCallback` → C++ queue + Python pop | §4, §5.3 | GIL acquisition on the frame-rate thread stalls the SDK |
+| `IDeckLinkVideoOutputCallback` tracked internally | §5.5 | Same as above |
+| `VideoInputFormatChanged` reconfigure done internally | §5.4 | SDK requires synchronous reconfigure from inside the callback |
+| `IDeckLinkNotificationCallback` → queue | §5.11 | Carry of the §4 queue shape; the section's own rationale notes the GIL argument is weaker at sub-Hz event rate |
+
+### When convenience layers are permitted
+
+Both conditions must hold:
+
+- The underlying SDK interface is also bound, so callers retain full
+  expressiveness.
+- The convenience behavior is expressible in terms of the underlying
+  surface.
+
+Example: `Device.set_profile(profile_id)` is a convenience over
+`ProfileManager.get_profile(...).set_active()`. Both layers are bound
+so callers needing peer enumeration or activation-completion
+callbacks are not locked out (§spec:profile-change-notifications).
+
+### Scope
+
+The principle governs the Python surface — class names, methods, call
+sequences, synchronous vs. push shapes. It does not govern internal
+implementation: C++ helpers, thread pools, and buffer pools are chosen
+for correctness and performance, not SDK fidelity.
+
+### Citations
+
+- §4 Device Model, §5.3 Capture — frame-rate queue precedent.
+- §5.11 Device Status — push-shape-via-queue precedent.
+- §spec:profile-change-notifications — first new-direction citation.
 
 ## Canonical GPU Passthrough §spec:canonical-gpu-passthrough
 

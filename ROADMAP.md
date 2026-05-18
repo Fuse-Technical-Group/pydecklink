@@ -104,3 +104,12 @@ Test restores the original profile in teardown.
   SPEC §5.11. Deferred until a long-running monitor surface
   exists to consume it; the synchronous getter in
   §road:bind-decklink-status covers one-shot diagnostics.
+- **adopt-symphonize-governance**: Ship `CONVENTIONS.md` and
+  `.github/workflows/governance-lint.yml` (referencing
+  `repentsinner/symphonize/.github/workflows/governance-lint.yml@v1`)
+  so governance rules live in the repo rather than in contributor
+  CLAUDE.md files. Validates `§spec:` / `§road:` slug formats,
+  status lines, and cross-document reference resolution. Legacy
+  numbered §1–§9 sections in SPEC.md remain as-is; new sections
+  use the slug-only convention §spec:binding-philosophy already
+  follows.
