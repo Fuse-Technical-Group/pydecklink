@@ -375,7 +375,7 @@ reference (AddRef, no pixel copy). Same metadata as `CaptureFrame`
 plus `callback_arrived_us` for latency profiling. Can be passed
 directly to `schedule_capture_frame` for zero-copy passthrough.
 
-### Why internal queue (not Python callbacks)
+#### Why internal queue (not Python callbacks)
 
 Exposing `VideoInputFrameArrived` as a Python callback requires
 acquiring the GIL on the SDK's thread at frame rate. If the Python
@@ -500,78 +500,6 @@ Module-level helpers (derived from display mode properties):
   latency profiling against `CaptureFrameRef.callback_arrived_us`.
 - `device.row_bytes_for_pixel_format(pixel_format, width) → int` —
   queries the output device's expected row stride.
-
-## 6. Target Workflow
-
-*Status: complete*
-
-Same goal as pyntv2: an ML inference passthrough pipeline. Capture a
-live SDI signal, process frames on CPU, play out the result — all
-from Python, at frame rate.
-
-The input format is auto-detected. The output is configured to match.
-Frames transfer between the DeckLink card and CPU memory. GPU
-processing requires explicit CPU↔GPU copies (see §4).
-
-## 7. Integration Testing
-
-*Status: complete*
-
-Integration tests require DeckLink hardware. Tests run locally with
-`pytest -m hardware`.
-
-### 7.1 Device enumeration
-
-Verify at least one device is found. Check model name, display name,
-capability flags.
-
-### 7.2 Signal detection
-
-Connect an SDI source. Verify `enable_video_input` with format
-detection resolves the correct mode and pixel format.
-
-### 7.3 Capture
-
-Capture N frames, verify frame data is non-zero, timestamps are
-monotonically increasing, no dropped frames.
-
-### 7.4 Playout
-
-Schedule N frames of a known pattern, verify zero dropped frames and
-stable output status.
-
-### 7.5 Passthrough (loopback)
-
-Capture on one sub-device, play out on another (requires a card with
-both input and output, or two cards). Verify frame data integrity
-end-to-end.
-
-### 7.6 Custom-allocator + zero-copy + signal-locked recycling
-
-Streams signal-locked frames through a custom allocator (Python
-`libc.malloc` / `libc.free` callbacks via ctypes), zero-copy
-delivery, `prefill(4)`. Asserts:
-
-- frames are delivered (input thread didn't stall);
-- `recycled_count > 0` (free-list cycle is closed at runtime);
-- `allocated_count` stable after prefill (no SLOW path during
-  streaming).
-
-Each assertion guards a distinct failure mode of the recycling
-path: stall on slow allocator, broken Release-to-free-list cycle,
-SLOW-path growth on the SDK input thread.
-
-## 8. Secondary Use Case: Test Pattern Generation
-
-*Status: not started*
-
-bmd-signal-gen currently uses a ctypes wrapper for DeckLink output.
-pydecklink replaces that wrapper. Signal-gen's pattern generation
-(solids, gradients, HDR metadata) produces numpy buffers that
-pydecklink can output directly via `display_frame_sync`.
-
-The integration path is the same as pyntv2's §8: a narrow
-`FrameOutput` protocol in signal-gen that either backend can satisfy.
 
 ### 5.10 Custom Buffer Allocators
 
@@ -748,7 +676,7 @@ The system shall:
 - Re-evaluate on every call so a runtime profile switch is
   reflected without device re-open.
 
-### Why a static table
+#### Why a static table
 
 The SDK's silence on this is structural: the connector mapping
 is hardware-internal, not surfaced by any attribute or interface.
@@ -762,7 +690,7 @@ multi-sub-device cards per year, and additions are mechanical
 unmapped cards keeps the API honest — the binding never
 synthesizes a guess from a partial signal.
 
-### Scope boundaries
+#### Scope boundaries
 
 - `connector_label` covers SDI ports only. HDMI, optical SDI,
   and analog connectors on hybrid cards are not labeled — those
@@ -770,6 +698,78 @@ synthesizes a guess from a partial signal.
   not arise.
 - The reverse mapping (`label → device`) is left to the caller:
   `next(d for d in (Device(i) for i in range(device_count())) if connector_label(d) == "SDI 3")`.
+
+## 6. Target Workflow
+
+*Status: complete*
+
+Same goal as pyntv2: an ML inference passthrough pipeline. Capture a
+live SDI signal, process frames on CPU, play out the result — all
+from Python, at frame rate.
+
+The input format is auto-detected. The output is configured to match.
+Frames transfer between the DeckLink card and CPU memory. GPU
+processing requires explicit CPU↔GPU copies (see §4).
+
+## 7. Integration Testing
+
+*Status: complete*
+
+Integration tests require DeckLink hardware. Tests run locally with
+`pytest -m hardware`.
+
+### 7.1 Device enumeration
+
+Verify at least one device is found. Check model name, display name,
+capability flags.
+
+### 7.2 Signal detection
+
+Connect an SDI source. Verify `enable_video_input` with format
+detection resolves the correct mode and pixel format.
+
+### 7.3 Capture
+
+Capture N frames, verify frame data is non-zero, timestamps are
+monotonically increasing, no dropped frames.
+
+### 7.4 Playout
+
+Schedule N frames of a known pattern, verify zero dropped frames and
+stable output status.
+
+### 7.5 Passthrough (loopback)
+
+Capture on one sub-device, play out on another (requires a card with
+both input and output, or two cards). Verify frame data integrity
+end-to-end.
+
+### 7.6 Custom-allocator + zero-copy + signal-locked recycling
+
+Streams signal-locked frames through a custom allocator (Python
+`libc.malloc` / `libc.free` callbacks via ctypes), zero-copy
+delivery, `prefill(4)`. Asserts:
+
+- frames are delivered (input thread didn't stall);
+- `recycled_count > 0` (free-list cycle is closed at runtime);
+- `allocated_count` stable after prefill (no SLOW path during
+  streaming).
+
+Each assertion guards a distinct failure mode of the recycling
+path: stall on slow allocator, broken Release-to-free-list cycle,
+SLOW-path growth on the SDK input thread.
+
+## 8. Secondary Use Case: Test Pattern Generation
+
+*Status: not started*
+
+bmd-signal-gen currently uses a ctypes wrapper for DeckLink output.
+pydecklink replaces that wrapper. Signal-gen's pattern generation
+(solids, gradients, HDR metadata) produces numpy buffers that
+pydecklink can output directly via `display_frame_sync`.
+
+The integration path is the same as pyntv2's §8: a narrow
+`FrameOutput` protocol in signal-gen that either backend can satisfy.
 
 ## 9. Explicit Non-Goals (Phase 1)
 
