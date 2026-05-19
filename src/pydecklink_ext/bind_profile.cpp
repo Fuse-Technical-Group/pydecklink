@@ -18,6 +18,18 @@ Profile wrap_profile_from_callback(IDeckLinkProfile* raw) {
     return Profile(ComPtr<IDeckLinkProfile>(raw));
 }
 
+// Drain an IDeckLinkProfileIterator into a vector<Profile>. Used by
+// both ProfileManager.get_profiles and Profile.get_peers.
+std::vector<Profile> drain_profile_iterator(IDeckLinkProfileIterator* iter) {
+    std::vector<Profile> out;
+    for (;;) {
+        ComPtr<IDeckLinkProfile> p;
+        if (iter->Next(p.put()) != S_OK || !p) break;
+        out.emplace_back(std::move(p));
+    }
+    return out;
+}
+
 }  // namespace
 
 HRESULT ProfileCallbackAdapter::ProfileChanging(
@@ -29,12 +41,9 @@ HRESULT ProfileCallbackAdapter::ProfileChanging(
         ProfileCallback* cb = nb::cast<ProfileCallback*>(user_);
         cb->profile_changing(nb::cast(std::move(p)),
                              static_cast<bool>(streamsWillBeForcedToStop));
-    } catch (const std::exception& e) {
+    } catch (...) {
         // SDK callbacks must not let exceptions escape — they cross
         // the FFI back into C. Log via Python's stderr and swallow.
-        PyErr_WriteUnraisable(user_.ptr());
-        (void)e;
-    } catch (...) {
         PyErr_WriteUnraisable(user_.ptr());
     }
     return S_OK;
@@ -132,20 +141,14 @@ void init_decklink_profile(nb::module_& m, nb::class_<Device>& device) {
                 if (hr != S_OK || !iter)
                     throw std::runtime_error(
                         "GetPeers failed (HRESULT " + std::to_string(hr) + ")");
-                std::vector<Profile> peers;
-                for (;;) {
-                    ComPtr<IDeckLinkProfile> p;
-                    if (iter->Next(p.put()) != S_OK || !p) break;
-                    peers.emplace_back(std::move(p));
-                }
-                return peers;
+                return drain_profile_iterator(iter.get());
             },
             "Return profiles of peer sub-devices that activate together "
             "when this profile becomes active.")
         .def("__repr__",
             [](Profile& self) {
                 return std::string("Profile(") +
-                       (self.profile ? "active" : "null") + ")";
+                       (self.profile ? "valid" : "null") + ")";
             }, nb::sig("def __repr__(self) -> str"));
 
     // -- ProfileManager --
@@ -162,13 +165,7 @@ void init_decklink_profile(nb::module_& m, nb::class_<Device>& device) {
                     throw std::runtime_error(
                         "GetProfiles failed (HRESULT " +
                         std::to_string(hr) + ")");
-                std::vector<Profile> out;
-                for (;;) {
-                    ComPtr<IDeckLinkProfile> p;
-                    if (iter->Next(p.put()) != S_OK || !p) break;
-                    out.emplace_back(std::move(p));
-                }
-                return out;
+                return drain_profile_iterator(iter.get());
             },
             "Return all profiles available on this device.")
         .def("get_profile",
