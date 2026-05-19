@@ -3,6 +3,7 @@
 #include <nanobind/nanobind.h>
 #include "platform.h"
 #include "comptr.h"
+#include <memory>
 #include <stdexcept>
 #include <string>
 
@@ -21,9 +22,10 @@ inline ComPtr<IDeckLinkIterator> require_iterator() {
     return iter;
 }
 
-// Forward declarations for callback types (defined in bind_output.cpp / bind_input.cpp).
+// Forward declarations for callback types (defined in bind_output.cpp / bind_input.cpp / bind_profile.cpp).
 class OutputCallback;
 class InputCallback;
+struct ProfileManager;
 
 /// Lightweight device info returned by list_devices().
 struct DeviceInfo {
@@ -45,6 +47,14 @@ struct Device {
     // Input state (managed by bind_input.cpp).
     ComPtr<IDeckLinkInput> input_;
     ComPtr<InputCallback> input_callback_;
+
+    // Profile state (managed by bind_profile.cpp). Cached on first
+    // access to ``profile_manager`` so a single ``ProfileManager``
+    // owns the live ``ProfileCallbackAdapter`` for this device's
+    // lifetime; ``~Device`` clears the SDK registration and drops the
+    // adapter before the wrapper falls out of scope. ``unique_ptr`` so
+    // the forward declaration above is sufficient.
+    std::unique_ptr<ProfileManager> profile_manager_;
 
     Device(int index);
     ~Device();  // Explicit teardown drops SDK callback refs to avoid cycles.
