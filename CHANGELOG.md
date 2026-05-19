@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.2.15](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.2.14...v0.2.15) (2026-05-19)
+
+
+### Added
+
+* profile change notifications (Profile, ProfileManager, ProfileCallback) ([55d7ddc](https://github.com/Fuse-Technical-Group/pydecklink/commit/55d7ddcde8470500dbde93fef91cf457737bc6b7))
+* profile change notifications via Profile, ProfileManager, ProfileCallback ([bd20f2e](https://github.com/Fuse-Technical-Group/pydecklink/commit/bd20f2eabc72d1799568f1214212165e39d81082))
+
+
+### Fixed
+
+* **profile:** include nanobind/stl/string.h for std::string repr returns ([6bd7933](https://github.com/Fuse-Technical-Group/pydecklink/commit/6bd7933c828782a5c469c02b55e24899c543d14f))
+
 ## [0.2.14](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.2.13...v0.2.14) (2026-05-18)
 
 
