@@ -31,6 +31,38 @@ std::vector<Profile> drain_profile_iterator(IDeckLinkProfileIterator* iter) {
     return out;
 }
 
+// Lazily QueryInterface IID_IDeckLinkProfileManager and cache on the
+// Device. Returns nullptr if the device is single-profile. Shared
+// between Device.profile_manager and Device.set_profile so a callback
+// registered through either call site survives both.
+ProfileManager* ensure_profile_manager(Device& dev) {
+    if (!dev.profile_manager_) {
+        ComPtr<IDeckLinkProfileManager> mgr;
+        if (dev.dl->QueryInterface(IID_IDeckLinkProfileManager,
+                                    (void**)mgr.put()) != S_OK || !mgr)
+            return nullptr;
+        dev.profile_manager_ = std::make_unique<ProfileManager>(std::move(mgr));
+    }
+    return dev.profile_manager_.get();
+}
+
+ComPtr<IDeckLinkProfile> get_profile_or_throw(IDeckLinkProfileManager* mgr,
+                                              BMDProfileID profileID) {
+    ComPtr<IDeckLinkProfile> profile;
+    HRESULT hr = mgr->GetProfile(profileID, profile.put());
+    if (hr != S_OK || !profile)
+        throw std::runtime_error(
+            "Profile not available (HRESULT " + std::to_string(hr) + ")");
+    return profile;
+}
+
+void activate_profile(IDeckLinkProfile* profile) {
+    HRESULT hr = profile->SetActive();
+    if (hr != S_OK)
+        throw std::runtime_error(
+            "SetActive failed (HRESULT " + std::to_string(hr) + ")");
+}
+
 }  // namespace
 
 HRESULT ProfileCallbackAdapter::ProfileChanging(
@@ -125,10 +157,7 @@ void init_decklink_profile(nb::module_& m, nb::class_<Device>& device) {
             [](Profile& self) {
                 if (!self.profile)
                     throw std::runtime_error("Profile is null");
-                HRESULT hr = self.profile->SetActive();
-                if (hr != S_OK)
-                    throw std::runtime_error(
-                        "SetActive failed (HRESULT " + std::to_string(hr) + ")");
+                activate_profile(self.profile.get());
             },
             "Request activation of this profile. Returns immediately; "
             "activation completes asynchronously and is signalled via "
@@ -173,13 +202,7 @@ void init_decklink_profile(nb::module_& m, nb::class_<Device>& device) {
             [](ProfileManager& self, _BMDProfileID profileID) -> Profile {
                 if (!self.mgr)
                     throw std::runtime_error("ProfileManager is null");
-                ComPtr<IDeckLinkProfile> profile;
-                HRESULT hr = self.mgr->GetProfile(profileID, profile.put());
-                if (hr != S_OK || !profile)
-                    throw std::runtime_error(
-                        "Profile not available (HRESULT " +
-                        std::to_string(hr) + ")");
-                return Profile(std::move(profile));
+                return Profile(get_profile_or_throw(self.mgr.get(), profileID));
             },
             nb::arg("profile_id"),
             "Look up a specific profile by its identifier.")
@@ -227,25 +250,14 @@ void init_decklink_profile(nb::module_& m, nb::class_<Device>& device) {
 
     // -- Device.profile_manager --
     //
-    // Cached on first access. The ``ProfileManager`` owns the live
-    // ``ProfileCallbackAdapter`` (if any); caching guarantees one
-    // wrapper per ``Device``, so a callback registered through any
-    // call site survives subsequent ``.profile_manager`` reads.
-    //
-    // ``reference_internal`` ties the Python wrapper's lifetime to the
-    // owning ``Device``, mirroring the cached-once-on-the-C++-side
-    // semantics.
+    // Cached on first access via ``ensure_profile_manager``. Caching
+    // guarantees one ``ProfileManager`` wrapper per ``Device``, so a
+    // callback registered through any call site survives subsequent
+    // ``.profile_manager`` reads. ``reference_internal`` ties the
+    // Python wrapper's lifetime to the owning ``Device``.
     device.def_prop_ro("profile_manager",
         [](Device& self) -> ProfileManager* {
-            if (!self.profile_manager_) {
-                ComPtr<IDeckLinkProfileManager> mgr;
-                if (self.dl->QueryInterface(IID_IDeckLinkProfileManager,
-                                             (void**)mgr.put()) != S_OK || !mgr)
-                    return nullptr;
-                self.profile_manager_ =
-                    std::make_unique<ProfileManager>(std::move(mgr));
-            }
-            return self.profile_manager_.get();
+            return ensure_profile_manager(self);
         },
         nb::rv_policy::reference_internal,
         // Override the auto-generated stub: nanobind translates a null
@@ -254,4 +266,25 @@ void init_decklink_profile(nb::module_& m, nb::class_<Device>& device) {
         nb::sig("def profile_manager(self) -> ProfileManager | None"),
         "Return the device's ``ProfileManager``, or ``None`` if the "
         "device is single-profile.");
+
+    // -- Device.set_profile --
+    //
+    // Convenience layer over ``profile_manager.get_profile(id).set_active()``
+    // permitted by §spec:binding-philosophy. Delegates through the
+    // cached ``ProfileManager`` and shares the same helpers as the
+    // lower-level bindings.
+    device.def("set_profile",
+        [](Device& self, _BMDProfileID profileID) {
+            ProfileManager* pm = ensure_profile_manager(self);
+            if (!pm)
+                throw std::runtime_error(
+                    "Device does not support profile management");
+            ComPtr<IDeckLinkProfile> profile =
+                get_profile_or_throw(pm->mgr.get(), profileID);
+            activate_profile(profile.get());
+        },
+        nb::arg("profile_id"),
+        "Activate a connector profile. Affects all sub-devices on this "
+        "card. Equivalent to "
+        "``device.profile_manager.get_profile(profile_id).set_active()``.");
 }

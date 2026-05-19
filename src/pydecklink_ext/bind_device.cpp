@@ -216,30 +216,9 @@ nb::class_<Device> init_decklink_device(nb::module_& m) {
                 return static_cast<_BMDProfileID>(value);
             },
             "Return the active profile ID for this device.")
-        .def("set_profile",
-            [](Device& self, _BMDProfileID profileID) {
-                // Convenience wrapper: equivalent to
-                //   self.profile_manager.get_profile(id).set_active()
-                // Phrased the long way here to keep the error messages
-                // ("Device does not support profile management",
-                // "Profile not available", "SetActive failed") identical
-                // to the pre-refactor surface that downstream consumers
-                // may match on.
-                ComPtr<IDeckLinkProfileManager> mgr;
-                if (self.dl->QueryInterface(IID_IDeckLinkProfileManager, (void**)mgr.put()) != S_OK)
-                    throw std::runtime_error("Device does not support profile management");
-
-                ComPtr<IDeckLinkProfile> profile;
-                HRESULT hr = mgr->GetProfile(profileID, profile.put());
-                if (hr != S_OK || !profile)
-                    throw std::runtime_error("Profile not available (HRESULT " + std::to_string(hr) + ")");
-
-                hr = profile->SetActive();
-                if (hr != S_OK)
-                    throw std::runtime_error("SetActive failed (HRESULT " + std::to_string(hr) + ")");
-            },
-            nb::arg("profile_id"),
-            "Activate a connector profile. Affects all sub-devices on this card.")
+        // ``set_profile`` is defined in bind_profile.cpp so it can
+        // delegate through the same helpers used by ``ProfileManager``
+        // and ``Profile``.
         .def("get_attribute_flag",
             [](Device& self, _BMDDeckLinkAttributeID attrID) -> bool {
                 ComPtr<IDeckLinkProfileAttributes> attrs;
