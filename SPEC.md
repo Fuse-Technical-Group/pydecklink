@@ -1413,85 +1413,46 @@ matching that shape keeps one failure idiom across the binding.
 
 ## Profile Change Notifications §spec:profile-change-notifications
 
-*Status: not started*
+*Status: complete*
 
 ### Problem
 
 `IDeckLinkProfile::SetActive` is asynchronous. The SDK header is
 explicit: "Activation is not complete until
 `IDeckLinkProfileCallback::ProfileActivated` is called"
-(`DeckLinkAPI.h:1506`). The binding's current surface
-(`Device.set_profile`, `Device.active_profile`) gives consumers no
-way to observe activation completion — they must poll
-`active_profile()` until it matches the requested ID. Downstream
-consumers carry 5-second probe loops as a workaround.
-
-The SDK also signals teardown intent through `ProfileChanging`, which
-fires synchronously before reconfiguration with a flag indicating
-whether active streams will be forced to stop. Without this signal,
-consumers cannot release I/O interfaces cleanly across a profile
-switch.
+(`DeckLinkAPI.h:1506`). Without a callback surface, consumers must
+poll `Device.active_profile()` until it matches the requested ID.
+The SDK also signals teardown intent through `ProfileChanging`,
+which fires synchronously with a flag indicating whether active
+streams will be forced to stop — without it, consumers cannot
+release I/O interfaces cleanly across a profile switch.
 
 ### Behavior
 
 The binding exposes the SDK's profile-management interfaces as
-faithful Python equivalents per §spec:binding-philosophy.
+faithful Python equivalents per §spec:binding-philosophy. `Profile`,
+`ProfileManager`, and `ProfileCallback` wrap `IDeckLinkProfile`,
+`IDeckLinkProfileManager`, and `IDeckLinkProfileCallback` respectively;
+`Device.profile_manager` returns the per-device manager (or `None`
+on single-profile cards). The authoritative surface — method
+signatures, return types, docstrings — lives in
+`src/pydecklink/_bindings.pyi`.
 
-`Profile` wraps `IDeckLinkProfile`:
-
-- `Profile.id → ProfileID`
-- `Profile.is_active → bool`
-- `Profile.set_active() → None` — wraps `SetActive`. Returns
-  immediately; activation completes asynchronously, signalled via
-  the registered callback.
-- `Profile.get_peers() → Iterator[Profile]` — wraps `GetPeers`.
-  Profiles of other sub-devices that activate together when this
-  profile becomes active.
-
-`ProfileManager` wraps `IDeckLinkProfileManager`:
-
-- `ProfileManager.get_profiles() → Iterator[Profile]` — wraps
-  `GetProfiles`.
-- `ProfileManager.get_profile(profile_id) → Profile` — wraps
-  `GetProfile`.
-- `ProfileManager.set_callback(callback: ProfileCallback | None) → None`
-  — wraps `SetCallback`. Passing `None` clears the registration. The
-  SDK accepts one callback per manager; subsequent calls replace
-  prior registrations.
-
-`ProfileCallback` is a Python-subclassable base wrapping
-`IDeckLinkProfileCallback`:
-
-- `ProfileCallback.profile_changing(profile, streams_will_be_forced_to_stop)`
-  — invoked synchronously from the SDK thread before firmware
-  reconfiguration. The SDK waits for the method to return before
-  proceeding. Consumers release I/O interfaces here when
-  `streams_will_be_forced_to_stop` is `True`.
-- `ProfileCallback.profile_activated(profile)` — invoked
-  synchronously from the SDK thread after firmware reconfiguration
-  completes.
-
-`Device.profile_manager → ProfileManager` exposes the per-device
-manager. Existing methods are retained as convenience per
-§spec:binding-philosophy:
-
-- `Device.set_profile(profile_id)` is equivalent to
-  `device.profile_manager.get_profile(profile_id).set_active()`.
-- `Device.active_profile() → ProfileID` reads from
-  `IDeckLinkProfileAttributes` directly, unchanged.
+`Device.set_profile` is retained as a convenience equivalent to
+`device.profile_manager.get_profile(id).set_active()`;
+`Device.active_profile` reads `BMDDeckLinkProfileID` from
+`IDeckLinkProfileAttributes` and is unchanged.
 
 ### Why a subclassable callback, not a queue
 
 Existing push-callback bindings (§4 capture, §5.5 output, §5.11
-status) wrap the C++ side and surface a Python pop queue. §4 and
-§5.5 are forced by frame-rate GIL contention. §5.11 carries the
-queue shape forward but acknowledges its own rationale ("status
-events fire on the order of seconds") does not require it.
-
-Profile changes fire on activation only — orders of magnitude below
-sub-Hz. The frame-rate GIL argument does not apply, and
-§spec:binding-philosophy permits new sections to follow the SDK
-shape when the original incompatibility does not hold.
+status) surface a Python pop queue. §4 and §5.5 are forced by
+frame-rate GIL contention; §5.11 carries the queue shape forward
+without that constraint. Profile changes fire on activation only —
+orders of magnitude below sub-Hz — so the frame-rate GIL argument
+does not apply, and §spec:binding-philosophy permits new sections
+to follow the SDK shape when the original incompatibility does not
+hold.
 
 A queue would also break the `ProfileChanging` contract. The SDK
 pauses the profile switch until the callback returns, giving the
@@ -1501,52 +1462,21 @@ Python could release I/O.
 
 ### Why no built-in blocking helper
 
-A `set_profile(profile_id, wait=True, timeout_s=...)` convenience
-would force a timeout-default decision with no defensible answer and
-hide the `ProfileChanging` phase where teardown lives. Consumers
-needing a blocking pattern compose one with `threading.Event` in a
-handful of lines:
-
-```python
-done = threading.Event()
-
-class WaitForActivation(pydecklink.ProfileCallback):
-    def profile_activated(self, profile):
-        done.set()
-
-device.profile_manager.set_callback(WaitForActivation())
-device.set_profile(target)
-done.wait(timeout=10.0)
-```
+A `set_profile(wait=True, timeout_s=...)` convenience would force a
+timeout-default decision with no defensible answer and hide the
+`ProfileChanging` phase where teardown lives. Consumers compose a
+blocking pattern with `threading.Event` and a callback subclass.
 
 ### Why per-`IDeckLink`, not card-level aggregation
 
 `IDeckLinkProfileManager` is queried per `IDeckLink`. Activating a
 profile cascades to peer sub-devices on the same physical card; the
 SDK fires `ProfileChanging` and `ProfileActivated` on every affected
-`IDeckLink` whose manager has a callback registered.
-
-The binding does not aggregate across sub-devices, matching the
-§5.11 per-`IDeckLink` precedent. Consumers wanting card-level
-coordination register a callback on each sub-device of interest, or
-iterate `Profile.get_peers()` from any one sub-device.
-
-### Scope
-
-- Covers `IDeckLinkProfile`, `IDeckLinkProfileIterator`,
-  `IDeckLinkProfileManager`, `IDeckLinkProfileCallback`.
-- `IDeckLinkProfileAttributes` is already bound via
-  `Device.get_attribute_int` / `Device.get_attribute_flag` (§5.1).
-- One callback per `ProfileManager`. Multiplexing multiple
-  consumer-side observers is the consumer's responsibility, matching
-  the SDK shape.
-
-### API surface impact
-
-Additive. New `Profile`, `ProfileManager`, `ProfileCallback` classes
-and `Device.profile_manager` property. Existing
-`Device.set_profile`, `Device.active_profile`, and `ProfileID`
-retained unchanged.
+`IDeckLink` whose manager has a callback registered. The binding
+does not aggregate across sub-devices, matching the §5.11
+per-`IDeckLink` precedent. Consumers wanting card-level coordination
+register a callback on each sub-device or iterate
+`Profile.get_peers()` from any one of them.
 
 ### Citations
 
