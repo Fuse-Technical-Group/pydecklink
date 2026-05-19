@@ -524,9 +524,6 @@ class Device:
     def active_profile(self) -> ProfileID:
         """Return the active profile ID for this device."""
 
-    def set_profile(self, profile_id: ProfileID) -> None:
-        """Activate a connector profile. Affects all sub-devices on this card."""
-
     def get_attribute_flag(self, attr_id: AttributeID) -> bool:
         """Get a boolean profile attribute."""
 
@@ -645,6 +642,11 @@ class Device:
     def profile_manager(self) -> ProfileManager | None:
         """
         Return the device's ``ProfileManager``, or ``None`` if the device is single-profile.
+        """
+
+    def set_profile(self, profile_id: ProfileID) -> None:
+        """
+        Activate a connector profile. Affects all sub-devices on this card. Equivalent to ``device.profile_manager.get_profile(profile_id).set_active()``.
         """
 
 class DisplayModeInfo:
