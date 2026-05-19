@@ -65,31 +65,6 @@ reference applied, and `n/a` for devices without a REF BNC.
 Disconnecting the reference between runs flips the corresponding
 row from `locked@…` to `unlocked`.
 
-## Profile change notifications
-
-### §road:profile-change-notifications
-
-Bind `IDeckLinkProfile`, `IDeckLinkProfileIterator`,
-`IDeckLinkProfileManager`, and `IDeckLinkProfileCallback` per
-§spec:profile-change-notifications. New nanobind classes `Profile`,
-`ProfileManager`, `ProfileCallback` and a new `Device.profile_manager`
-property. `ProfileCallback` is a nanobind trampoline so Python
-subclasses can override `profile_changing` and `profile_activated`;
-the SDK invokes both synchronously with the GIL held. Existing
-`Device.set_profile` and `Device.active_profile` keep their current
-signatures; `set_profile` internally delegates to
-`device.profile_manager.get_profile(id).set_active()`. Update `.pyi`
-stubs.
-
-**Verify:** On a host with a multi-profile DeckLink card (8K Pro is
-canonical), run `uv run pytest -m hardware
-tests/test_profile_callbacks.py`. The test registers a
-`ProfileCallback` subclass via `device.profile_manager.set_callback`,
-switches to a different profile, and asserts both `profile_changing`
-(with the correct `streams_will_be_forced_to_stop` flag) and
-`profile_activated` fire on the target device within 10 seconds.
-Test restores the original profile in teardown.
-
 ## Future
 
 - **hdr-metadata**: `IDeckLinkVideoFrameMutableMetadataExtensions`

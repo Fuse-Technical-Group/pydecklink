@@ -641,6 +641,12 @@ class Device:
         Create a frame pool backed by pinned (allocator-managed) buffers. Each frame uses CreateVideoFrameWithBuffer. For GPU DMA, pass an allocator using CUDA pinned memory.
         """
 
+    @property
+    def profile_manager(self) -> ProfileManager | None:
+        """
+        Return the device's ``ProfileManager``, or ``None`` if the device is single-profile.
+        """
+
 class DisplayModeInfo:
     @property
     def mode(self) -> DisplayMode: ...
@@ -926,3 +932,61 @@ def api_version() -> APIVersion:
     """
     Return the running Desktop Video runtime version. Raises RuntimeError if Desktop Video is not installed.
     """
+
+class ProfileCallback:
+    """
+    Base class for profile-change callbacks. Subclass and override ``profile_changing`` and/or ``profile_activated``. The SDK invokes both synchronously on an internal thread; the binding acquires the GIL before dispatching into Python.
+    """
+
+    def __init__(self) -> None: ...
+
+    def profile_changing(self, profile: object, streams_will_be_forced_to_stop: bool) -> None:
+        """
+        Called before firmware reconfiguration. The SDK waits for this method to return before proceeding. Release I/O interfaces here when ``streams_will_be_forced_to_stop`` is True.
+        """
+
+    def profile_activated(self, profile: object) -> None:
+        """Called after firmware reconfiguration completes."""
+
+class Profile:
+    """
+    Wraps ``IDeckLinkProfile``. A handle to one of a card's connector profiles.
+    """
+
+    @property
+    def id(self) -> ProfileID:
+        """The profile's identifier."""
+
+    @property
+    def is_active(self) -> bool:
+        """True if this profile is currently active on the card."""
+
+    def set_active(self) -> None:
+        """
+        Request activation of this profile. Returns immediately; activation completes asynchronously and is signalled via the registered ``ProfileCallback``.
+        """
+
+    def get_peers(self) -> list[Profile]:
+        """
+        Return profiles of peer sub-devices that activate together when this profile becomes active.
+        """
+
+    def __repr__(self) -> str: ...
+
+class ProfileManager:
+    """
+    Wraps ``IDeckLinkProfileManager``. Created on demand via ``Device.profile_manager``; one per ``IDeckLink``.
+    """
+
+    def get_profiles(self) -> list[Profile]:
+        """Return all profiles available on this device."""
+
+    def get_profile(self, profile_id: ProfileID) -> Profile:
+        """Look up a specific profile by its identifier."""
+
+    def set_callback(self, callback: object | None) -> None:
+        """
+        Register a ``ProfileCallback``. Pass ``None`` to clear. The SDK accepts one callback per manager; subsequent calls replace prior registrations.
+        """
+
+    def __repr__(self) -> str: ...
