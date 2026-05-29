@@ -13,6 +13,22 @@ inference, QC, monitoring, live production tooling).
 pydecklink exposes DeckLink's capture and scheduled playback APIs as a
 Python module. It uses CPU buffers (numpy) for frame transfers.
 
+### Scope boundary
+
+pydecklink is an I/O binding library. It owns the DeckLink SDK surface
+(capture, scheduled playback, COM lifecycle) and the buffer, lifecycle,
+and synchronization primitives consumers build on — allocator-agnostic
+pinned-buffer pools, synchronized stream start, and zero-copy capture
+references. It does not own pipeline orchestration, threading models,
+GPU kernels, or model code, and imports no GPU toolkit
+(§spec:gpu-pinned-memory). Those concerns live in the consumer: for
+example a depth-matting inference kernel and its host runtime (the
+matte_rt / backlit_molecule projects), which compose pydecklink as one
+interchangeable I/O backend. Why: keeping the binding free of pipeline
+and model assumptions lets it serve any consumer — ML inference, QC,
+monitoring, live production tooling — without inheriting one pipeline's
+design, and keeps GPU-framework choices on the consumer side.
+
 ### Prior art
 
 [bmd-signal-gen](https://github.com/OpenLEDEval/bmd-signal-gen)
