@@ -19,3 +19,12 @@ repos:
       - id: ruff
         args: [--fix]
       - id: ruff-format
+
+  - repo: local
+    hooks:
+      - id: devcontainer-nonroot
+        name: devcontainer not root under keep-id
+        entry: .devcontainer/assert-nonroot.sh
+        language: script
+        pass_filenames: false
+        files: ^\.devcontainer/
