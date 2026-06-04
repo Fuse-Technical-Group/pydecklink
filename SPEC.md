@@ -877,6 +877,38 @@ workflows, and the score is visible to downstream consumers
 deciding whether to depend on pydecklink. Lower priority than
 the scanning itself; see roadmap sequencing.
 
+### Release integrity (outbound)
+
+The subsections above harden the *inbound* supply chain — code
+pydecklink consumes. Releases are the *outbound* surface: pydecklink
+ships per-platform wheels (Linux, macOS, Windows) as GitHub Release
+assets that downstream users install directly. A published release
+whose assets can be altered after publication, or that ships before
+every platform's wheel is present, is an integrity risk for those
+installs.
+
+The system shall:
+
+- Publish releases as **immutable** GitHub Releases — once published,
+  a release's tag and assets cannot be added, replaced, or removed.
+- Publish a release only after every per-platform wheel has been built
+  and attached, so a published release is never missing a platform's
+  wheel and no asset can be swapped after the fact.
+
+Why: consumers install wheels straight from the release assets, so the
+published set must be both complete and bit-stable. Immutability gives
+the same post-publish tamper-resistance a package index (PyPI) provides
+through filename burn; distributing via an index is a possible future
+alternative but is out of scope — the package is not currently indexed.
+
+Because GitHub freezes a release's assets at publication, the release
+tool must build and attach all wheels *before* publishing: cut the
+release as a draft, attach wheels, and promote to published only once
+every platform succeeds; a failed build leaves a draft for remediation
+rather than shipping an incomplete release. This draft → attach →
+promote ordering is a hard requirement on whatever tool cuts releases,
+and gates the release-automation migration tracked in the roadmap.
+
 ### Constraints
 
 - **PR-time scan budget.** The PR-time scan shall complete in
