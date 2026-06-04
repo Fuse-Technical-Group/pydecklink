@@ -4,11 +4,14 @@ on:
     types: [opened, synchronize, reopened, ready_for_review, edited]
 jobs:
   conduct:
-    uses: point-source/flywheel/.github/workflows/pr.yml@v1
+    # SHA-pinned per SPEC §10 (no floating tags). Bump via Dependabot;
+    # when the uses: SHA changes, update flywheel-version below to match —
+    # Dependabot bumps the uses: ref but not the input value.
+    uses: point-source/flywheel/.github/workflows/pr.yml@39897d9868c78ffbf6b57e2ba84638e18f89e82b # v1.4.0
     with:
       app-id: ${{ vars.FLYWHEEL_GH_APP_ID }}
-      # Check the Flywheel action source out at the same ref this caller
-      # pins the reusable workflow at; keep in lockstep with the @v1 above.
-      flywheel-version: v1
+      # Checks the flywheel action source out at the same ref as the reusable
+      # workflow above — keep this SHA identical to the uses: pin.
+      flywheel-version: 39897d9868c78ffbf6b57e2ba84638e18f89e82b # v1.4.0
     secrets:
       app-private-key: ${{ secrets.FLYWHEEL_GH_APP_PRIVATE_KEY }}
