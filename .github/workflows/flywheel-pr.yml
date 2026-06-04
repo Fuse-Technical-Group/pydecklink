@@ -1,0 +1,14 @@
+name: Flywheel — PR
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, edited]
+jobs:
+  conduct:
+    uses: point-source/flywheel/.github/workflows/pr.yml@v1
+    with:
+      app-id: ${{ vars.FLYWHEEL_GH_APP_ID }}
+      # Check the Flywheel action source out at the same ref this caller
+      # pins the reusable workflow at; keep in lockstep with the @v1 above.
+      flywheel-version: v1
+    secrets:
+      app-private-key: ${{ secrets.FLYWHEEL_GH_APP_PRIVATE_KEY }}

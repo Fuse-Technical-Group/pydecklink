@@ -1,0 +1,5 @@
+# >>> flywheel: managed merge-driver attributes (do not edit) >>>
+CHANGELOG.md merge=flywheel-changelog
+# Add a line per release_files entry from .flywheel.yml, e.g.:
+#   pubspec.yaml merge=flywheel-release-file
+# <<< flywheel: managed merge-driver attributes <<<
