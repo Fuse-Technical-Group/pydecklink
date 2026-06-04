@@ -71,6 +71,16 @@ separate axis (self-audit, not dep-scan) and lowest priority.
   Independent of dep-scanning — answers "is *pydecklink* hardened?"
   rather than "are pydecklink's deps vulnerable?". Lowest priority
   in the section. §spec:10
+- **migrate-release-please-to-flywheel**: Replace release-please with
+  point-source/flywheel for versioning and release automation, matching
+  the org standard (humongous-boat); touches `release-please.yml`,
+  `release-please-config.json`, `.release-please-manifest.json`,
+  `pyproject.toml` versioning, and `build-wheels.yml`. §spec:10.
+  Blocked — flywheel publishes releases immediately and cannot build and
+  attach wheels before the immutability freeze (§10 release integrity);
+  unblocked when point-source/flywheel#215 adds draft → attach → promote
+  support. PyPI/index distribution is the alternative unblock path but is
+  out of scope (staying on immutable GitHub Release assets).
 
 **Verify:** End-to-end coverage of §10 is observable via five
 surfaces:
