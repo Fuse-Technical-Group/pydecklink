@@ -73,14 +73,16 @@ separate axis (self-audit, not dep-scan) and lowest priority.
   in the section. §spec:10
 - **migrate-release-please-to-flywheel**: Replace release-please with
   point-source/flywheel for versioning and release automation, matching
-  the org standard (humongous-boat); touches `release-please.yml`,
-  `release-please-config.json`, `.release-please-manifest.json`,
-  `pyproject.toml` versioning, and `build-wheels.yml`. §spec:10.
-  Blocked — flywheel publishes releases immediately and cannot build and
-  attach wheels before the immutability freeze (§10 release integrity);
-  unblocked when point-source/flywheel#215 adds draft → attach → promote
-  support. PyPI/index distribution is the alternative unblock path but is
-  out of scope (staying on immutable GitHub Release assets).
+  the org standard (humongous-boat); removes `release-please.yml`,
+  `release-please-config.json`, `.release-please-manifest.json`, adds
+  `.flywheel.yml` + flywheel PR/push workflows, switches `pyproject.toml`
+  to a dynamic version from the git tag (setuptools_scm), and rewires
+  `build-wheels.yml` to trigger on the release-tag push, attach wheels to
+  the draft, and publish only after all platforms succeed. §spec:10.
+  Unblocked — flywheel ≥ v1.4.0 supports per-branch `release_as_draft`
+  (its `§spec:immutable-release-support`), satisfying the §10 draft →
+  attach → promote requirement; set it on `main`. PyPI/index distribution
+  remains out of scope (staying on immutable GitHub Release assets).
 
 **Verify:** End-to-end coverage of §10 is observable via five
 surfaces:
