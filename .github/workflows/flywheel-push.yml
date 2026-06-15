@@ -2,16 +2,21 @@ name: Flywheel — Push
 on:
   push:
     branches: ["**"]
+concurrency:
+  group: flywheel-push-${{ github.ref_name }}
+  cancel-in-progress: false
 jobs:
   release:
-    # SHA-pinned per SPEC §10 (no floating tags). Bump via Dependabot;
-    # when the uses: SHA changes, update flywheel-version below to match —
-    # Dependabot bumps the uses: ref but not the input value.
-    uses: point-source/flywheel/.github/workflows/push.yml@39897d9868c78ffbf6b57e2ba84638e18f89e82b # v1.4.0
-    with:
-      app-id: ${{ vars.FLYWHEEL_GH_APP_ID }}
-      # Checks the flywheel action source out at the same ref as the reusable
-      # workflow above — keep this SHA identical to the uses: pin.
-      flywheel-version: 39897d9868c78ffbf6b57e2ba84638e18f89e82b # v1.4.0
-    secrets:
-      app-private-key: ${{ secrets.FLYWHEEL_GH_APP_PRIVATE_KEY }}
+    runs-on: ubuntu-latest
+    steps:
+      # SHA-pinned per SPEC §10 (no floating tags). Bump via Dependabot;
+      # the trailing # vX.Y.Z comment is mandatory for human review.
+      # v2 invokes the composite action directly — the @<ref> resolves the
+      # dispatcher, bundled scripts, and semantic-release plugins together, so
+      # the v1 flywheel-version input is gone. v2.0.1 is the floor: its #229
+      # fix lets external adopters resolve the composite (v2.0.0 cannot).
+      - uses: point-source/flywheel@4c8d37b9bb19461681757e1363ce8f0dee041e01 # v2.0.1
+        with:
+          event: push
+          app-id: ${{ vars.FLYWHEEL_GH_APP_ID }}
+          app-private-key: ${{ secrets.FLYWHEEL_GH_APP_PRIVATE_KEY }}
