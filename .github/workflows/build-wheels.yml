@@ -1,11 +1,13 @@
 name: build-wheels
 
+# Triggered by the release tag flywheel pushes (release_as_draft on main
+# leaves the GitHub Release as a draft). This job attaches every platform's
+# wheel to that draft; the publish job promotes it to a published (immutable)
+# release only after all platforms succeed. workflow_dispatch is kept for
+# manual artifact builds / re-uploads to an existing tag.
 on:
-  workflow_call:
-    inputs:
-      tag_name:
-        required: true
-        type: string
+  push:
+    tags: ["v*"]
   workflow_dispatch:
     inputs:
       tag_name:
@@ -33,6 +35,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          # Full history + tags so setuptools_scm can derive the version
+          # from the release tag (pyproject [project] dynamic = version).
+          fetch-depth: 0
 
       - name: Install system deps (Linux)
         if: matrix.platform == 'linux'
@@ -61,8 +67,31 @@ jobs:
           name: wheel-${{ matrix.platform }}
           path: dist/*.whl
 
+      # Attach to the draft release for this tag. The draft is still mutable,
+      # so assets can be added here; the immutability freeze happens at the
+      # publish step below, with every platform's wheel present.
       - name: Upload wheel to release
-        if: inputs.tag_name != ''
+        if: github.ref_type == 'tag' || (github.event_name == 'workflow_dispatch' && inputs.tag_name != '')
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ inputs.tag_name }}" dist/*.whl --clobber
+          INPUT_TAG: ${{ inputs.tag_name }}
+        run: |
+          TAG="${INPUT_TAG:-${{ github.ref_name }}}"
+          gh release upload "$TAG" dist/*.whl --clobber
+
+  # Promote the draft to a published (immutable) release only after every
+  # platform's wheel has uploaded. fail-fast: false means one failed platform
+  # fails `build`, this job is skipped, and the release stays a draft for
+  # remediation rather than shipping incomplete. Tag-push only; manual
+  # workflow_dispatch runs never auto-publish.
+  publish:
+    needs: build
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Promote draft release to published
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit "${{ github.ref_name }}" --draft=false

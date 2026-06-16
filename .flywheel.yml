@@ -1,0 +1,13 @@
+flywheel:
+  streams:
+    - name: main-line
+      branches:
+        - name: main
+          release: production
+          # Cut the release as an unpublished draft so build-wheels.yml can
+          # attach all per-platform wheels before publication, then publish
+          # (the immutability freeze) only when every platform succeeds.
+          # See SPEC §10 "Release integrity (outbound)" and flywheel
+          # §spec:immutable-release-support (flywheel >= v1.4.0).
+          release_as_draft: true
+          auto_merge: [fix, chore, docs]
