@@ -21,7 +21,7 @@ Prebuilt wheels ship for Linux (manylinux x86_64), macOS, and Windows.
 Building from source requires a C++ toolchain — see
 [CONTRIBUTING.md](CONTRIBUTING.md).
 
-## Quick start
+## Usage
 
 ```python
 import pydecklink
@@ -55,6 +55,45 @@ The [`examples/`](examples) directory in the repo contains runnable scripts:
 
 CUDA examples need the `cuda-examples` extra
 (`uv pip install "pydecklink[cuda-examples]"`).
+
+## API
+
+The package ships type stubs (`pydecklink/_bindings.pyi`) and a `py.typed`
+marker, so editors and `mypy` see the full typed surface. Key entry points:
+
+**Device discovery**
+
+- `list_devices() -> list[DeviceInfo]`, `device_count() -> int`
+- `api_version() -> APIVersion` — Desktop Video runtime version
+- `connector_label(device) -> str | None` — physical SDI port label
+
+**Display-mode helpers**
+
+- `get_mode_width(mode)`, `get_mode_height(mode)`, `get_mode_fps(mode)`
+- `get_mode_frame_duration(mode)`, `get_frame_bytes(mode, pixel_format)`,
+  `get_row_bytes(pixel_format, width)`
+
+**`Device`** — open a card with `Device(index)`, then:
+
+- *Capture*: `enable_video_input(...)`, `start_streams()`, and
+  `pop_capture_frame()` (copying) or `pop_capture_frame_ref()` (zero-copy).
+- *Scheduled playback*: `enable_video_output(...)`, `create_frame_pool(...)`,
+  `acquire_output_frame()`, `schedule_output_frame(...)`,
+  `start_scheduled_playback(...)`.
+- *Zero-copy passthrough*: `schedule_capture_frame(...)` forwards a captured
+  frame straight to output with no memcpy.
+
+**Frames** — `CaptureFrame`, `CaptureFrameRef` (zero-copy), and `MutableFrame`
+expose pixel data as a numpy array via `.data`, alongside `.width`,
+`.height`, `.row_bytes`.
+
+**Enums** — `DisplayMode`, `PixelFormat`, `VideoConnection`, `VideoInputFlag`,
+`VideoOutputFlag`, `FieldDominance`, and related SDK constants.
+
+**Custom memory** — `VideoBufferAllocator` / `VideoBufferAllocatorProvider`
+back capture and playback with caller-owned buffers (e.g. CUDA pinned memory)
+for direct GPU DMA. **Connector profiles** — `ProfileManager`, `Profile`,
+and `ProfileID` switch a card's duplex/sub-device layout.
 
 ## License
 
