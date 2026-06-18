@@ -90,6 +90,9 @@ jobs:
       # publish step below, with every platform's wheel present.
       - name: Upload wheel to release
         if: github.ref_type == 'tag' || (github.event_name == 'workflow_dispatch' && inputs.tag_name != '')
+        # Force bash: on the Windows runner the default shell is PowerShell,
+        # which cannot parse the ${INPUT_TAG:-...} expansion or glob dist/*.whl.
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           INPUT_TAG: ${{ inputs.tag_name }}
