@@ -789,6 +789,8 @@ The integration path is the same as pyntv2's §8: a narrow
 
 ## 9. Explicit Non-Goals (Phase 1)
 
+*Status: complete*
+
 - **GPU RDMA.** The allocator infrastructure, free-list recycling,
   and `prefill` API support GPU pinned memory
   (§spec:gpu-pinned-memory). Wiring a specific GPU allocator (CUDA,
