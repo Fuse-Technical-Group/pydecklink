@@ -103,4 +103,4 @@ uv run pytest -m hardware -v
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+BSD-3-Clause — see [LICENSE](LICENSE).
