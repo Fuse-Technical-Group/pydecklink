@@ -6,9 +6,28 @@ build-backend = "scikit_build_core.build"
 name = "pydecklink"
 dynamic = ["version"]
 description = "Python bindings for Blackmagic DeckLink SDK"
+readme = "README.md"
 license = "BSD-3-Clause"
+license-files = ["LICENSE"]
+authors = [{ name = "Fuse Technical Group" }]
+keywords = ["decklink", "blackmagic", "sdi", "video-capture", "broadcast"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: Microsoft :: Windows",
+    "Topic :: Multimedia :: Video :: Capture",
+    "Typing :: Typed",
+]
 requires-python = ">=3.12"
 dependencies = ["numpy>=1.26"]
+
+[project.urls]
+Homepage = "https://github.com/Fuse-Technical-Group/pydecklink"
+Repository = "https://github.com/Fuse-Technical-Group/pydecklink"
+Issues = "https://github.com/Fuse-Technical-Group/pydecklink/issues"
 
 [project.optional-dependencies]
 test = ["pytest>=8", "psutil>=5.9"]
