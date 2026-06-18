@@ -7,6 +7,7 @@ exposing the capture and scheduled playback APIs via CPU buffers (numpy).
 
 - **Linux** or **Windows** (Blackmagic Desktop Video installed)
 - Blackmagic DeckLink hardware
+- Python 3.12+
 - [uv](https://docs.astral.sh/uv/) (manages Python and dependencies)
 
 The DeckLink SDK headers are vendored in the repo.
@@ -25,10 +26,11 @@ Install Blackmagic Desktop Video on the host for both platforms.
 uv pip install .
 ```
 
-Or for development (editable build with test dependencies):
+Or for development (editable build with the `dev` dependency group —
+pytest, mypy, psutil):
 
 ```bash
-uv pip install -e ".[dev]"
+uv sync
 ```
 
 ### Windows
@@ -63,13 +65,32 @@ invocations — its flag interface (`--list`, `--device ID`,
 ```python
 import pydecklink
 
-for mode in pydecklink.display_modes():
-    print(f"{mode.name}: {mode.width}x{mode.height} @ {mode.fps:.2f}")
+# Desktop Video runtime version
+print(pydecklink.api_version().string)
+
+# Enumerate DeckLink devices
+for info in pydecklink.list_devices():
+    print(f"{info.index}: {info.model_name}")
+
+# Display modes a device can output
+dev = pydecklink.Device(0)
+for m in dev.list_output_modes():
+    fps = pydecklink.get_mode_fps(m.mode)
+    print(f"{m.name}: {m.width}x{m.height} @ {fps:.2f}")
 ```
 
-See `examples/passthrough.py` for a zero-copy capture → playout
-loop, or `examples/cuda_passthrough.py` for the canonical SDI →
-CUDA kernel → SDI recipe (drop in your own kernel callable).
+## Examples
+
+| Script | What it does |
+|---|---|
+| `passthrough.py` | Zero-copy SDI capture → playout loop. |
+| `cuda_passthrough.py` | Canonical SDI → CUDA kernel → SDI recipe (drop in your own kernel callable). |
+| `cuda_loopback_latency.py` | Fingerprint loopback benchmark for end-to-end latency. |
+| `cuda_register_pinned.py` | Register CUDA pinned memory for the H2D capture path. |
+| `detect_signals.py` | Walk all inputs, report which carry an active signal. |
+| `dump_topology.py` | Print each device's identity and profile attributes. |
+
+CUDA examples need the `cuda-examples` extra (`uv pip install ".[cuda-examples]"`).
 
 ## Running hardware tests
 
