@@ -28,3 +28,6 @@ vendor/Blackmagic DeckLink SDK 15.3/Mac/*
 !vendor/Blackmagic DeckLink SDK 15.3/Win/
 vendor/Blackmagic DeckLink SDK 15.3/Win/*
 !vendor/Blackmagic DeckLink SDK 15.3/Win/include/
+
+# Local-only working files (e.g. symphonize/conduct progress trackers)
+*.local.md

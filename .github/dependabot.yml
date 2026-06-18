@@ -1,0 +1,14 @@
+version: 2
+
+updates:
+  # Keep SHA-pinned GitHub Actions current across all workflows. We pin every
+  # `uses:` to a commit SHA (supply-chain hardening); Dependabot bumps those
+  # SHAs and updates the trailing version comment.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns:
+          - "*"
