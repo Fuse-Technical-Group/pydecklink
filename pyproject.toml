@@ -83,3 +83,13 @@ cmake.define.DECKLINK_SDK_DIR = {env = "DECKLINK_SDK_DIR", default = "vendor/Bla
 # Version comes from git tags (e.g. v0.3.0 -> 0.3.0). The release tag is
 # created by flywheel; the build must run against it with full history and
 # tags present (build-wheels.yml checks out with fetch-depth: 0).
+
+[tool.cibuildwheel]
+# Used by the Linux leg of build-wheels.yml to produce manylinux wheels
+# (cibuildwheel runs auditwheel repair, rewriting the linux_x86_64 tag PyPI
+# rejects). macOS/Windows still build via `uv build`. Build only the cp312
+# stable-ABI (abi3) wheel — nanobind STABLE_ABI + wheel.py-api = "cp312" make
+# one build cover 3.12+. The container has no git, so build-wheels.yml passes
+# the host-derived version via SETUPTOOLS_SCM_PRETEND_VERSION_FOR_PYDECKLINK.
+build = "cp312-*"
+build-frontend = "build[uv]"
