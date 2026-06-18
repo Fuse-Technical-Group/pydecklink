@@ -92,4 +92,8 @@ cmake.define.DECKLINK_SDK_DIR = {env = "DECKLINK_SDK_DIR", default = "vendor/Bla
 # one build cover 3.12+. The container has no git, so build-wheels.yml passes
 # the host-derived version via SETUPTOOLS_SCM_PRETEND_VERSION_FOR_PYDECKLINK.
 build = "cp312-*"
+# Blackmagic ships the DeckLink driver (libDeckLinkAPI.so) only for glibc, so a
+# musllinux wheel would install on Alpine but never dlopen the driver. Build
+# manylinux only.
+skip = "*-musllinux*"
 build-frontend = "build[uv]"
