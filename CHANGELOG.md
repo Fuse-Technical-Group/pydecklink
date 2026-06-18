@@ -1,3 +1,22 @@
+# [0.3.0](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.2.15...v0.3.0) (2026-06-18)
+
+
+### Bug Fixes
+
+* **build:** link libdl for runtime dlopen on glibc < 2.34 ([61af697](https://github.com/Fuse-Technical-Group/pydecklink/commit/61af697be6e6c49f6a3afd29e613005d69f99c38))
+* **test:** validate DeckLink device node, drop unbacked shm check ([#180](https://github.com/Fuse-Technical-Group/pydecklink/issues/180)) ([81fd82d](https://github.com/Fuse-Technical-Group/pydecklink/commit/81fd82d59a105513fcdcf42943d51ad7926502d0))
+
+
+### Features
+
+* **device:** bind IDeckLinkStatus reference-signal getters ([54780ba](https://github.com/Fuse-Technical-Group/pydecklink/commit/54780baccb481fafbb0e7714d745df9d1cee7819))
+* **examples:** report reference lock state in detect_signals ([39a3bd4](https://github.com/Fuse-Technical-Group/pydecklink/commit/39a3bd444c456a9a29d820e0d9aa96e0a0170317))
+
+
+### Performance Improvements
+
+* **examples:** query reference status only on the skipped path ([afb70b4](https://github.com/Fuse-Technical-Group/pydecklink/commit/afb70b4b0ef79e46c54553482311d7490eb4468d))
+
 # Changelog
 
 ## [0.2.15](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.2.14...v0.2.15) (2026-05-19)
