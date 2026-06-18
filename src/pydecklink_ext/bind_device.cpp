@@ -10,6 +10,13 @@
 #include <tuple>
 #include <vector>
 
+// True when the reference status has a resolvable display mode to report:
+// locked to a known mode. Single source of truth for the "mode → None"
+// rule shared by the ``mode`` property and ``__repr__`` (§spec:5.11).
+static bool has_resolvable_mode(const ReferenceStatus& s) {
+    return s.locked && s.mode != bmdModeUnknown;
+}
+
 // --- Device implementation ---
 
 Device::~Device() {
@@ -305,15 +312,15 @@ nb::class_<Device> init_decklink_device(nb::module_& m) {
             [](const ReferenceStatus& self) -> nb::object {
                 // None when unlocked or mode is unknown; otherwise the
                 // DisplayMode enum value (§spec:5.11).
-                if (!self.locked || self.mode == bmdModeUnknown)
+                if (!has_resolvable_mode(self))
                     return nb::none();
                 return nb::cast(self.mode);
             },
             nb::sig("def mode(self) -> DisplayMode | None"))
         .def("__repr__", [](const ReferenceStatus& self) {
-            std::string mode = (!self.locked || self.mode == bmdModeUnknown)
-                                   ? "None"
-                                   : std::to_string(static_cast<uint32_t>(self.mode));
+            std::string mode = has_resolvable_mode(self)
+                                   ? std::to_string(static_cast<uint32_t>(self.mode))
+                                   : "None";
             return "ReferenceStatus(locked=" +
                    std::string(self.locked ? "True" : "False") +
                    ", mode=" + mode +
