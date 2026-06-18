@@ -115,4 +115,6 @@ jobs:
       - name: Promote draft release to published
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release edit "${{ github.ref_name }}" --draft=false
+        # This job has no checkout, so gh cannot infer the repo from git
+        # context (it errors "not a git repository"). Pass it explicitly.
+        run: gh release edit "${{ github.ref_name }}" --draft=false --repo "${{ github.repository }}"
