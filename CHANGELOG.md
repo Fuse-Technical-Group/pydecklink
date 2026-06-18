@@ -1,3 +1,10 @@
+## [0.3.2](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.3.1...v0.3.2) (2026-06-18)
+
+
+### Bug Fixes
+
+* **ci:** pass --repo to gh release edit in publish job ([#185](https://github.com/Fuse-Technical-Group/pydecklink/issues/185)) ([ad71e41](https://github.com/Fuse-Technical-Group/pydecklink/commit/ad71e41b382f767bf73a01a1ddd43679e42bcd34))
+
 ## [0.3.1](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.3.0...v0.3.1) (2026-06-18)
 
 
