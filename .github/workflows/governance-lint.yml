@@ -1,0 +1,20 @@
+name: Governance Lint
+
+# Calls notation's reusable governance-lint workflow: markdownlint-cli2 over
+# the governance docs, SPEC.md status-line validation, and the README heading
+# profile. Supersedes the former hand-rolled lint-docs.yml (pymarkdownlnt on
+# SPEC/ROADMAP only). readme-type: library requires Installation, Usage, API,
+# and License headings in README.md.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    # Pinned to the commit behind notation--v0; Dependabot (github-actions
+    # ecosystem) bumps this SHA. notation's release tags use a notation--v*
+    # prefix, so Dependabot may not auto-track them — bump manually if so.
+    uses: repentsinner/symphonize/.github/workflows/governance-lint.yml@cb78dbc50dbf45b28dd7e8bfdef0a1e008ea3233 # notation--v0
+    with:
+      readme-type: library
