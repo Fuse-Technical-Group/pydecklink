@@ -2,9 +2,7 @@
 
 Derived from [SPEC.md](SPEC.md). Sections are in build-dependency order.
 
-## Sub-frame phase tuning
-
-### §road:config-reference-input-timing-offset
+## Sub-frame phase tuning §road:config-reference-input-timing-offset
 
 Add `ConfigInt.ReferenceInputTimingOffset` to `bind_enums.cpp` and the
 `.pyi` stub, and a `--phase-sweep` mode to
@@ -21,9 +19,7 @@ The minimum RTT across the sweep occurs at a non-zero offset and is
 strictly less than the integer-frame floor of the free-running run.
 Health counters remain zero at the reported optimum.
 
-## Headroom and preroll sweep
-
-### §road:headroom-preroll-sweep
+## Headroom and preroll sweep §road:headroom-preroll-sweep
 
 Add a `--sweep` mode to `examples/cuda_loopback_latency.py` that varies
 headroom and preroll across configurable ranges and reports a 2D
@@ -39,26 +35,17 @@ stable configuration. Cells below the floor show nonzero counters;
 cells at or above show zero. The benchmark exits with a nonzero
 status if no stable configuration exists in the input range.
 
-## Future
+## Future §road:future
 
 - **hdr-metadata**: `IDeckLinkVideoFrameMutableMetadataExtensions`
   for HDR10/HLG output. Required for bmd-signal-gen integration
-  (Spec §8).
+  (§spec:test-pattern-generation).
 - **audio-streams**: Audio capture/playout via
   `ScheduleAudioSamples` / `IDeckLinkAudioInputPacket`.
 - **ancillary-data**: Timecode, closed captions.
 - **status-change-notifications**: Push-based status updates via
   `IDeckLinkNotification::Subscribe(bmdStatusChanged)` —
   `device.subscribe_status_changes() → StatusChangeQueue` per
-  SPEC §5.11. Deferred until a long-running monitor surface
-  exists to consume it; the synchronous getter in
-  §road:bind-decklink-status covers one-shot diagnostics.
-- **adopt-symphonize-governance**: Ship `CONVENTIONS.md` and
-  `.github/workflows/governance-lint.yml` (referencing
-  `repentsinner/symphonize/.github/workflows/governance-lint.yml@v1`)
-  so governance rules live in the repo rather than in contributor
-  CLAUDE.md files. Validates `§spec:` / `§road:` slug formats,
-  status lines, and cross-document reference resolution. Legacy
-  numbered §1–§9 sections in SPEC.md remain as-is; new sections
-  use the slug-only convention §spec:binding-philosophy already
-  follows.
+  §spec:device-status. Deferred until a long-running monitor surface
+  exists to consume it; the synchronous status getter already
+  covers one-shot diagnostics.
