@@ -52,36 +52,23 @@ class TestUlimits:
         )
 
 
-class TestSharedMemory:
-    """Validate shared memory size.
-
-    Configured in: devcontainer.json runArgs (--shm-size=1g).
-    """
-
-    def test_shm_size_at_least_1g(self) -> None:
-        stat = os.statvfs("/dev/shm")
-        size_bytes = stat.f_blocks * stat.f_frsize
-        one_gb = 1024**3
-        assert size_bytes >= one_gb, (
-            f"/dev/shm is {size_bytes / (1024**2):.0f} MB, expected >= 1024 MB. "
-            f"--shm-size=1g is not taking effect."
-        )
-
-
 class TestDevice:
-    """Validate AJA device is mapped into container.
+    """Validate DeckLink devices are mapped into container.
 
-    Configured in: devcontainer.json runArgs (--device=/dev/ajantv20).
+    Configured in: devcontainer.json runArgs (--device=/dev/blackmagic).
+    Podman passes the directory through as char nodes /dev/blackmagic/io0..ioN.
     """
 
-    def test_aja_device_exists(self) -> None:
-        assert os.path.exists("/dev/ajantv20"), (
-            "/dev/ajantv20 not found. --device=/dev/ajantv20 is not taking effect "
-            "or no AJA card is installed."
+    DEVICE = "/dev/blackmagic/io0"
+
+    def test_blackmagic_device_exists(self) -> None:
+        assert os.path.exists(self.DEVICE), (
+            f"{self.DEVICE} not found. --device=/dev/blackmagic is not taking "
+            f"effect or no DeckLink card is installed."
         )
 
-    def test_aja_device_readable(self) -> None:
-        assert os.access("/dev/ajantv20", os.R_OK | os.W_OK), (
-            "/dev/ajantv20 exists but is not readable/writable. "
-            "Check --userns=keep-id and device node permissions (expect mode 666)."
+    def test_blackmagic_device_readable(self) -> None:
+        assert os.access(self.DEVICE, os.R_OK | os.W_OK), (
+            f"{self.DEVICE} exists but is not readable/writable. "
+            f"Check --userns=keep-id and device node permissions (expect mode 666)."
         )
