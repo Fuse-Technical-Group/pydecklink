@@ -10,6 +10,13 @@
 #include <tuple>
 #include <vector>
 
+// True when the reference status has a resolvable display mode to report:
+// locked to a known mode. Single source of truth for the "mode → None"
+// rule shared by the ``mode`` property and ``__repr__`` (§spec:5.11).
+static bool has_resolvable_mode(const ReferenceStatus& s) {
+    return s.locked && s.mode != bmdModeUnknown;
+}
+
 // --- Device implementation ---
 
 Device::~Device() {
@@ -231,7 +238,94 @@ nb::class_<Device> init_decklink_device(nb::module_& m) {
                 return static_cast<bool>(value);
             },
             nb::arg("attr_id"),
-            "Get a boolean profile attribute.");
+            "Get a boolean profile attribute.")
+        .def("get_status_flag",
+            [](Device& self, _BMDDeckLinkStatusID statusID) -> bool {
+                ComPtr<IDeckLinkStatus> status;
+                if (self.dl->QueryInterface(IID_IDeckLinkStatus, (void**)status.put()) != S_OK)
+                    throw std::runtime_error("Device does not support status");
+                dlbool_t value = false;
+                HRESULT hr = status->GetFlag(statusID, &value);
+                if (hr != S_OK)
+                    throw std::runtime_error("GetFlag failed (HRESULT " + std::to_string(hr) + ")");
+                return static_cast<bool>(value);
+            },
+            nb::arg("status_id"),
+            "Get a boolean runtime status value via IDeckLinkStatus.")
+        .def("get_status_int",
+            [](Device& self, _BMDDeckLinkStatusID statusID) -> int64_t {
+                ComPtr<IDeckLinkStatus> status;
+                if (self.dl->QueryInterface(IID_IDeckLinkStatus, (void**)status.put()) != S_OK)
+                    throw std::runtime_error("Device does not support status");
+                int64_t value = 0;
+                HRESULT hr = status->GetInt(statusID, &value);
+                if (hr != S_OK)
+                    throw std::runtime_error("GetInt failed (HRESULT " + std::to_string(hr) + ")");
+                return value;
+            },
+            nb::arg("status_id"),
+            "Get an integer runtime status value via IDeckLinkStatus.")
+        .def_prop_ro("reference_status",
+            [](Device& self) -> ReferenceStatus {
+                // Gate on HasReferenceInput: devices without a REF BNC
+                // have no meaningful reference status (§spec:5.11).
+                ComPtr<IDeckLinkProfileAttributes> attrs;
+                if (self.dl->QueryInterface(IID_IDeckLinkProfileAttributes, (void**)attrs.put()) != S_OK)
+                    throw std::runtime_error("Device does not support profile attributes");
+                dlbool_t has_ref = false;
+                attrs->GetFlag(BMDDeckLinkHasReferenceInput, &has_ref);
+                if (!has_ref)
+                    throw std::runtime_error("Device has no reference input (HasReferenceInput is false)");
+
+                ComPtr<IDeckLinkStatus> status;
+                if (self.dl->QueryInterface(IID_IDeckLinkStatus, (void**)status.put()) != S_OK)
+                    throw std::runtime_error("Device does not support status");
+
+                ReferenceStatus out;
+                dlbool_t locked = false;
+                HRESULT hr = status->GetFlag(bmdDeckLinkStatusReferenceSignalLocked, &locked);
+                if (hr != S_OK)
+                    throw std::runtime_error("GetFlag(ReferenceSignalLocked) failed (HRESULT " + std::to_string(hr) + ")");
+                out.locked = static_cast<bool>(locked);
+
+                int64_t mode = bmdModeUnknown;
+                // Mode/flags may be unavailable when unlocked; tolerate failure.
+                if (status->GetInt(bmdDeckLinkStatusReferenceSignalMode, &mode) != S_OK)
+                    mode = bmdModeUnknown;
+                out.mode = static_cast<_BMDDisplayMode>(mode);
+
+                int64_t flags = 0;
+                if (status->GetInt(bmdDeckLinkStatusReferenceSignalFlags, &flags) != S_OK)
+                    flags = 0;
+                out.flags = flags;
+
+                return out;
+            },
+            "Snapshot of the reference (genlock) input state. Raises "
+            "RuntimeError if the device has no reference input.");
+
+    // -- ReferenceStatus --
+    nb::class_<ReferenceStatus>(m, "ReferenceStatus")
+        .def_ro("locked", &ReferenceStatus::locked)
+        .def_ro("flags", &ReferenceStatus::flags)
+        .def_prop_ro("mode",
+            [](const ReferenceStatus& self) -> nb::object {
+                // None when unlocked or mode is unknown; otherwise the
+                // DisplayMode enum value (§spec:5.11).
+                if (!has_resolvable_mode(self))
+                    return nb::none();
+                return nb::cast(self.mode);
+            },
+            nb::sig("def mode(self) -> DisplayMode | None"))
+        .def("__repr__", [](const ReferenceStatus& self) {
+            std::string mode = has_resolvable_mode(self)
+                                   ? std::to_string(static_cast<uint32_t>(self.mode))
+                                   : "None";
+            return "ReferenceStatus(locked=" +
+                   std::string(self.locked ? "True" : "False") +
+                   ", mode=" + mode +
+                   ", flags=" + std::to_string(self.flags) + ")";
+        }, nb::sig("def __repr__(self) -> str"));
 
     // -- DisplayModeInfo --
     nb::class_<DisplayModeInfo>(m, "DisplayModeInfo")

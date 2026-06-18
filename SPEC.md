@@ -556,7 +556,7 @@ Both CUDA examples follow this pattern.
 
 ### 5.11 Device Status and Reference Input
 
-*Status: not started*
+*Status: in progress*
 
 Wraps `IDeckLinkStatus` so Python can observe runtime hardware state
 that the existing `IDeckLinkProfileAttributes` surface (static

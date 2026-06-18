@@ -18,6 +18,23 @@ def _physical_label(dev: pydecklink.Device) -> str:
     return pydecklink.connector_label(dev) or "?"
 
 
+def _reference_info(dev: pydecklink.Device) -> str:
+    """Return the reference (genlock) lock state for the ``ref=`` field.
+
+    ``locked@<DisplayMode>`` when the device is locked to a resolvable
+    reference mode, ``unlocked`` when a REF BNC exists but no reference
+    is applied (or the mode is unknown), and ``n/a`` for devices without
+    a REF BNC. SPEC §5.11.
+    """
+    if not dev.get_attribute_flag(pydecklink.AttributeID.HasReferenceInput):
+        return "n/a"
+
+    status = dev.reference_status
+    if status.locked and status.mode is not None:
+        return f"locked@{status.mode.name}"
+    return "unlocked"
+
+
 def _profile_info(dev: pydecklink.Device) -> str:
     """Return a human-readable profile + duplex summary, or 'n/a'."""
     try:
@@ -47,7 +64,8 @@ def probe_input(index: int, name: str) -> str:
     dev = pydecklink.Device(index=index)
     label = _physical_label(dev)
     profile = _profile_info(dev)
-    suffix = f"[decklink #{index}] {name}  profile={profile}"
+    ref = _reference_info(dev)
+    suffix = f"[decklink #{index}] {name}  profile={profile}  ref={ref}"
 
     dev.enable_video_input(
         mode=pydecklink.DisplayMode.HD1080p25,
@@ -103,9 +121,15 @@ def main() -> None:
         try:
             line = probe_input(info.index, info.display_name)
         except RuntimeError as exc:
+            # probe_input already reports ref= on the success path; only the
+            # skipped-device fallback needs to query it here, so defer the
+            # extra device open to this branch instead of every device.
+            dev = pydecklink.Device(index=info.index)
+            ref = _reference_info(dev)
+            del dev
             line = (
                 f"  {label:<8}  skipped ({exc})  "
-                f"[decklink #{info.index}] {info.display_name}"
+                f"[decklink #{info.index}] {info.display_name}  ref={ref}"
             )
         rows.append((label, line))
 

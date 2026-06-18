@@ -34,6 +34,16 @@ struct DeviceInfo {
     int index;
 };
 
+/// Snapshot of the reference (genlock) input state read via
+/// IDeckLinkStatus (§spec:5.11). ``mode`` is the raw BMDDisplayMode;
+/// the Python binding maps it to the DisplayMode enum and reports
+/// ``None`` when unlocked or ``bmdModeUnknown``.
+struct ReferenceStatus {
+    bool locked;
+    _BMDDisplayMode mode;
+    int64_t flags;
+};
+
 /// Python-visible Device class wrapping IDeckLink.
 /// Sub-interfaces (output, input) are acquired lazily and stored here
 /// so that multiple binding files can access them.
