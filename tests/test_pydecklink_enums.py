@@ -185,6 +185,20 @@ class TestConfigurationID:
         )
 
 
+class TestStatusID:
+    """BMDDeckLinkStatusID enum values (reference-signal subset)."""
+
+    def test_enum_exists(self):
+        assert hasattr(pydecklink, "StatusID")
+
+    def test_reference_signal_values(self):
+        # 'refl' / 'refm' / 'reff' from BMDDeckLinkStatusID (§spec:5.11).
+        sid = pydecklink.StatusID
+        assert sid.ReferenceSignalLocked.value == 0x7265666C
+        assert sid.ReferenceSignalMode.value == 0x7265666D
+        assert sid.ReferenceSignalFlags.value == 0x72656666
+
+
 class TestAttributeID:
     """BMDDeckLinkAttributeID enum values (subset)."""
 

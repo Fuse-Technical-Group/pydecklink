@@ -473,6 +473,13 @@ class ProfileID(enum.Enum):
 
     FourSubDevicesHalfDuplex = 878995556
 
+class StatusID(enum.Enum):
+    ReferenceSignalLocked = 1919247980
+
+    ReferenceSignalMode = 1919247981
+
+    ReferenceSignalFlags = 1919247974
+
 class DeviceInfo:
     @property
     def model_name(self) -> str: ...
@@ -526,6 +533,18 @@ class Device:
 
     def get_attribute_flag(self, attr_id: AttributeID) -> bool:
         """Get a boolean profile attribute."""
+
+    def get_status_flag(self, status_id: StatusID) -> bool:
+        """Get a boolean runtime status value via IDeckLinkStatus."""
+
+    def get_status_int(self, status_id: StatusID) -> int:
+        """Get an integer runtime status value via IDeckLinkStatus."""
+
+    @property
+    def reference_status(self) -> ReferenceStatus:
+        """
+        Snapshot of the reference (genlock) input state. Raises RuntimeError if the device has no reference input.
+        """
 
     def get_display_mode(self, mode: DisplayMode) -> DisplayModeInfo:
         """Get display mode properties for a given BMDDisplayMode."""
@@ -648,6 +667,18 @@ class Device:
         """
         Activate a connector profile. Affects all sub-devices on this card. Equivalent to ``device.profile_manager.get_profile(profile_id).set_active()``.
         """
+
+class ReferenceStatus:
+    @property
+    def locked(self) -> bool: ...
+
+    @property
+    def flags(self) -> int: ...
+
+    @property
+    def mode(self) -> DisplayMode | None: ...
+
+    def __repr__(self) -> str: ...
 
 class DisplayModeInfo:
     @property

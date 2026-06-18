@@ -307,4 +307,13 @@ void init_decklink_enums(nb::module_& m) {
         .value("TwoSubDevicesFullDuplex", bmdProfileTwoSubDevicesFullDuplex)
         .value("TwoSubDevicesHalfDuplex", bmdProfileTwoSubDevicesHalfDuplex)
         .value("FourSubDevicesHalfDuplex", bmdProfileFourSubDevicesHalfDuplex);
+
+    // -- BMDDeckLinkStatusID (reference-signal subset) --
+    // Runtime hardware state read via IDeckLinkStatus (§spec:5.11). Only
+    // the reference-signal members are bound; the rest of the enum is
+    // reachable through get_status_flag / get_status_int by raw value.
+    nb::enum_<_BMDDeckLinkStatusID>(m, "StatusID")
+        .value("ReferenceSignalLocked", bmdDeckLinkStatusReferenceSignalLocked)
+        .value("ReferenceSignalMode", bmdDeckLinkStatusReferenceSignalMode)
+        .value("ReferenceSignalFlags", bmdDeckLinkStatusReferenceSignalFlags);
 }
