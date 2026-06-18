@@ -1,3 +1,10 @@
+## [0.3.1](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.3.0...v0.3.1) (2026-06-18)
+
+
+### Bug Fixes
+
+* **ci:** unblock release pipeline (Windows wheel upload + changelog lint) ([#184](https://github.com/Fuse-Technical-Group/pydecklink/issues/184)) ([083ea6d](https://github.com/Fuse-Technical-Group/pydecklink/commit/083ea6db3902e085070549c247aabc2aa67280ef))
+
 # [0.3.0](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.2.15...v0.3.0) (2026-06-18)
 
 
