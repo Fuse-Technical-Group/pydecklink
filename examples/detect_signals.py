@@ -117,11 +117,16 @@ def main() -> None:
     for info in devices:
         dev = pydecklink.Device(index=info.index)
         label = _physical_label(dev)
-        ref = _reference_info(dev)
         del dev
         try:
             line = probe_input(info.index, info.display_name)
         except RuntimeError as exc:
+            # probe_input already reports ref= on the success path; only the
+            # skipped-device fallback needs to query it here, so defer the
+            # extra device open to this branch instead of every device.
+            dev = pydecklink.Device(index=info.index)
+            ref = _reference_info(dev)
+            del dev
             line = (
                 f"  {label:<8}  skipped ({exc})  "
                 f"[decklink #{info.index}] {info.display_name}  ref={ref}"
