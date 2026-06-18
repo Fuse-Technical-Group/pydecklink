@@ -1,3 +1,10 @@
+## [0.3.3](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.3.2...v0.3.3) (2026-06-18)
+
+
+### Bug Fixes
+
+* **ci:** pin gh-action-pypi-publish to the real v1.14.0 SHA ([#186](https://github.com/Fuse-Technical-Group/pydecklink/issues/186)) ([beb2bc6](https://github.com/Fuse-Technical-Group/pydecklink/commit/beb2bc66228c292021dcdf31a093b71763376287)), closes [#action-pypi-publish](https://github.com/Fuse-Technical-Group/pydecklink/issues/action-pypi-publish)
+
 ## [0.3.2](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.3.1...v0.3.2) (2026-06-18)
 
 
