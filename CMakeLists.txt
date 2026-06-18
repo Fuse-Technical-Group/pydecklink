@@ -86,6 +86,11 @@ if(HAVE_DECKLINK_SDK)
     target_link_libraries(_bindings PRIVATE ole32 oleaut32)
   endif()
   target_include_directories(_bindings PRIVATE "${DECKLINK_SDK_DIR}")
+  # DeckLinkAPIDispatch.cpp dlopen()s the driver at runtime, so the extension
+  # needs libdl. CMAKE_DL_LIBS resolves to "dl" on glibc < 2.34 (manylinux
+  # build containers) and is empty where dlopen lives in libc (Windows, macOS,
+  # glibc >= 2.34) — without it the manylinux link fails on undefined dlopen.
+  target_link_libraries(_bindings PRIVATE ${CMAKE_DL_LIBS})
   if(APPLE)
     target_link_libraries(_bindings PRIVATE "-framework CoreFoundation")
   endif()
