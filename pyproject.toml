@@ -6,7 +6,7 @@ build-backend = "scikit_build_core.build"
 name = "pydecklink"
 dynamic = ["version"]
 description = "Python bindings for Blackmagic DeckLink SDK"
-license = "MIT"
+license = "BSD-3-Clause"
 requires-python = ">=3.12"
 dependencies = ["numpy>=1.26"]
 
