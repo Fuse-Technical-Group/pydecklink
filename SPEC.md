@@ -1,6 +1,6 @@
 # pydecklink — Python Bindings for Blackmagic DeckLink
 
-## 1. Problem Statement
+## Problem Statement §spec:problem-statement
 
 *Status: complete*
 
@@ -37,7 +37,7 @@ via `extern "C"` + ctypes. It targets macOS only and is not designed
 for sustained frame-rate streaming. pydecklink replaces that approach
 with nanobind, scheduled playback, capture input, and Linux support.
 
-## 2. Development Environment
+## Development Environment §spec:development-environment
 
 *Status: complete*
 
@@ -79,7 +79,7 @@ to build without the SDK on any platform.
 - Windows requires Visual Studio with the Desktop development with
   C++ workload (MSVC + Windows SDK for MIDL).
 
-## 3. Binding Technology
+## Binding Technology §spec:binding-technology
 
 *Status: complete*
 
@@ -100,7 +100,7 @@ finds nanobind via `find_package`, conditionally includes vendored
 SDK sources when present. CI builds without the SDK; the extension
 compiles but has no DeckLink functionality until the SDK is available.
 
-## 4. Device Model
+## Device Model §spec:device-model
 
 *Status: complete*
 
@@ -309,11 +309,11 @@ zero-copy mode) buffer-pool pressure: each queued frame holds an
 AddRef on a `ManagedBuffer`, keeping it off the allocator's
 free-list.
 
-## 5. Python API
+## Python API §spec:python-api
 
 *Status: in progress*
 
-### 5.1 Device
+### Device §spec:device
 
 Wraps `IDeckLink`. Created via enumeration or by device index.
 Supports context manager protocol.
@@ -336,7 +336,7 @@ Module-level enumeration:
 - `list_devices() → list[DeviceInfo]` — lightweight metadata without
   opening devices.
 
-### 5.2 Display Modes
+### Display Modes
 
 `IDeckLinkDisplayMode` properties exposed as a Python object:
 
@@ -352,7 +352,7 @@ Device-level queries:
 - `device.get_display_mode_iterator() → Iterator[DisplayMode]`
 - `device.does_support_video_mode(mode, pixel_format, direction) → bool`
 
-### 5.3 Capture
+### Capture §spec:capture
 
 The binding implements `IDeckLinkInputCallback` in C++. Captured
 frames are copied into a bounded queue. Python consumes frames via
@@ -400,7 +400,7 @@ callbacks for that device. A C++ queue with Python pop decouples the
 SDK thread from Python execution. The queue drops oldest frames on
 overflow, matching hardware behavior.
 
-### 5.4 Format Detection
+### Format Detection §spec:format-detection
 
 When `bmdVideoInputEnableFormatDetection` is passed to
 `enable_video_input`, the SDK calls `VideoInputFormatChanged` on
@@ -414,7 +414,7 @@ signal changes. The binding handles this by:
 This matches pyntv2's auto-detection pattern but is handled
 internally because DeckLink's callback-driven model requires it.
 
-### 5.5 Playout
+### Playout §spec:playout
 
 Two output modes: synchronous (simple, blocking) and scheduled
 (sustained frame-rate streaming).
@@ -456,7 +456,7 @@ internally and exposed via:
 - `device.output_status → OutputStatus` — dropped count, late count,
   underrun flag.
 
-### 5.6 Frame Creation
+### Frame Creation
 
 - `device.create_video_frame(width, height, row_bytes, pixel_format)
   → MutableFrame` — wraps `IDeckLinkOutput::CreateVideoFrame`.
@@ -469,7 +469,7 @@ creation internally. Scheduled playback uses the pool API
 (`create_frame_pool` + `acquire_output_frame` +
 `schedule_output_frame`).
 
-### 5.7 Configuration
+### Configuration §spec:configuration
 
 Wraps `IDeckLinkConfiguration`:
 
@@ -482,7 +482,7 @@ Wraps `IDeckLinkConfiguration`:
 
 Used for SDI mode selection (4:4:4 vs 4:2:2), connector mapping, etc.
 
-### 5.8 Enums
+### Enums
 
 Bound from DeckLink SDK types via `nb::enum_<>`:
 
@@ -502,7 +502,7 @@ Bound from DeckLink SDK types via `nb::enum_<>`:
 | `ProfileID` | `BMDProfileID` | Connector profile selection |
 | `DuplexMode` | `BMDDuplexMode` | Full, half, simplex, inactive |
 
-### 5.9 Format Metadata
+### Format Metadata
 
 Module-level helpers (derived from display mode properties):
 
@@ -517,7 +517,7 @@ Module-level helpers (derived from display mode properties):
 - `device.row_bytes_for_pixel_format(pixel_format, width) → int` —
   queries the output device's expected row stride.
 
-### 5.10 Custom Buffer Allocators
+### Custom Buffer Allocators
 
 Wraps `IDeckLinkVideoBufferAllocator`, `IDeckLinkVideoBufferAllocatorProvider`,
 and `IDeckLinkVideoBuffer` for user-controlled DMA buffer allocation.
@@ -528,7 +528,7 @@ and `IDeckLinkVideoBuffer` for user-controlled DMA buffer allocation.
 - `VideoBufferAllocator.allocate() → ManagedBuffer`
 - `VideoBufferAllocator.prefill(count) → None` — pre-allocate
   `count` buffers and seat them on the free-list. Required before
-  `start_streams` whenever `alloc` is a Python callable; see §4
+  `start_streams` whenever `alloc` is a Python callable; see §spec:device-model
   buffer recycling for why.
 - `VideoBufferAllocator.size → int`
 - `VideoBufferAllocator.allocated_count → int`
@@ -554,7 +554,7 @@ in a function so the allocator and its callbacks are local
 variables; the cycle is reclaimed when that function returns.
 Both CUDA examples follow this pattern.
 
-### 5.11 Device Status and Reference Input
+### Device Status and Reference Input §spec:device-status
 
 *Status: in progress*
 
@@ -643,7 +643,7 @@ generic `get_status_flag` / `get_status_int` accessors do not gate;
 they surface the SDK's `HRESULT` failure as `RuntimeError`, matching
 how `get_attribute_int` already behaves.
 
-### 5.12 Connector Labeling
+### Connector Labeling
 
 *Status: complete*
 
@@ -715,7 +715,7 @@ synthesizes a guess from a partial signal.
 - The reverse mapping (`label → device`) is left to the caller:
   `next(d for d in (Device(i) for i in range(device_count())) if connector_label(d) == "SDI 3")`.
 
-## 6. Target Workflow
+## Target Workflow §spec:target-workflow
 
 *Status: complete*
 
@@ -725,42 +725,42 @@ from Python, at frame rate.
 
 The input format is auto-detected. The output is configured to match.
 Frames transfer between the DeckLink card and CPU memory. GPU
-processing requires explicit CPU↔GPU copies (see §4).
+processing requires explicit CPU↔GPU copies (see §spec:device-model).
 
-## 7. Integration Testing
+## Integration Testing §spec:integration-testing
 
 *Status: complete*
 
 Integration tests require DeckLink hardware. Tests run locally with
 `pytest -m hardware`.
 
-### 7.1 Device enumeration
+### Device enumeration
 
 Verify at least one device is found. Check model name, display name,
 capability flags.
 
-### 7.2 Signal detection
+### Signal detection
 
 Connect an SDI source. Verify `enable_video_input` with format
 detection resolves the correct mode and pixel format.
 
-### 7.3 Capture
+### Capture
 
 Capture N frames, verify frame data is non-zero, timestamps are
 monotonically increasing, no dropped frames.
 
-### 7.4 Playout
+### Playout
 
 Schedule N frames of a known pattern, verify zero dropped frames and
 stable output status.
 
-### 7.5 Passthrough (loopback)
+### Passthrough (loopback)
 
 Capture on one sub-device, play out on another (requires a card with
 both input and output, or two cards). Verify frame data integrity
 end-to-end.
 
-### 7.6 Custom-allocator + zero-copy + signal-locked recycling
+### Custom-allocator + zero-copy + signal-locked recycling
 
 Streams signal-locked frames through a custom allocator (Python
 `libc.malloc` / `libc.free` callbacks via ctypes), zero-copy
@@ -775,7 +775,7 @@ Each assertion guards a distinct failure mode of the recycling
 path: stall on slow allocator, broken Release-to-free-list cycle,
 SLOW-path growth on the SDK input thread.
 
-## 8. Secondary Use Case: Test Pattern Generation
+## Secondary Use Case: Test Pattern Generation §spec:test-pattern-generation
 
 *Status: not started*
 
@@ -784,10 +784,10 @@ pydecklink replaces that wrapper. Signal-gen's pattern generation
 (solids, gradients, HDR metadata) produces numpy buffers that
 pydecklink can output directly via `display_frame_sync`.
 
-The integration path is the same as pyntv2's §8: a narrow
+The integration path mirrors pyntv2's: a narrow
 `FrameOutput` protocol in signal-gen that either backend can satisfy.
 
-## 9. Explicit Non-Goals (Phase 1)
+## Explicit Non-Goals (Phase 1) §spec:non-goals
 
 *Status: complete*
 
@@ -809,7 +809,7 @@ The integration path is the same as pyntv2's §8: a narrow
   no reference-output role — the REF BNC is input-only (genlock /
   tri-level sync in). Reference-generator products (Mini Sync
   Generator, Sync Generator 4K) are out of scope; only reference
-  *input* status is exposed (§5.11).
+  *input* status is exposed (§spec:device-status).
 - **Video conversion.** No color space conversion, scaling. The SDK
   has some hardware conversion modes; exposing them is deferred.
 
@@ -827,8 +827,8 @@ surface is not.
 ### Why state the principle
 
 Without it, every spec section re-litigates whether to mirror the SDK
-or invent a Python-shaped alternative. §4 ("Why C++ callback queues")
-and §5.11 ("Why mirror the SDK's push shape") invoke the same GIL
+or invent a Python-shaped alternative. §spec:device-model ("Why C++ callback queues")
+and §spec:device-status ("Why mirror the SDK's push shape") invoke the same GIL
 argument under different framing. Naming the principle gives future
 sections a citation target.
 
@@ -836,11 +836,11 @@ sections a citation target.
 
 | Deviation | Section | Why |
 |---|---|---|
-| COM lifetime hidden behind `ComPtr<T>` | §4 | Python GC is non-deterministic; COM refcounting is not |
-| `IDeckLinkInputCallback` → C++ queue + Python pop | §4, §5.3 | GIL acquisition on the frame-rate thread stalls the SDK |
-| `IDeckLinkVideoOutputCallback` tracked internally | §5.5 | Same as above |
-| `VideoInputFormatChanged` reconfigure done internally | §5.4 | SDK requires synchronous reconfigure from inside the callback |
-| `IDeckLinkNotificationCallback` → queue | §5.11 | Carry of the §4 queue shape; the section's own rationale notes the GIL argument is weaker at sub-Hz event rate |
+| COM lifetime hidden behind `ComPtr<T>` | §spec:device-model | Python GC is non-deterministic; COM refcounting is not |
+| `IDeckLinkInputCallback` → C++ queue + Python pop | §spec:device-model, §spec:capture | GIL acquisition on the frame-rate thread stalls the SDK |
+| `IDeckLinkVideoOutputCallback` tracked internally | §spec:playout | Same as above |
+| `VideoInputFormatChanged` reconfigure done internally | §spec:format-detection | SDK requires synchronous reconfigure from inside the callback |
+| `IDeckLinkNotificationCallback` → queue | §spec:device-status | Carry of the §spec:device-model queue shape; the section's own rationale notes the GIL argument is weaker at sub-Hz event rate |
 
 ### When convenience layers are permitted
 
@@ -865,8 +865,8 @@ for correctness and performance, not SDK fidelity.
 
 ### Citations
 
-- §4 Device Model, §5.3 Capture — frame-rate queue precedent.
-- §5.11 Device Status — push-shape-via-queue precedent.
+- §spec:device-model Device Model, §spec:capture Capture — frame-rate queue precedent.
+- §spec:device-status Device Status — push-shape-via-queue precedent.
 - §spec:profile-change-notifications — first new-direction citation.
 
 ## Canonical GPU Passthrough §spec:canonical-gpu-passthrough
@@ -880,7 +880,7 @@ SDI cable → GPU kernel → SDI cable, at frame rate, with the most
 performant IO the library can provide. The library has all the
 building blocks — pinned-allocator capture
 (§spec:gpu-pinned-memory), scheduled playback with custom
-allocators (§4), zero-copy frame relay (§5), latency floor
+allocators (§spec:device-model), zero-copy frame relay (§spec:python-api), latency floor
 characterization (§spec:latency-characterization) — but lacked a
 single example tying them together as a consumer-facing recipe.
 
@@ -889,7 +889,7 @@ threading model, preroll depth, output queue depth, format
 detection sequencing, allocator wiring, GC tuning, signal-loss
 recovery — is independent and easy to get wrong. Wrong choices
 manifest as elevated latency, output drops, or silent stalls.
-This extends the Target Workflow (§6), which described a CPU
+This extends the Target Workflow (§spec:target-workflow), which described a CPU
 passthrough pipeline because it predates GPU-direct DMA support.
 
 ### Behavior
@@ -942,7 +942,7 @@ launches.
 ### Why bidirectional in one example, not separate halves
 
 Latency, queue depth, and preroll decisions span both halves —
-splitting them invites recomposition errors of the kind §6
+splitting them invites recomposition errors of the kind §spec:target-workflow
 already warned against. The headline value of the recipe is the
 loop, not either half in isolation. Consumers who need only one
 half read the corresponding half of `cuda_passthrough.py` and
@@ -1107,7 +1107,7 @@ the PID; cross-process invocations get distinct IDs.
   Outputs inherit the auto-detected input mode.
 - **No cross-card fanout.** The example assumes all sub-devices
   share a clock domain (one card). Multi-card sync requires genlock
-  via the REF input and is out of scope for this section (§5.11
+  via the REF input and is out of scope for this section (§spec:device-status
   territory).
 
 ### API surface impact
@@ -1370,12 +1370,12 @@ proves common a future spec section may propose one.
 
 ### Citations
 
-- §4 Device Model — buffer recycling and queue depth context.
-- §5.5 Playout — scheduled playback semantics.
-- §5.7 Configuration — config-int surface this section extends.
-- §5.11 Device Status — soft dependency. `ReferenceStatus.locked` is
+- §spec:device-model Device Model — buffer recycling and queue depth context.
+- §spec:playout Playout — scheduled playback semantics.
+- §spec:configuration Configuration — config-int surface this section extends.
+- §spec:device-status Device Status — soft dependency. `ReferenceStatus.locked` is
   useful for interpreting whether input-locked output mode actually
-  engaged, but the benchmark does not require §5.11 to ship.
+  engaged, but the benchmark does not require §spec:device-status to ship.
 
 ## API Information §spec:api-information
 
@@ -1424,9 +1424,9 @@ matching that shape keeps one failure idiom across the binding.
 
 ### Citations
 
-- §2 Development Environment — vendored SDK header version (15.3)
+- §spec:development-environment Development Environment — vendored SDK header version (15.3)
   that this surface complements at runtime.
-- §5.1 Device — module-level enumeration pattern
+- §spec:device Device — module-level enumeration pattern
   (`device_count()`, `list_devices()`) this function follows.
 
 ## Profile Change Notifications §spec:profile-change-notifications
@@ -1463,9 +1463,9 @@ signatures, return types, docstrings — lives in
 
 ### Why a subclassable callback, not a queue
 
-Existing push-callback bindings (§4 capture, §5.5 output, §5.11
-status) surface a Python pop queue. §4 and §5.5 are forced by
-frame-rate GIL contention; §5.11 carries the queue shape forward
+Existing push-callback bindings (§spec:device-model capture, §spec:playout output, §spec:device-status
+status) surface a Python pop queue. §spec:device-model and §spec:playout are forced by
+frame-rate GIL contention; §spec:device-status carries the queue shape forward
 without that constraint. Profile changes fire on activation only —
 orders of magnitude below sub-Hz — so the frame-rate GIL argument
 does not apply, and §spec:binding-philosophy permits new sections
@@ -1491,7 +1491,7 @@ blocking pattern with `threading.Event` and a callback subclass.
 profile cascades to peer sub-devices on the same physical card; the
 SDK fires `ProfileChanging` and `ProfileActivated` on every affected
 `IDeckLink` whose manager has a callback registered. The binding
-does not aggregate across sub-devices, matching the §5.11
+does not aggregate across sub-devices, matching the §spec:device-status
 per-`IDeckLink` precedent. Consumers wanting card-level coordination
 register a callback on each sub-device or iterate
 `Profile.get_peers()` from any one of them.
@@ -1499,9 +1499,9 @@ register a callback on each sub-device or iterate
 ### Citations
 
 - §spec:binding-philosophy — principle this section follows.
-- §5.1 Device — existing `set_profile` / `active_profile` retained
+- §spec:device Device — existing `set_profile` / `active_profile` retained
   as convenience.
-- §5.11 Device Status — per-`IDeckLink` precedent for callbacks that
+- §spec:device-status Device Status — per-`IDeckLink` precedent for callbacks that
   cascade across sub-devices.
 - DeckLink SDK 15.3 `DeckLinkAPI.h:1488-1536` — `IDeckLinkProfile`,
   `IDeckLinkProfileIterator`, `IDeckLinkProfileCallback`,
