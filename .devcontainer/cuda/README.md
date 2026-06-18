@@ -25,9 +25,11 @@ recycle semantics without needing CUDA.
 
 - NVIDIA Container Toolkit installed.
 - CDI spec generated:
+
   ```sh
   sudo nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml
   ```
+
   Re-run after driver upgrades.
 - Blackmagic Desktop Video driver loaded (same as the slim devcontainer).
 
