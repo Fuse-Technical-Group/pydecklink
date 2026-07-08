@@ -469,6 +469,53 @@ creation internally. Scheduled playback uses the pool API
 (`create_frame_pool` + `acquire_output_frame` +
 `schedule_output_frame`).
 
+### HDR Metadata §spec:hdr-metadata
+
+`MutableFrame` carries HDR10 static metadata for output frames —
+SMPTE ST 2086 mastering-display colour volume plus CTA-861.3 content
+light levels:
+
+- `MutableFrame.set_hdr_metadata(metadata: HDRMetadata)` — attaches
+  HDR10 static metadata to the frame and sets
+  `FrameFlag.ContainsHDRMetadata`. Written through the frame's
+  `IDeckLinkVideoFrameMutableMetadataExtensions` interface.
+
+`HDRMetadata` fields:
+
+- `eotf: EOTF` — electro-optical transfer function (SDR, PQ, HLG).
+- `colorspace: Colorspace` — defaults to `Rec2020`.
+- display primaries and white point as (x, y) chromaticities —
+  default to Rec.2020.
+- `max_display_mastering_luminance`,
+  `min_display_mastering_luminance` — mastering display luminance
+  range in cd/m².
+- `max_cll` — maximum content light level, cd/m².
+- `max_fall` — maximum frame-average light level, cd/m².
+
+The synchronous single-frame path accepts a caller-built frame so
+metadata (and custom-packed pixel data) attaches before display:
+
+- `device.display_frame_sync_frame(mutable_frame)` — displays a
+  pre-built `MutableFrame` immediately via `DisplayVideoFrameSync`.
+
+`display_frame_sync(buffer)` remains for the metadata-free common
+case.
+
+#### Why a pre-built sync frame
+
+bmd-signal-gen emits one static HDR pattern and holds it — the
+immediate `DisplayVideoFrameSync` model, not scheduled playback.
+`display_frame_sync(buffer)` builds and destroys its frame
+internally, leaving nowhere to attach metadata. A caller-built frame
+gives the synchronous and scheduled paths one metadata attachment
+point and unblocks custom pixel packing.
+
+#### Why frame-level, not device-level
+
+The SDK carries HDR10 metadata per frame (an `IDeckLinkVideoFrame`
+extension), so the setter lives on `MutableFrame`, not `Device`.
+`Device.supports_hdr` gates whether the hardware honours it.
+
 ### Configuration §spec:configuration
 
 Wraps `IDeckLinkConfiguration`:
@@ -781,8 +828,11 @@ SLOW-path growth on the SDK input thread.
 
 bmd-signal-gen currently uses a ctypes wrapper for DeckLink output.
 pydecklink replaces that wrapper. Signal-gen's pattern generation
-(solids, gradients, HDR metadata) produces numpy buffers that
-pydecklink can output directly via `display_frame_sync`.
+(solids, gradients) produces numpy buffers that pydecklink outputs
+directly. HDR test patterns additionally attach HDR10 static
+metadata to a caller-built frame and display it synchronously
+(§spec:hdr-metadata) — the metadata signalling is signal-gen's core
+function and the last blocker to retiring its ctypes wrapper.
 
 The integration path mirrors pyntv2's: a narrow
 `FrameOutput` protocol in signal-gen that either backend can satisfy.
@@ -801,8 +851,6 @@ The integration path mirrors pyntv2's: a narrow
 - **Audio.** Deferred. The SDK supports audio scheduling; the binding
   does not expose it yet.
 - **Ancillary data.** Timecode, closed captions — deferred.
-- **HDR metadata.** The SDK supports it via frame metadata extensions.
-  Deferred to Phase 2 (bmd-signal-gen integration needs it).
 - **Deck control.** `IDeckLinkDeckControl` (tape transport) is not
   bound.
 - **Reference signal generation.** Capture/playback DeckLinks have

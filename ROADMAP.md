@@ -35,11 +35,33 @@ stable configuration. Cells below the floor show nonzero counters;
 cells at or above show zero. The benchmark exits with a nonzero
 status if no stable configuration exists in the input range.
 
+## HDR metadata output §road:hdr-metadata
+
+Expose HDR10 static metadata on output frames. Add an `EOTF` enum to
+`bind_enums.cpp` and the `.pyi` stub (reuse the existing `Colorspace`
+values). Add `MutableFrame.set_hdr_metadata(HDRMetadata)` in
+`bind_output.cpp`: query
+`IID_IDeckLinkVideoFrameMutableMetadataExtensions` off the frame,
+`SetInt`/`SetFloat` the mastering-display, white-point, and content
+light-level IDs, then `SetFlags(flags | bmdFrameContainsHDRMetadata)`.
+Add `device.display_frame_sync_frame(mutable_frame)` so a caller-built
+frame carries metadata through the synchronous `DisplayVideoFrameSync`
+path. Defaults: Rec.2020 primaries and white point; PQ and HLG EOTF
+selectable. Ports bmd-signal-gen's `SetHDRMetadata`
+(`cpp/decklink_wrapper.cpp`), which drives the identical SDK
+interface. §spec:hdr-metadata. Closes #194.
+
+**Verify:** Build the extension. On a device where `supports_hdr` is
+true, create a 12-bit RGB frame, call `set_hdr_metadata` with
+`EOTF.PQ`, `Colorspace.Rec2020`, `max_cll=10000`, then
+`display_frame_sync_frame`. A downstream HDR display or analyzer
+reports the signalled EOTF, colorspace, and MaxCLL. Without hardware:
+read the values back through the frame's metadata extension
+(`GetInt`/`GetFloat` return what was set) and assert
+`FrameFlag.ContainsHDRMetadata` is present in the frame flags.
+
 ## Future §road:future
 
-- **hdr-metadata**: `IDeckLinkVideoFrameMutableMetadataExtensions`
-  for HDR10/HLG output. Required for bmd-signal-gen integration
-  (§spec:test-pattern-generation).
 - **audio-streams**: Audio capture/playout via
   `ScheduleAudioSamples` / `IDeckLinkAudioInputPacket`.
 - **ancillary-data**: Timecode, closed captions.
