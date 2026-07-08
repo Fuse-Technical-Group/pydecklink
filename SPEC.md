@@ -868,27 +868,40 @@ The integration path mirrors pyntv2's: a narrow
 
 ## Pixel Packing §spec:pixel-packing
 
-*Status: not started*
+*Status: complete*
 
 `pydecklink.packing` is an opt-in module that packs integer RGB/YUV
 pixel values into DeckLink's in-memory layouts and unpacks the inverse.
-`pack(pixels, pixel_format, row_bytes) → uint8` produces a buffer ready
-for `MutableFrame.data`; `unpack(data, pixel_format, width, height,
-row_bytes) → ndarray` recovers pixel values from a raw
-`CaptureFrame.data`. The module is imported explicitly; importing
-`pydecklink` alone pulls in no pixel-packing code.
+`pack(pixels, pixel_format, row_bytes) → uint8` produces a 1-D buffer
+(length `height × row_bytes`) ready for `MutableFrame.data`;
+`unpack(data, pixel_format, width, height, row_bytes) → ndarray` recovers
+pixel values from a raw `CaptureFrame.data`. The module is imported
+explicitly; importing `pydecklink` alone pulls in no pixel-packing code.
 
 Covered layouts are those the DeckLink SDK defines (SDK 15.3 section 3.4,
 pixel formats), keyed by the existing `PixelFormat` enum: 8-bit `ARGB` /
 `BGRA`, 10-bit RGB `r210` / `R10b` / `R10l`, 10-bit YUV `v210`, and
-12-bit RGB `R12B` / `R12L`.
+12-bit RGB `R12B` / `R12L`. The SDK manual is the byte-layout authority;
+this section does not restate the wire format.
+
+Pixel arrays are `(height, width, 3)` integer ndarrays. RGB formats use
+channels `[R, G, B]`; the ARGB/BGRA alpha byte is written at peak on pack
+and dropped on unpack (alpha is not a round-tripped pixel value). v210
+uses `[Y, Cb, Cr]`; chroma is sampled from even columns on pack and
+replicated across each pair on unpack, so `unpack ∘ pack` is identity
+only when chroma is equal within each horizontal pair — inherent to 4:2:2
+subsampling, not a packing loss. Widths shorter than a format's pixel
+group (v210: 6, 12-bit: 8) are zero-padded to a whole group; `row_bytes`
+must cover the packed active line.
 
 The reference implementation is NumPy. The API is backend-swappable so a
 native (C++/SIMD) fast path can later move into the extension without a
 surface change — mirroring the allocator layering (§spec:device-model),
 where a Python API fronts optional native acceleration. Static-pattern
 consumers pack once and hold, so NumPy suffices; video-rate consumers
-motivate the future native path.
+motivate the future native path. It ships as a `pydecklink.packing`
+submodule rather than a separate package: co-location holds until packing
+earns an independent release lifecycle (per YAGNI).
 
 ### Why in pydecklink, above the binding
 
@@ -922,20 +935,13 @@ pack` is identity. The non-goal stands.
 
 ### Behaviour
 
-- `pack` output is byte-exact against a known-good reference
-  (SignalGenHDR / bmd-signal-gen) for each supported format.
+- `pack` output is byte-exact against hand-computed reference vectors
+  derived from the SDK 15.3 section 3.4 layout tables for each format.
 - `pack` → `unpack` round-trips to identity for each format.
 - 12-bit `R12B` / `R12L` is correct across the 8-pixel / 36-byte group
   boundary — the historically error-prone case.
 - Importing `pydecklink` leaves the transport surface unchanged and
   pulls in no packing code.
-
-### Open question: placement
-
-`pydecklink.packing` submodule (recommended) versus a separate
-`pydecklink-packing` package. Co-location holds until packing earns an
-independent release lifecycle — e.g. a native fast path with its own
-build matrix — per YAGNI. Resolved at implementation time.
 
 ### Citations
 
@@ -947,8 +953,10 @@ build matrix — per YAGNI. Resolved at implementation time.
   not to cross.
 - §spec:hdr-metadata — names custom pixel packing as the consumer-side
   complement this section supplies.
-- bmd-signal-gen `cpp/pixel_packing.{h,cpp}` — reference implementation
-  and byte-exactness oracle.
+- DeckLink SDK 15.3 manual section 3.4 — byte-layout authority and
+  byte-exactness oracle.
+- bmd-signal-gen `cpp/pixel_packing.{h,cpp}` — prior-art reference
+  implementation of the same layouts.
 - Reported in #195.
 
 ## Explicit Non-Goals (Phase 1) §spec:non-goals
