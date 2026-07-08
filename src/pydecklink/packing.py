@@ -77,28 +77,18 @@ _R12B_MAP: list[list[tuple[int, int, int, int, int]]] = [
     [(7, _R, 4, 8, 0)],
 ]
 
-# (group_pixels, group_bytes) per supported format.
-_GROUP = {
-    "argb": (1, 4),
-    "bgra": (1, 4),
-    "r210": (1, 4),
-    "r10b": (1, 4),
-    "r10l": (1, 4),
-    "v210": (6, 16),
-    "r12b": (8, 36),
-    "r12l": (8, 36),
-}
-
-# Bit depth per supported format (for range validation).
-_BITS = {
-    "argb": 8,
-    "bgra": 8,
-    "r210": 10,
-    "r10b": 10,
-    "r10l": 10,
-    "v210": 10,
-    "r12b": 12,
-    "r12l": 12,
+# (group_pixels, group_bytes, bit_depth) per supported format. bit_depth is
+# not derivable from the group size (argb and r210 share (1, 4) but pack 8 vs
+# 10 bits), so it is carried explicitly.
+_LAYOUT = {
+    "argb": (1, 4, 8),
+    "bgra": (1, 4, 8),
+    "r210": (1, 4, 10),
+    "r10b": (1, 4, 10),
+    "r10l": (1, 4, 10),
+    "v210": (6, 16, 10),
+    "r12b": (8, 36, 12),
+    "r12l": (8, 36, 12),
 }
 
 _FORMATS = {
@@ -137,7 +127,7 @@ def pack(
         raise ValueError(f"pixels must have shape (height, width, 3), got {arr.shape}")
     height, width, _ = arr.shape
 
-    group_px, group_bytes = _GROUP[key]
+    group_px, group_bytes, bits = _LAYOUT[key]
     num_groups = (width + group_px - 1) // group_px
     min_row = num_groups * group_bytes
     if row_bytes < min_row:
@@ -146,11 +136,9 @@ def pack(
             f"({pixel_format!r} needs at least {min_row})"
         )
 
-    maxval = (1 << _BITS[key]) - 1
+    maxval = (1 << bits) - 1
     if arr.size and int(arr.max()) > maxval:
-        raise ValueError(
-            f"pixel value exceeds {_BITS[key]}-bit range for {pixel_format!r}"
-        )
+        raise ValueError(f"pixel value exceeds {bits}-bit range for {pixel_format!r}")
 
     # Zero-pad width to a whole number of groups.
     padded_w = num_groups * group_px
@@ -189,7 +177,7 @@ def unpack(
         )
     rows = buf[: height * row_bytes].reshape(height, row_bytes)
 
-    group_px, group_bytes = _GROUP[key]
+    group_px, group_bytes, bits = _LAYOUT[key]
     num_groups = (width + group_px - 1) // group_px
     group_data = rows[:, : num_groups * group_bytes]
 
@@ -198,7 +186,7 @@ def unpack(
     )  # (height, padded_w, 3)
     result = padded[:, :width, :]
 
-    out_dtype = np.uint8 if _BITS[key] == 8 else np.uint16
+    out_dtype = np.uint8 if bits == 8 else np.uint16
     return result.astype(out_dtype)
 
 
@@ -217,7 +205,9 @@ def _pack_groups(
         return _pack_10bit_rgb(key, src)
     if key == "v210":
         return _pack_v210(src, height, num_groups)
-    return _pack_12bit(key, src, height, num_groups)
+    if key in ("r12b", "r12l"):
+        return _pack_12bit(key, src, height, num_groups)
+    raise AssertionError(f"no packer registered for {key!r}")
 
 
 def _unpack_groups(
@@ -232,7 +222,9 @@ def _unpack_groups(
         return _unpack_10bit_rgb(key, data)
     if key == "v210":
         return _unpack_v210(data, height, num_groups)
-    return _unpack_12bit(key, data, height, num_groups)
+    if key in ("r12b", "r12l"):
+        return _unpack_12bit(key, data, height, num_groups)
+    raise AssertionError(f"no unpacker registered for {key!r}")
 
 
 def _u32_to_bytes(words: NDArray[np.uint32], big_endian: bool) -> NDArray[np.uint8]:
