@@ -393,6 +393,22 @@ class AttributeID(enum.Enum):
 
     DeviceHandle = 1684371048
 
+class Colorspace(enum.Enum):
+    Rec601 = 1916153905
+
+    Rec709 = 1916219449
+
+    Rec2020 = 842019376
+
+class EOTF(enum.Enum):
+    Reserved = 0
+
+    SDR = 1
+
+    PQ = 2
+
+    HLG = 3
+
 class DisplayModeFlag(enum.Enum):
     Supports3D = 1
 
@@ -591,6 +607,11 @@ class Device:
         Display a frame synchronously (blocking). Copies buffer into a new frame.
         """
 
+    def display_frame_sync_frame(self, frame: MutableFrame) -> None:
+        """
+        Display a caller-built MutableFrame synchronously (blocking). Carries HDR metadata and custom pixel packing through the sync path.
+        """
+
     def schedule_capture_frame(self, capture_frame: CaptureFrameRef, display_time: int, duration: int, timescale: int) -> None:
         """Schedule a zero-copy captured frame for playback. No memcpy."""
 
@@ -757,6 +778,94 @@ class OutputStatus:
 
     def __repr__(self) -> str: ...
 
+class HDRMetadata:
+    def __init__(self, eotf: EOTF = EOTF.PQ, colorspace: Colorspace = Colorspace.Rec2020, red_x: float = 0.708, red_y: float = 0.292, green_x: float = 0.17, green_y: float = 0.797, blue_x: float = 0.131, blue_y: float = 0.046, white_x: float = 0.3127, white_y: float = 0.329, max_display_mastering_luminance: float = 1000.0, min_display_mastering_luminance: float = 0.0001, max_cll: float = 1000.0, max_fall: float = 50.0) -> None:
+        """HDR10 static metadata. Defaults describe a Rec.2020 / PQ signal."""
+
+    @property
+    def eotf(self) -> EOTF: ...
+
+    @eotf.setter
+    def eotf(self, arg: EOTF, /) -> None: ...
+
+    @property
+    def colorspace(self) -> Colorspace: ...
+
+    @colorspace.setter
+    def colorspace(self, arg: Colorspace, /) -> None: ...
+
+    @property
+    def red_x(self) -> float: ...
+
+    @red_x.setter
+    def red_x(self, arg: float, /) -> None: ...
+
+    @property
+    def red_y(self) -> float: ...
+
+    @red_y.setter
+    def red_y(self, arg: float, /) -> None: ...
+
+    @property
+    def green_x(self) -> float: ...
+
+    @green_x.setter
+    def green_x(self, arg: float, /) -> None: ...
+
+    @property
+    def green_y(self) -> float: ...
+
+    @green_y.setter
+    def green_y(self, arg: float, /) -> None: ...
+
+    @property
+    def blue_x(self) -> float: ...
+
+    @blue_x.setter
+    def blue_x(self, arg: float, /) -> None: ...
+
+    @property
+    def blue_y(self) -> float: ...
+
+    @blue_y.setter
+    def blue_y(self, arg: float, /) -> None: ...
+
+    @property
+    def white_x(self) -> float: ...
+
+    @white_x.setter
+    def white_x(self, arg: float, /) -> None: ...
+
+    @property
+    def white_y(self) -> float: ...
+
+    @white_y.setter
+    def white_y(self, arg: float, /) -> None: ...
+
+    @property
+    def max_display_mastering_luminance(self) -> float: ...
+
+    @max_display_mastering_luminance.setter
+    def max_display_mastering_luminance(self, arg: float, /) -> None: ...
+
+    @property
+    def min_display_mastering_luminance(self) -> float: ...
+
+    @min_display_mastering_luminance.setter
+    def min_display_mastering_luminance(self, arg: float, /) -> None: ...
+
+    @property
+    def max_cll(self) -> float: ...
+
+    @max_cll.setter
+    def max_cll(self, arg: float, /) -> None: ...
+
+    @property
+    def max_fall(self) -> float: ...
+
+    @max_fall.setter
+    def max_fall(self, arg: float, /) -> None: ...
+
 class MutableFrame:
     @property
     def width(self) -> int: ...
@@ -766,6 +875,13 @@ class MutableFrame:
 
     @property
     def row_bytes(self) -> int: ...
+
+    @property
+    def flags(self) -> int:
+        """Frame flags bitmask (see FrameFlag)."""
+
+    def set_hdr_metadata(self, metadata: HDRMetadata) -> None:
+        """Attach HDR10 static metadata and set FrameFlag.ContainsHDRMetadata."""
 
     @property
     def data(self) -> Annotated[NDArray[numpy.uint8], dict(shape=(None,))]:
