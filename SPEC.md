@@ -849,10 +849,10 @@ row_bytes) → ndarray` recovers pixel values from a raw
 `CaptureFrame.data`. The module is imported explicitly; importing
 `pydecklink` alone pulls in no pixel-packing code.
 
-Covered layouts are those the DeckLink SDK defines (§3.4 pixel formats),
-keyed by the existing `PixelFormat` enum: 8-bit `ARGB` / `BGRA`, 10-bit
-RGB `r210` / `R10b` / `R10l`, 10-bit YUV `v210`, and 12-bit RGB `R12B` /
-`R12L`.
+Covered layouts are those the DeckLink SDK defines (SDK 15.3 section 3.4,
+pixel formats), keyed by the existing `PixelFormat` enum: 8-bit `ARGB` /
+`BGRA`, 10-bit RGB `r210` / `R10b` / `R10l`, 10-bit YUV `v210`, and
+12-bit RGB `R12B` / `R12L`.
 
 The reference implementation is NumPy. The API is backend-swappable so a
 native (C++/SIMD) fast path can later move into the extension without a

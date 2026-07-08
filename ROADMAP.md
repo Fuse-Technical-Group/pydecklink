@@ -63,9 +63,10 @@ read the values back through the frame's metadata extension
 ## Pixel packing module §road:pixel-packing
 
 Add an opt-in `pydecklink.packing` module with `pack` and `unpack` NumPy
-reference implementations covering the SDK §3.4 layouts: 8-bit `ARGB` /
-`BGRA`, 10-bit RGB `r210` / `R10b` / `R10l`, 10-bit YUV `v210`, 12-bit
-RGB `R12B` / `R12L`. Port bmd-signal-gen's `cpp/pixel_packing.{h,cpp}`
+reference implementations covering the SDK 15.3 section 3.4 pixel-format
+layouts: 8-bit `ARGB` / `BGRA`, 10-bit RGB `r210` / `R10b` / `R10l`,
+10-bit YUV `v210`, 12-bit RGB `R12B` / `R12L`. Port bmd-signal-gen's
+`cpp/pixel_packing.{h,cpp}`
 (`pack_pixel_format` dispatch on `BMDPixelFormat`) as the basis. Keep the
 API backend-swappable so a future native fast path drops in without a
 surface change. Importing `pydecklink` must pull in no packing code.
