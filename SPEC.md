@@ -462,6 +462,8 @@ internally and exposed via:
   → MutableFrame` — wraps `IDeckLinkOutput::CreateVideoFrame`.
 - `MutableFrame.data → numpy.ndarray` — writeable buffer via
   `IDeckLinkVideoBuffer`.
+- `MutableFrame.flags → int` — the frame's `BMDFrameFlags` bitmask
+  (see `FrameFlag`); reflects `ContainsHDRMetadata` once set.
 
 For the common case (display a single numpy buffer synchronously),
 `display_frame_sync` accepts a numpy array directly and handles frame
