@@ -837,6 +837,91 @@ function and the last blocker to retiring its ctypes wrapper.
 The integration path mirrors pyntv2's: a narrow
 `FrameOutput` protocol in signal-gen that either backend can satisfy.
 
+## Pixel Packing §spec:pixel-packing
+
+*Status: not started*
+
+`pydecklink.packing` is an opt-in module that packs integer RGB/YUV
+pixel values into DeckLink's in-memory layouts and unpacks the inverse.
+`pack(pixels, pixel_format, row_bytes) → uint8` produces a buffer ready
+for `MutableFrame.data`; `unpack(data, pixel_format, width, height,
+row_bytes) → ndarray` recovers pixel values from a raw
+`CaptureFrame.data`. The module is imported explicitly; importing
+`pydecklink` alone pulls in no pixel-packing code.
+
+Covered layouts are those the DeckLink SDK defines (SDK 15.3 section 3.4,
+pixel formats), keyed by the existing `PixelFormat` enum: 8-bit `ARGB` /
+`BGRA`, 10-bit RGB `r210` / `R10b` / `R10l`, 10-bit YUV `v210`, and
+12-bit RGB `R12B` / `R12L`.
+
+The reference implementation is NumPy. The API is backend-swappable so a
+native (C++/SIMD) fast path can later move into the extension without a
+surface change — mirroring the allocator layering (§spec:device-model),
+where a Python API fronts optional native acceleration. Static-pattern
+consumers pack once and hold, so NumPy suffices; video-rate consumers
+motivate the future native path.
+
+### Why in pydecklink, above the binding
+
+Packing is format knowledge, not consumer logic. It is keyed entirely to
+`PixelFormat` — living in a foreign package invites version skew against
+the enum it depends on. It is generic to any DeckLink RGB playout or
+capture consumer, not specific to one tool, so leaving it in
+bmd-signal-gen (its reference implementation) strands reusable code.
+Co-locating it with the enum gives one install, one release cadence, and
+no cross-repo skew.
+
+The module sits strictly above the binding. §spec:problem-statement's
+scope boundary keeps the transport thin — `MutableFrame.data` and
+`display_frame_sync` take a raw `uint8` buffer plus `row_bytes` and do no
+pixel interpretation. Putting packing in the core would break that
+contract; leaving it out of the repo entirely strands it. An opt-in
+module resolves the tension: the core gains no pixel semantics, and
+consumers that need packing import it deliberately. This is the
+convenience-layer-above-a-faithful-surface pattern of
+§spec:binding-philosophy — the raw transport stays fully expressive
+underneath. §spec:hdr-metadata already names custom pixel packing as the
+consumer-side complement to caller-built frames; this section is where
+that packing lives.
+
+### Why this is not video conversion
+
+§spec:non-goals excludes colour-space conversion and scaling. Packing is
+neither: it rearranges given integer pixel values into a byte layout
+without altering colorimetry, resolution, or sample values. `unpack ∘
+pack` is identity. The non-goal stands.
+
+### Behaviour
+
+- `pack` output is byte-exact against a known-good reference
+  (SignalGenHDR / bmd-signal-gen) for each supported format.
+- `pack` → `unpack` round-trips to identity for each format.
+- 12-bit `R12B` / `R12L` is correct across the 8-pixel / 36-byte group
+  boundary — the historically error-prone case.
+- Importing `pydecklink` leaves the transport surface unchanged and
+  pulls in no packing code.
+
+### Open question: placement
+
+`pydecklink.packing` submodule (recommended) versus a separate
+`pydecklink-packing` package. Co-location holds until packing earns an
+independent release lifecycle — e.g. a native fast path with its own
+build matrix — per YAGNI. Resolved at implementation time.
+
+### Citations
+
+- §spec:problem-statement — thin-transport scope boundary the module
+  layers above.
+- §spec:binding-philosophy — convenience-layer-above-faithful-surface
+  principle.
+- §spec:non-goals — video-conversion exclusion this section is careful
+  not to cross.
+- §spec:hdr-metadata — names custom pixel packing as the consumer-side
+  complement this section supplies.
+- bmd-signal-gen `cpp/pixel_packing.{h,cpp}` — reference implementation
+  and byte-exactness oracle.
+- Reported in #195.
+
 ## Explicit Non-Goals (Phase 1) §spec:non-goals
 
 *Status: complete*
