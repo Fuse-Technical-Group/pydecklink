@@ -942,6 +942,11 @@ pack` is identity. The non-goal stands.
   boundary — the historically error-prone case.
 - Importing `pydecklink` leaves the transport surface unchanged and
   pulls in no packing code.
+- A packed buffer survives the real output → SDI → capture path: a v210
+  pattern round-trips bit-exactly through hardware loopback
+  (§spec:integration-testing). 4:2:2 formats are validated on the wire at
+  1.5G HD-SDI; 4:4:4 RGB exceeds that link's bandwidth (it needs 3G or
+  dual-link) and is verified in memory only.
 
 ### Citations
 
