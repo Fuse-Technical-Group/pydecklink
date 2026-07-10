@@ -432,6 +432,13 @@ class DuplexMode(enum.Enum):
 
     Inactive = 1685612910
 
+class LinkConfiguration(enum.Enum):
+    SingleLink = 1818456940
+
+    DualLink = 1818453100
+
+    QuadLink = 1818456428
+
 class SupportedVideoModeFlag(enum.Enum):
     Default = 0
 
