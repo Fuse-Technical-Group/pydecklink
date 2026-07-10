@@ -1329,35 +1329,28 @@ outputs free-run and the same-instant guarantee is silently lost.
 
 ## SDI Output Link Configuration §spec:sdi-link-configuration
 
-*Status: not started*
-
-### Problem
-
-`ConfigurationID.ConfigSDIOutputLinkConfiguration` is bound, but the
-`BMDLinkConfiguration` values it takes (single / dual / quad link) are
-not — callers must pass the raw FourCC integer (`0x6C63736C` for single
-link) to `set_config_int`. Worse, the config **defaults to dual link** on
-at least some devices. Dual link splits the raster across two physical
-SDI cables; on a single-cable connection the second link's half of the
-picture is silently dropped. A consumer playing out 4K over one BNC gets
-a frame with every other line blank and no error — the failure surfaces
-only as corrupted output. This was found while validating 4K RGB loopback
-(§spec:pixel-packing): the packed frame was correct, but half the lines
-never crossed the wire until the link config was forced to single.
+*Status: complete*
 
 ### Behavior
 
 `LinkConfiguration` is bound from `BMDLinkConfiguration`
-(`SingleLink`, `DualLink`, `QuadLink`), so callers select the link mode
-by name:
+(`SingleLink`, `DualLink`, `QuadLink`), so callers select the SDI output
+link mode by name rather than by raw FourCC:
 
 - `device.set_config_int(ConfigurationID.ConfigSDIOutputLinkConfiguration,
-  LinkConfiguration.SingleLink)`
+  LinkConfiguration.SingleLink.value)`
 
-The binding does not change the SDK's default. It documents that
-single-cable output on a multi-link-capable device requires setting
-single link explicitly, and exposes the enum so the choice is legible at
-the call site rather than an opaque FourCC.
+`.value` is required: the nanobind enum is a plain `enum.Enum` that does
+not implicitly convert to `set_config_int`'s `int64_t` argument.
+
+The config **defaults to dual link** on at least some devices. Dual link
+splits the raster across two physical SDI cables; on a single-cable
+connection the second link's half of the picture is silently dropped —
+no error, just every other line blank. Single-cable output on a
+multi-link-capable device must therefore force single link. This was
+found validating 4K RGB loopback (§spec:pixel-packing): the packed frame
+was correct, but half the lines never crossed the wire until the link
+config was forced to single.
 
 ### Why not change the default
 
