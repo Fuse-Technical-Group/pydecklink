@@ -185,6 +185,24 @@ class TestConfigurationID:
         )
 
 
+class TestLinkConfiguration:
+    """BMDLinkConfiguration enum values (§spec:sdi-link-configuration)."""
+
+    def test_enum_exists(self):
+        assert hasattr(pydecklink, "LinkConfiguration")
+
+    def test_members(self):
+        lc = pydecklink.LinkConfiguration
+        assert {"SingleLink", "DualLink", "QuadLink"} <= set(lc.__members__)
+
+    def test_values(self):
+        # FourCC 'lcsl' / 'lcdl' / 'lcql' from BMDLinkConfiguration.
+        lc = pydecklink.LinkConfiguration
+        assert lc.SingleLink.value == 0x6C63736C
+        assert lc.DualLink.value == 0x6C63646C
+        assert lc.QuadLink.value == 0x6C63716C
+
+
 class TestStatusID:
     """BMDDeckLinkStatusID enum values (reference-signal subset)."""
 
