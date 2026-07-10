@@ -172,11 +172,6 @@ def test_v210_packing_round_trips_over_sdi():
                 step()
 
 
-# bmdLinkConfigurationSingleLink ('lcsl') — the SDK has no bound enum for the
-# BMDLinkConfiguration value, so the FourCC is used directly.
-_LINK_SINGLE = 0x6C63736C
-
-
 def test_r210_packing_round_trips_over_sdi_4k():
     """A r210 (10-bit RGB 4:4:4) frame round-trips bit-exact at 4K over SDI.
 
@@ -203,7 +198,12 @@ def test_r210_packing_round_trips_over_sdi_4k():
     link_cfg = pydecklink.ConfigurationID.ConfigSDIOutputLinkConfiguration
     try:
         original_link = out_dev.get_config_int(link_cfg)
-        out_dev.set_config_int(link_cfg, _LINK_SINGLE)
+        # SingleLink: the dual-link default splits the raster across two cables
+        # and drops half the picture over a one-cable loopback. .value because
+        # the nanobind enum does not implicitly convert to set_config_int's int.
+        out_dev.set_config_int(
+            link_cfg, pydecklink.LinkConfiguration.SingleLink.value
+        )
     except RuntimeError:
         original_link = None
 
