@@ -280,6 +280,16 @@ void init_decklink_enums(nb::module_& m) {
         .value("Simplex", bmdDuplexSimplex)
         .value("Inactive", bmdDuplexInactive);
 
+    // -- BMDLinkConfiguration --
+    // Value enum fed to set_config_int(ConfigSDIOutputLinkConfiguration, ...).
+    // Single-cable output on a multi-link device must force SingleLink; the
+    // dual-link default splits the raster across two cables and silently drops
+    // half the picture over one cable (§spec:sdi-link-configuration).
+    nb::enum_<_BMDLinkConfiguration>(m, "LinkConfiguration")
+        .value("SingleLink", bmdLinkConfigurationSingleLink)
+        .value("DualLink", bmdLinkConfigurationDualLink)
+        .value("QuadLink", bmdLinkConfigurationQuadLink);
+
     // -- BMDSupportedVideoModeFlags --
     nb::enum_<_BMDSupportedVideoModeFlags>(m, "SupportedVideoModeFlag")
         .value("Default", bmdSupportedVideoModeDefault)
