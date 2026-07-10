@@ -22,8 +22,11 @@ import sys
 
 import pytest
 
-if sys.platform == "win32":
-    pytest.skip("Linux container tests", allow_module_level=True)
+if sys.platform != "linux":
+    # These validate the Linux devcontainer (memlock ulimit, /dev/blackmagic
+    # device nodes). They are meaningless off Linux — macOS/Windows hosts run
+    # the binding natively, not in the container.
+    pytest.skip("Linux devcontainer tests", allow_module_level=True)
 
 import resource  # Unix-only; guarded above
 

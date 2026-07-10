@@ -810,9 +810,30 @@ stable output status.
 
 ### Passthrough (loopback)
 
-Capture on one sub-device, play out on another (requires a card with
-both input and output, or two cards). Verify frame data integrity
-end-to-end.
+Play out on a DeckLink output and capture the same signal on a DeckLink
+input joined by an SDI cable; verify frame data integrity end-to-end.
+Two topologies satisfy this: a single full-duplex device looped SDI
+OUT → its own SDI IN (the default — output and input resolve to the
+same index), or a multi-sub-device card / two cards with the endpoints
+set via `PYDECKLINK_LOOPBACK_OUTPUT` / `PYDECKLINK_LOOPBACK_INPUT` to
+match the physical cabling. Why configurable: the SDI cable, not
+software, decides which ports are joined, and the binding cannot infer
+it — so the loopback endpoints are a deployment fact, defaulting to
+self-loopback and overridable per rig. Tests skip (not fail) when no
+signal reaches the input, so the suite stays clean on hosts without the
+cable.
+
+Two hardware-observed requirements shape the self-loopback path. The
+output and input share one `Device` handle — two separate handles to the
+same full-duplex device do not route output → input, so the capture never
+locks. The output is forced to 4:2:2 YCbCr (`Config444SDIVideoOutput` =
+False) so the SDI wire carries the 8-bit YUV that is generated; at the
+card's 4:4:4 RGB default the output is converted to RGB on the wire and a
+fixed-mode YUV input cannot match it. With 4:2:2 in effect a fixed-mode
+YUV capture locks, and a known luma-band pattern round-trips faithfully —
+so the integrity check asserts the recovered spatial structure, not a
+mere non-blank heuristic. Forcing 4:2:2 depends on runtime configuration
+actually applying (§spec:configuration).
 
 ### Custom-allocator + zero-copy + signal-locked recycling
 
@@ -1268,12 +1289,22 @@ No changes to the signatures of `enable_video_output`,
 `set_config_int`, `get_attribute_flag`, or
 `schedule_output_frame`.
 
+Engaging the group depends on the held configuration interface
+(§spec:configuration): `set_config_int(PlaybackGroup, ...)` reaches the
+hardware only because the `Device` retains its `IDeckLinkConfiguration`
+across the subsequent `enable_video_output`. A transient interface
+discards the group assignment before output is enabled, so each output
+carries the synchronize flag but is never assigned to the group — the
+outputs free-run and the same-instant guarantee is silently lost.
+
 ### Citations
 
 - Blackmagic DeckLink SDK 15.3 ReadMe — "SynchronizedPlayback"
   sample, `bmdVideoOutputSynchronizeToPlaybackGroup`,
   `bmdDeckLinkConfigPlaybackGroup`,
   `BMDDeckLinkSupportsSynchronizeToPlaybackGroup`.
+- §spec:configuration — the held configuration interface this section
+  relies on to assign the playback group.
 - §spec:canonical-gpu-passthrough — the single-output recipe this
   section extends.
 - §spec:gpu-pinned-memory — the allocator pattern reused per output.
