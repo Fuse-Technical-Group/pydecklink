@@ -555,6 +555,7 @@ Bound from DeckLink SDK types via `nb::enum_<>`:
 | `DeviceAttribute` | `BMDDeckLinkAttributeID` | Capability query IDs |
 | `ProfileID` | `BMDProfileID` | Connector profile selection |
 | `DuplexMode` | `BMDDuplexMode` | Full, half, simplex, inactive |
+| `LinkConfiguration` | `BMDLinkConfiguration` | Single, dual, quad link (§spec:sdi-link-configuration) |
 
 ### Format Metadata
 
@@ -1308,6 +1309,55 @@ outputs free-run and the same-instant guarantee is silently lost.
 - §spec:canonical-gpu-passthrough — the single-output recipe this
   section extends.
 - §spec:gpu-pinned-memory — the allocator pattern reused per output.
+
+## SDI Output Link Configuration §spec:sdi-link-configuration
+
+*Status: not started*
+
+### Problem
+
+`ConfigurationID.ConfigSDIOutputLinkConfiguration` is bound, but the
+`BMDLinkConfiguration` values it takes (single / dual / quad link) are
+not — callers must pass the raw FourCC integer (`0x6C63736C` for single
+link) to `set_config_int`. Worse, the config **defaults to dual link** on
+at least some devices. Dual link splits the raster across two physical
+SDI cables; on a single-cable connection the second link's half of the
+picture is silently dropped. A consumer playing out 4K over one BNC gets
+a frame with every other line blank and no error — the failure surfaces
+only as corrupted output. This was found while validating 4K RGB loopback
+(§spec:pixel-packing): the packed frame was correct, but half the lines
+never crossed the wire until the link config was forced to single.
+
+### Behavior
+
+`LinkConfiguration` is bound from `BMDLinkConfiguration`
+(`SingleLink`, `DualLink`, `QuadLink`), so callers select the link mode
+by name:
+
+- `device.set_config_int(ConfigurationID.ConfigSDIOutputLinkConfiguration,
+  LinkConfiguration.SingleLink)`
+
+The binding does not change the SDK's default. It documents that
+single-cable output on a multi-link-capable device requires setting
+single link explicitly, and exposes the enum so the choice is legible at
+the call site rather than an opaque FourCC.
+
+### Why not change the default
+
+The default is the SDK's, and dual/quad link is correct on rigs actually
+wired for it; silently overriding it would break those. The binding's job
+is to expose the control and name the values (§spec:binding-philosophy),
+not to second-guess the hardware wiring — which only the operator knows.
+
+### Citations
+
+- §spec:pixel-packing — 4K RGB wire validation that surfaced the
+  dual-link default.
+- §spec:configuration — the `set_config_int` surface this enum feeds.
+- §spec:binding-philosophy — mirror-the-SDK principle; the value enum
+  completes the already-bound config ID.
+- DeckLink SDK 15.3 `DeckLinkAPIConfiguration.h` — `BMDLinkConfiguration`,
+  `bmdDeckLinkConfigSDIOutputLinkConfiguration`.
 
 ## Latency Characterization §spec:latency-characterization
 
