@@ -27,11 +27,99 @@ void init_decklink_output(nb::module_& m, nb::class_<Device>& device) {
                    ", underrun=" + std::string(s.underrun ? "True" : "False") + ")";
         }, nb::sig("def __repr__(self) -> str")); // avoid platform-specific C++ type in stub
 
+    // -- HDRMetadata --
+    // Rec.2020 / PQ HDR10 defaults; every field is overridable via
+    // constructor kwargs or attribute assignment (§spec:hdr-metadata).
+    nb::class_<HDRMetadata>(m, "HDRMetadata")
+        .def("__init__",
+            [](HDRMetadata* self, EOTF eotf, _BMDColorspace colorspace,
+               double red_x, double red_y, double green_x, double green_y,
+               double blue_x, double blue_y, double white_x, double white_y,
+               double max_display_mastering_luminance,
+               double min_display_mastering_luminance,
+               double max_cll, double max_fall) {
+                new (self) HDRMetadata{
+                    eotf, colorspace, red_x, red_y, green_x, green_y,
+                    blue_x, blue_y, white_x, white_y,
+                    max_display_mastering_luminance,
+                    min_display_mastering_luminance, max_cll, max_fall};
+            },
+            nb::arg("eotf") = EOTF::PQ,
+            nb::arg("colorspace") = bmdColorspaceRec2020,
+            nb::arg("red_x") = hdr_defaults::kRec2020RedX,
+            nb::arg("red_y") = hdr_defaults::kRec2020RedY,
+            nb::arg("green_x") = hdr_defaults::kRec2020GreenX,
+            nb::arg("green_y") = hdr_defaults::kRec2020GreenY,
+            nb::arg("blue_x") = hdr_defaults::kRec2020BlueX,
+            nb::arg("blue_y") = hdr_defaults::kRec2020BlueY,
+            nb::arg("white_x") = hdr_defaults::kD65WhiteX,
+            nb::arg("white_y") = hdr_defaults::kD65WhiteY,
+            nb::arg("max_display_mastering_luminance") = hdr_defaults::kMaxDisplayMasteringLuminance,
+            nb::arg("min_display_mastering_luminance") = hdr_defaults::kMinDisplayMasteringLuminance,
+            nb::arg("max_cll") = hdr_defaults::kMaxCLL,
+            nb::arg("max_fall") = hdr_defaults::kMaxFALL,
+            "HDR10 static metadata. Defaults describe a Rec.2020 / PQ signal.")
+        .def_rw("eotf", &HDRMetadata::eotf)
+        .def_rw("colorspace", &HDRMetadata::colorspace)
+        .def_rw("red_x", &HDRMetadata::red_x)
+        .def_rw("red_y", &HDRMetadata::red_y)
+        .def_rw("green_x", &HDRMetadata::green_x)
+        .def_rw("green_y", &HDRMetadata::green_y)
+        .def_rw("blue_x", &HDRMetadata::blue_x)
+        .def_rw("blue_y", &HDRMetadata::blue_y)
+        .def_rw("white_x", &HDRMetadata::white_x)
+        .def_rw("white_y", &HDRMetadata::white_y)
+        .def_rw("max_display_mastering_luminance",
+                &HDRMetadata::max_display_mastering_luminance)
+        .def_rw("min_display_mastering_luminance",
+                &HDRMetadata::min_display_mastering_luminance)
+        .def_rw("max_cll", &HDRMetadata::max_cll)
+        .def_rw("max_fall", &HDRMetadata::max_fall);
+
     // -- MutableFrame --
     nb::class_<MutableFrame>(m, "MutableFrame")
         .def_prop_ro("width", &MutableFrame::width)
         .def_prop_ro("height", &MutableFrame::height)
         .def_prop_ro("row_bytes", &MutableFrame::row_bytes)
+        .def_prop_ro("flags",
+            [](MutableFrame& mf) -> uint32_t {
+                if (!mf.frame)
+                    throw std::runtime_error("MutableFrame has no frame");
+                return static_cast<uint32_t>(mf.frame->GetFlags());
+            },
+            "Frame flags bitmask (see FrameFlag).")
+        .def("set_hdr_metadata",
+            [](MutableFrame& mf, const HDRMetadata& md) {
+                if (!mf.frame)
+                    throw std::runtime_error("MutableFrame has no frame");
+                ComPtr<IDeckLinkVideoFrameMutableMetadataExtensions> ext;
+                if (mf.frame->QueryInterface(
+                        IID_IDeckLinkVideoFrameMutableMetadataExtensions,
+                        (void**)ext.put()) != S_OK || !ext)
+                    throw std::runtime_error(
+                        "Frame does not support mutable HDR metadata");
+                ext->SetInt(bmdDeckLinkFrameMetadataColorspace,
+                            static_cast<int64_t>(md.colorspace));
+                ext->SetInt(bmdDeckLinkFrameMetadataHDRElectroOpticalTransferFunc,
+                            static_cast<int64_t>(md.eotf));
+                ext->SetFloat(bmdDeckLinkFrameMetadataHDRDisplayPrimariesRedX, md.red_x);
+                ext->SetFloat(bmdDeckLinkFrameMetadataHDRDisplayPrimariesRedY, md.red_y);
+                ext->SetFloat(bmdDeckLinkFrameMetadataHDRDisplayPrimariesGreenX, md.green_x);
+                ext->SetFloat(bmdDeckLinkFrameMetadataHDRDisplayPrimariesGreenY, md.green_y);
+                ext->SetFloat(bmdDeckLinkFrameMetadataHDRDisplayPrimariesBlueX, md.blue_x);
+                ext->SetFloat(bmdDeckLinkFrameMetadataHDRDisplayPrimariesBlueY, md.blue_y);
+                ext->SetFloat(bmdDeckLinkFrameMetadataHDRWhitePointX, md.white_x);
+                ext->SetFloat(bmdDeckLinkFrameMetadataHDRWhitePointY, md.white_y);
+                ext->SetFloat(bmdDeckLinkFrameMetadataHDRMaxDisplayMasteringLuminance,
+                              md.max_display_mastering_luminance);
+                ext->SetFloat(bmdDeckLinkFrameMetadataHDRMinDisplayMasteringLuminance,
+                              md.min_display_mastering_luminance);
+                ext->SetFloat(bmdDeckLinkFrameMetadataHDRMaximumContentLightLevel, md.max_cll);
+                ext->SetFloat(bmdDeckLinkFrameMetadataHDRMaximumFrameAverageLightLevel, md.max_fall);
+                mf.frame->SetFlags(mf.frame->GetFlags() | bmdFrameContainsHDRMetadata);
+            },
+            nb::arg("metadata"),
+            "Attach HDR10 static metadata and set FrameFlag.ContainsHDRMetadata.")
         .def_prop_ro("data", [](nb::handle self) {
             // The write access window is opened when the wrapper is
             // constructed (acquire_output_frame / create_video_frame)
@@ -208,6 +296,24 @@ void init_decklink_output(nb::module_& m, nb::class_<Device>& device) {
         nb::arg("buffer"), nb::arg("width"), nb::arg("height"),
         nb::arg("row_bytes"), nb::arg("pixel_format"),
         "Display a frame synchronously (blocking). Copies buffer into a new frame.");
+
+    device.def("display_frame_sync_frame",
+        [](Device& self, MutableFrame& mf) {
+            if (!self.output_)
+                throw std::runtime_error("Video output not enabled");
+            if (!mf.frame)
+                throw std::runtime_error("MutableFrame has no frame");
+            // Close the write window before handing the frame to the SDK;
+            // the caller has finished populating pixels and metadata.
+            mf.close_access();
+            HRESULT hr = self.output_->DisplayVideoFrameSync(mf.frame.get());
+            if (hr != S_OK)
+                throw std::runtime_error(
+                    "DisplayVideoFrameSync failed (HRESULT " + std::to_string(hr) + ")");
+        },
+        nb::arg("frame"),
+        "Display a caller-built MutableFrame synchronously (blocking). "
+        "Carries HDR metadata and custom pixel packing through the sync path.");
 
     device.def("schedule_capture_frame",
         [](Device& self, CaptureFrameRef& capture_frame,

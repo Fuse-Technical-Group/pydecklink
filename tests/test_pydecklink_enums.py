@@ -233,3 +233,31 @@ class TestAttributeID:
             pydecklink.AttributeID.SupportsFullFrameReferenceInputTimingOffset.value
             == 0x6672696E
         )
+
+
+class TestEOTF:
+    """EOTF enum — CTA-861.3 electro-optical transfer function codes."""
+
+    def test_enum_exists(self):
+        assert hasattr(pydecklink, "EOTF")
+
+    def test_cta_861_3_values(self):
+        # Integer codes per CTA-861.3: 0 reserved, 1 SDR, 2 PQ, 3 HLG.
+        assert pydecklink.EOTF.SDR.value == 1
+        assert pydecklink.EOTF.PQ.value == 2
+        assert pydecklink.EOTF.HLG.value == 3
+
+    def test_reserved_value(self):
+        assert pydecklink.EOTF.Reserved.value == 0
+
+
+class TestColorspace:
+    """BMDColorspace enum — frame colour volume signalling."""
+
+    def test_enum_exists(self):
+        assert hasattr(pydecklink, "Colorspace")
+
+    def test_fourcc_values(self):
+        assert pydecklink.Colorspace.Rec601.value == 0x72363031
+        assert pydecklink.Colorspace.Rec709.value == 0x72373039
+        assert pydecklink.Colorspace.Rec2020.value == 0x32303230

@@ -253,6 +253,24 @@ void init_decklink_enums(nb::module_& m) {
         .value("ModelName", BMDDeckLinkModelName)
         .value("DeviceHandle", BMDDeckLinkDeviceHandle);
 
+    // -- BMDColorspace --
+    // Frame colour volume signalled via
+    // bmdDeckLinkFrameMetadataColorspace (see HDRMetadata).
+    nb::enum_<_BMDColorspace>(m, "Colorspace")
+        .value("Rec601", bmdColorspaceRec601)
+        .value("Rec709", bmdColorspaceRec709)
+        .value("Rec2020", bmdColorspaceRec2020);
+
+    // -- EOTF --
+    // CTA-861.3 electro-optical transfer function codes. The SDK stores
+    // these as a raw int with no enum of its own; pydecklink defines the
+    // code points (§spec:hdr-metadata).
+    nb::enum_<EOTF>(m, "EOTF")
+        .value("Reserved", EOTF::Reserved)
+        .value("SDR", EOTF::SDR)
+        .value("PQ", EOTF::PQ)
+        .value("HLG", EOTF::HLG);
+
     // -- BMDDisplayModeFlags --
     nb::enum_<_BMDDisplayModeFlags>(m, "DisplayModeFlag")
         .value("Supports3D", bmdDisplayModeSupports3D)
