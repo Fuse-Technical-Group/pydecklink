@@ -201,9 +201,7 @@ def test_r210_packing_round_trips_over_sdi_4k():
         # SingleLink: the dual-link default splits the raster across two cables
         # and drops half the picture over a one-cable loopback. .value because
         # the nanobind enum does not implicitly convert to set_config_int's int.
-        out_dev.set_config_int(
-            link_cfg, pydecklink.LinkConfiguration.SingleLink.value
-        )
+        out_dev.set_config_int(link_cfg, pydecklink.LinkConfiguration.SingleLink.value)
     except RuntimeError:
         original_link = None
 
