@@ -79,6 +79,25 @@ bmd-signal-gen reference buffer and `unpack(pack(x)) == x`. Assert 12-bit
 boundary. Assert `import pydecklink` (without `.packing`) exposes no
 packing symbols and leaves the transport surface unchanged.
 
+## SDI output link configuration enum §road:sdi-link-configuration
+
+Bind `BMDLinkConfiguration` as a `LinkConfiguration` enum
+(`SingleLink` / `DualLink` / `QuadLink`) in `bind_enums.cpp` and the
+`.pyi` stub, so
+`set_config_int(ConfigurationID.ConfigSDIOutputLinkConfiguration, ...)`
+takes a named value rather than a raw FourCC. Document that single-cable
+output on a multi-link device must force single link — the dual-link
+default silently drops half the raster over one cable. Replace the raw
+`0x6C63736C` constant in the 4K RGB wire test
+(`tests/test_packing_wire.py`) with `LinkConfiguration.SingleLink`.
+§spec:sdi-link-configuration.
+
+**Verify:** `from pydecklink import LinkConfiguration` exposes
+`SingleLink`, `DualLink`, `QuadLink`. The 4K RGB packing wire test uses
+`LinkConfiguration.SingleLink` (no raw FourCC) and still round-trips
+bit-exact on hardware. Building the extension regenerates a `.pyi` stub
+matching the committed one (stub-freshness check passes).
+
 ## Future §road:future
 
 - **audio-streams**: Audio capture/playout via
