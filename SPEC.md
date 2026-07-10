@@ -942,17 +942,15 @@ pack` is identity. The non-goal stands.
   boundary — the historically error-prone case.
 - Importing `pydecklink` leaves the transport surface unchanged and
   pulls in no packing code.
-- A packed buffer survives the real output → SDI → capture path: a v210
-  pattern round-trips bit-exactly through hardware loopback
-  (§spec:integration-testing), exercising the shared pack → DMA → wire →
-  capture → unpack path. 4:4:4 RGB packing is validated in memory
-  (byte-exact against the SDK layout tables). On-the-wire RGB needs a
-  4:4:4-capable link: HD/3G single-link SDI carries only 4:2:2, so RGB
-  traverses SDI only at 4K on 12G (2160p ≤30, where 4:4:4 fits the link),
-  and there the SMPTE 2082 sub-image (2SI) mapping permutes pixel
-  positions — a transport property, not a packing one. Bit-exact RGB wire
-  validation is therefore deferred to a 4:4:4 transport without that
-  remapping (HDMI, or 4K SDI with 2SI handling).
+- A packed buffer survives the real output → SDI → capture path
+  bit-exactly, exercising the shared pack → DMA → wire → capture → unpack
+  path (§spec:integration-testing): v210 (4:2:2) at HD1080p25 on
+  single-link HD-SDI, and r210 (10-bit RGB 4:4:4) at 4K 2160p30 on
+  single-link 12G-SDI. 4:4:4 doubles the sample rate of 4:2:2, so RGB
+  needs a 4K/12G mode to fit the link; and the SDI output link
+  configuration must be forced to single link — the default is dual link,
+  which splits the raster across two cables and drops half the picture
+  over a single-cable loopback.
 
 ### Citations
 
