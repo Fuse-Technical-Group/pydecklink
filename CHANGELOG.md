@@ -1,3 +1,10 @@
+# [0.4.0](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.3.4...v0.4.0) (2026-07-10)
+
+
+### Features
+
+* **packing:** add opt-in pixel packing module ([3d7906e](https://github.com/Fuse-Technical-Group/pydecklink/commit/3d7906e22118520bcd47af4876f34c33e4a61f02))
+
 ## [0.3.4](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.3.3...v0.3.4) (2026-07-10)
 
 
