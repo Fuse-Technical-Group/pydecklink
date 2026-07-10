@@ -2,18 +2,30 @@
 
 Run with: pytest -m hardware tests/test_decklink_integration.py
 
-Requires:
-- At least two DeckLink sub-devices (or two cards).
-- Device 0 (SDI 1) output connected to device 2 (SDI 2) input via SDI cable (loopback).
+Requires an SDI loopback: a DeckLink output connected back to a DeckLink
+input by an SDI cable. Two topologies are supported:
 
-Tests verify the full path: host → DeckLink output → SDI cable →
-DeckLink input → host.
+- Single full-duplex device (e.g. UltraStudio 4K Mini): loop the device's
+  SDI OUT to its own SDI IN. This is the default — output and input both
+  resolve to device index 0.
+- Multi-sub-device card or two cards: play out on one sub-device, capture
+  on another. Set ``PYDECKLINK_LOOPBACK_OUTPUT`` / ``PYDECKLINK_LOOPBACK_INPUT``
+  to the indices matching the physical cabling.
+
+The output is forced to 4:2:2 YCbCr so the SDI wire carries the 8-bit YUV
+we generate; a fixed-mode YUV input then matches the wire and captures a
+faithful round-trip. Tests verify the full path: host → DeckLink output →
+SDI cable → DeckLink input → host. When no signal reaches the input
+(cable absent or wired to a different port), the affected tests skip
+rather than fail.
 """
 
 from __future__ import annotations
 
 import contextlib
 import ctypes
+import ctypes.util
+import os
 
 import numpy as np
 import pytest
@@ -21,6 +33,11 @@ import pytest
 import pydecklink
 
 _HAS_SDK = getattr(pydecklink, "HAS_SDK", False)
+
+# Loopback endpoints. Default to single-device self-loopback (output and
+# input on the same full-duplex device); override for multi-device rigs.
+_OUTPUT_INDEX = int(os.environ.get("PYDECKLINK_LOOPBACK_OUTPUT", "0"))
+_INPUT_INDEX = int(os.environ.get("PYDECKLINK_LOOPBACK_INPUT", str(_OUTPUT_INDEX)))
 
 pytestmark = [
     pytest.mark.hardware,
@@ -49,58 +66,118 @@ else:
     TIMESCALE = FRAME_DURATION = 0
 
 
+def _luma_band_frame() -> np.ndarray:
+    """A UYVY frame with a bright top half and dark bottom half.
+
+    Chroma neutral (0x80); luma 0xC0 in the top rows, 0x40 in the bottom.
+    Distinctive enough that a faithful loopback recovers the spatial
+    structure, and clear of the SMPTE reserved luma codes (0x00 / 0xFF).
+    UYVY byte order is Cb Y Cr Y, so luma occupies the odd byte offsets.
+    """
+    frame = np.full((HEIGHT, ROW_BYTES), 0x80, dtype=np.uint8)  # neutral chroma
+    frame[: HEIGHT // 2, 1::2] = 0xC0  # bright top
+    frame[HEIGHT // 2 :, 1::2] = 0x40  # dark bottom
+    return frame.reshape(-1)
+
+
 # -- Fixtures -----------------------------------------------------------------
 
 
 @pytest.fixture()
 def output_device():
-    """Open DeckLink device 0 for output."""
-    dev = pydecklink.Device(index=0)
+    """Open the loopback output device, forced to 4:2:2 YCbCr SDI output.
+
+    Index from ``PYDECKLINK_LOOPBACK_OUTPUT`` (default 0). The SDI output
+    is set to 4:2:2 (``Config444SDIVideoOutput`` = False) so the wire
+    carries the 8-bit YUV we generate; left at its 4:4:4 RGB default the
+    card would convert on the wire and the loopback would not be a
+    faithful YUV round-trip. The original setting is restored on teardown.
+    """
+    if pydecklink.device_count() <= _OUTPUT_INDEX:
+        pytest.skip(f"No DeckLink device at output index {_OUTPUT_INDEX}")
+    dev = pydecklink.Device(index=_OUTPUT_INDEX)
+    c444 = pydecklink.ConfigurationID.Config444SDIVideoOutput
+    try:
+        original_444 = dev.get_config_flag(c444)
+        dev.set_config_flag(c444, False)
+    except RuntimeError:
+        original_444 = None  # Flag unsupported; use the device default.
     yield dev
+    if original_444 is not None:
+        with contextlib.suppress(RuntimeError):
+            dev.set_config_flag(c444, original_444)
 
 
 @pytest.fixture()
-def input_device():
-    """Open DeckLink device 2 (SDI 2) for input."""
-    dev = pydecklink.Device(index=2)
-    yield dev
+def input_device(output_device):
+    """Open the loopback input device (``PYDECKLINK_LOOPBACK_INPUT``, default 0).
+
+    On single-device self-loopback (input index == output index) the input
+    shares the output's `Device` handle: two separate handles to the same
+    full-duplex device do not route output → input, so the capture never
+    locks. Distinct indices get their own handle.
+    """
+    if _INPUT_INDEX == _OUTPUT_INDEX:
+        yield output_device
+        return
+    if pydecklink.device_count() <= _INPUT_INDEX:
+        pytest.skip(f"No DeckLink device at input index {_INPUT_INDEX}")
+    yield pydecklink.Device(index=_INPUT_INDEX)
+
+
+def _teardown_loopback(output_device, input_device) -> None:
+    for step in (
+        output_device.stop_scheduled_playback,
+        input_device.stop_streams,
+        input_device.disable_video_input,
+        output_device.disable_video_output,
+    ):
+        with contextlib.suppress(RuntimeError):
+            step()
 
 
 @pytest.fixture()
 def loopback_pair(output_device, input_device):
-    """Configure a playout → capture loopback pair.
+    """Playout → capture loopback in fixed-mode 8-bit YUV.
 
-    Device 0 (SDI 1) outputs; device 2 (SDI 2) captures.
-    Tears down on exit.
+    Output plays out; input captures the same signal over the SDI cable.
+    With the output forced to 4:2:2 (see ``output_device``) the wire is
+    8-bit YCbCr, so a fixed-mode YUV input matches it and locks — no
+    format detection needed. Both endpoints default to the same
+    full-duplex device (self-loopback); override the indices for
+    multi-device rigs. Tears down on exit.
     """
     output_device.enable_video_output(MODE)
     input_device.enable_video_input(MODE, PIXEL_FORMAT)
     input_device.start_streams()
     yield output_device, input_device
-    # Teardown
-    with contextlib.suppress(RuntimeError):
-        output_device.stop_scheduled_playback()
-    with contextlib.suppress(RuntimeError):
-        input_device.stop_streams()
-    with contextlib.suppress(RuntimeError):
-        input_device.disable_video_input()
-    with contextlib.suppress(RuntimeError):
-        output_device.disable_video_output()
+    _teardown_loopback(output_device, input_device)
+
+
+@pytest.fixture()
+def loopback_detect(output_device, input_device):
+    """Loopback with input format detection enabled (for the detection test)."""
+    output_device.enable_video_output(MODE)
+    input_device.enable_video_input(
+        MODE, PIXEL_FORMAT, flags=pydecklink.VideoInputFlag.EnableFormatDetection.value
+    )
+    input_device.start_streams()
+    yield output_device, input_device
+    _teardown_loopback(output_device, input_device)
 
 
 # -- Signal Detection ---------------------------------------------------------
 
 
 class TestSignalDetection:
-    """Verify format detection resolves the correct mode."""
+    """Verify format detection resolves the mode and format we output."""
 
-    def test_detects_known_signal(self, loopback_pair):
-        """Output a known mode, verify input detects it."""
-        out_dev, in_dev = loopback_pair
+    def test_detects_known_signal(self, loopback_detect):
+        """Format detection reports the mode and pixel format we output."""
+        out_dev, in_dev = loopback_detect
 
-        # Schedule a few frames to establish a signal.
-        out_dev.create_frame_pool(8, WIDTH, HEIGHT, ROW_BYTES, PIXEL_FORMAT)
-        for i in range(5):
+        out_dev.create_frame_pool(20, WIDTH, HEIGHT, ROW_BYTES, PIXEL_FORMAT)
+        for i in range(15):
             mf = out_dev.acquire_output_frame(timeout_ms=1000)
             mf.data[:] = 0x80  # Valid YCbCr neutral gray.
             out_dev.schedule_output_frame(
@@ -111,42 +188,62 @@ class TestSignalDetection:
             )
         out_dev.start_scheduled_playback(start_time=0, timescale=TIMESCALE)
 
-        # Wait for input to receive frames.
         frame = None
-        for _ in range(20):
-            frame = in_dev.pop_capture_frame(timeout_ms=500)
+        display_time = 15 * FRAME_DURATION
+        for _ in range(60):
+            frame = in_dev.pop_capture_frame(timeout_ms=1000)
+            with contextlib.suppress(RuntimeError):
+                mf = out_dev.acquire_output_frame(timeout_ms=50)
+                mf.data[:] = 0x80
+                out_dev.schedule_output_frame(
+                    mf,
+                    display_time=display_time,
+                    duration=FRAME_DURATION,
+                    timescale=TIMESCALE,
+                )
+                display_time += FRAME_DURATION
             if frame is not None and frame.has_signal:
                 break
 
-        assert frame is not None, "No frame captured — SDI loopback cable connected?"
-        assert frame.has_signal, "Captured frame has no input signal"
+        if frame is None or not frame.has_signal:
+            pytest.skip("No SDI signal on loopback input — check OUT→IN cabling")
         assert frame.width == WIDTH
         assert frame.height == HEIGHT
+        # Detection must report what we actually output — 4:2:2 YCbCr at the
+        # output mode — not a different colorspace or bit depth.
+        fmt = in_dev.current_input_format
+        assert fmt is not None
+        assert fmt.mode == MODE
+        assert fmt.pixel_format == PIXEL_FORMAT, (
+            f"format detection reported {fmt.pixel_format}, expected "
+            f"{PIXEL_FORMAT} for a 4:2:2 YCbCr output"
+        )
 
 
 # -- Loopback Data Integrity --------------------------------------------------
 
 
 class TestLoopbackIntegrity:
-    """Playout a known pattern, capture it back, verify non-trivial data."""
+    """Playout a known pattern, capture it back, verify it survives."""
 
-    def test_captured_frame_is_not_empty(self, loopback_pair):
-        """SDI loopback delivers real video data, not zeros.
+    def test_loopback_reproduces_pattern(self, loopback_pair):
+        """A known luma-band pattern survives the SDI loopback.
 
-        SDI transport inserts timing references in blanking, so
-        byte-exact comparison against the sent pattern is not
-        meaningful. Instead, assert the captured frame has substantial
-        non-zero content.
+        Output a frame with a bright top half and dark bottom half (neutral
+        chroma) and verify the captured frame reproduces that spatial
+        structure. 4:2:2 YCbCr is bit-exact on the SDI wire, so a faithful
+        loopback recovers the bands; a blank, garbled, or vertically
+        misaligned capture does not.
         """
         out_dev, in_dev = loopback_pair
+        pattern = _luma_band_frame()
 
-        # Schedule enough frames for the pipeline to stabilize.
-        preroll = 8
+        preroll = 15
         out_dev.create_frame_pool(preroll + 5, WIDTH, HEIGHT, ROW_BYTES, PIXEL_FORMAT)
 
-        def schedule_pattern(display_time: int) -> None:
+        def schedule(display_time: int) -> None:
             mf = out_dev.acquire_output_frame(timeout_ms=1000)
-            mf.data[:] = 0x80  # Valid YCbCr neutral gray.
+            mf.data[:] = pattern
             out_dev.schedule_output_frame(
                 mf,
                 display_time=display_time,
@@ -155,30 +252,36 @@ class TestLoopbackIntegrity:
             )
 
         for i in range(preroll):
-            schedule_pattern(i * FRAME_DURATION)
+            schedule(i * FRAME_DURATION)
         out_dev.start_scheduled_playback(start_time=0, timescale=TIMESCALE)
-
-        # Drain a few frames to let the pipeline settle.
-        for _ in range(5):
-            in_dev.pop_capture_frame(timeout_ms=1000)
-
-        # Continue scheduling so output doesn't underrun.
         display_time = preroll * FRAME_DURATION
-        for _ in range(5):
-            schedule_pattern(display_time)
-            display_time += FRAME_DURATION
 
-        # Capture a settled frame.
-        frame = in_dev.pop_capture_frame(timeout_ms=2000)
-        assert frame is not None, "No frame captured after settling"
-        assert frame.has_signal, "Captured frame reports no signal"
+        frame = None
+        for _ in range(200):
+            f = in_dev.pop_capture_frame(timeout_ms=1000)
+            with contextlib.suppress(RuntimeError):
+                schedule(display_time)
+                display_time += FRAME_DURATION
+            if f is not None and f.has_signal:
+                frame = f
+                break
 
-        data = np.array(frame.data)
-        nonzero_ratio = np.count_nonzero(data) / len(data)
-        assert nonzero_ratio > 0.5, (
-            f"Captured frame is mostly zeros ({nonzero_ratio:.1%} non-zero). "
-            f"SDI loopback path may not be delivering data."
+        if frame is None:
+            pytest.skip("No SDI signal on loopback input — check OUT→IN cabling")
+
+        assert frame.pixel_format == PIXEL_FORMAT
+        cap = np.array(frame.data)
+        row_bytes = len(cap) // frame.height
+        luma = cap.reshape(frame.height, row_bytes)[:, 1::2].astype(np.int32)
+        top = float(luma[: frame.height // 2].mean())
+        bottom = float(luma[frame.height // 2 :].mean())
+        # Sent 0xC0 (192) over 0x40 (64). Allow generous SDI level tolerance,
+        # but the bands must be clearly separated and on the correct sides.
+        assert top - bottom > 80, (
+            f"luma bands not recovered: top mean {top:.0f}, bottom {bottom:.0f}"
         )
+        assert top > 150, f"bright band captured too dark: {top:.0f}"
+        assert bottom < 110, f"dark band captured too bright: {bottom:.0f}"
 
 
 # -- Sustained Streaming (Passthrough) ----------------------------------------
@@ -227,7 +330,8 @@ class TestPassthroughStreaming:
                 signal_acquired = True
                 break
 
-        assert signal_acquired, "Input never acquired SDI signal from output"
+        if not signal_acquired:
+            pytest.skip("Input never acquired SDI signal — check OUT→IN cabling")
 
         captured = 1  # The acquisition frame above counts.
         consecutive_no_signal = 0
@@ -302,7 +406,10 @@ class TestCustomAllocatorZeroCopy:
     def test_zero_copy_streams_with_custom_allocator(self, output_device, input_device):
         """Stream signal-locked frames through a custom allocator,
         verify recycle behavior."""
-        libc = ctypes.CDLL("libc.so.6")
+        libc_name = ctypes.util.find_library("c")
+        if libc_name is None:
+            pytest.skip("libc not found for custom-allocator test")
+        libc = ctypes.CDLL(libc_name)
         libc.malloc.restype = ctypes.c_void_p
         libc.malloc.argtypes = [ctypes.c_size_t]
         libc.free.argtypes = [ctypes.c_void_p]
@@ -342,7 +449,7 @@ class TestCustomAllocatorZeroCopy:
         input_device.enable_video_input_with_allocator(
             mode=MODE,
             pixel_format=PIXEL_FORMAT,
-            flags=pydecklink.VideoInputFlag(0),
+            flags=pydecklink.VideoInputFlag.Default.value,
             allocator_provider=provider,
             zero_copy=True,
             input_queue_depth=1,
@@ -377,9 +484,8 @@ class TestCustomAllocatorZeroCopy:
                     signal_acquired = True
                     break
 
-            assert signal_acquired, (
-                "Input never acquired signal — SDI loopback cable connected?"
-            )
+            if not signal_acquired:
+                pytest.skip("Input never acquired SDI signal — check OUT→IN cabling")
 
             # Stream signal-locked frames. The capture count is the
             # core "did the SDK input thread stall?" signal.
