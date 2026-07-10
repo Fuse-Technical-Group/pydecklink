@@ -58,6 +58,14 @@ struct Device {
     ComPtr<IDeckLinkInput> input_;
     ComPtr<InputCallback> input_callback_;
 
+    // Configuration interface, acquired lazily and held for the device's
+    // lifetime. A transient IDeckLinkConfiguration discards live SetFlag /
+    // SetInt changes the moment it is released, so all config accessors
+    // share this one held instance (see bind_output.cpp). Used by
+    // set/get_config_flag, set/get_config_int, and write_config.
+    ComPtr<IDeckLinkConfiguration> config_;
+    IDeckLinkConfiguration* config();  // Lazily acquire; throw if unsupported.
+
     // Profile state (managed by bind_profile.cpp). Cached on first
     // access to ``profile_manager`` so a single ``ProfileManager``
     // owns the live ``ProfileCallbackAdapter`` for this device's

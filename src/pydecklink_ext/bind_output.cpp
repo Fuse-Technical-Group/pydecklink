@@ -268,10 +268,7 @@ void init_decklink_output(nb::module_& m, nb::class_<Device>& device) {
     // -- Configuration methods on Device --
     device.def("set_config_flag",
         [](Device& self, _BMDDeckLinkConfigurationID cfgID, bool value) {
-            ComPtr<IDeckLinkConfiguration> config;
-            if (self.dl->QueryInterface(IID_IDeckLinkConfiguration, (void**)config.put()) != S_OK)
-                throw std::runtime_error("Device does not support configuration");
-            HRESULT hr = config->SetFlag(cfgID, static_cast<dlbool_t>(value));
+            HRESULT hr = self.config()->SetFlag(cfgID, static_cast<dlbool_t>(value));
             if (hr != S_OK)
                 throw std::runtime_error("SetFlag failed (HRESULT " + std::to_string(hr) + ")");
         },
@@ -280,11 +277,8 @@ void init_decklink_output(nb::module_& m, nb::class_<Device>& device) {
 
     device.def("get_config_flag",
         [](Device& self, _BMDDeckLinkConfigurationID cfgID) -> bool {
-            ComPtr<IDeckLinkConfiguration> config;
-            if (self.dl->QueryInterface(IID_IDeckLinkConfiguration, (void**)config.put()) != S_OK)
-                throw std::runtime_error("Device does not support configuration");
             dlbool_t value = false;
-            HRESULT hr = config->GetFlag(cfgID, &value);
+            HRESULT hr = self.config()->GetFlag(cfgID, &value);
             if (hr != S_OK)
                 throw std::runtime_error("GetFlag failed (HRESULT " + std::to_string(hr) + ")");
             return static_cast<bool>(value);
@@ -294,10 +288,7 @@ void init_decklink_output(nb::module_& m, nb::class_<Device>& device) {
 
     device.def("set_config_int",
         [](Device& self, _BMDDeckLinkConfigurationID cfgID, int64_t value) {
-            ComPtr<IDeckLinkConfiguration> config;
-            if (self.dl->QueryInterface(IID_IDeckLinkConfiguration, (void**)config.put()) != S_OK)
-                throw std::runtime_error("Device does not support configuration");
-            HRESULT hr = config->SetInt(cfgID, value);
+            HRESULT hr = self.config()->SetInt(cfgID, value);
             if (hr != S_OK)
                 throw std::runtime_error("SetInt failed (HRESULT " + std::to_string(hr) + ")");
         },
@@ -306,11 +297,8 @@ void init_decklink_output(nb::module_& m, nb::class_<Device>& device) {
 
     device.def("get_config_int",
         [](Device& self, _BMDDeckLinkConfigurationID cfgID) -> int64_t {
-            ComPtr<IDeckLinkConfiguration> config;
-            if (self.dl->QueryInterface(IID_IDeckLinkConfiguration, (void**)config.put()) != S_OK)
-                throw std::runtime_error("Device does not support configuration");
             int64_t value = 0;
-            HRESULT hr = config->GetInt(cfgID, &value);
+            HRESULT hr = self.config()->GetInt(cfgID, &value);
             if (hr != S_OK)
                 throw std::runtime_error("GetInt failed (HRESULT " + std::to_string(hr) + ")");
             return value;
@@ -320,10 +308,7 @@ void init_decklink_output(nb::module_& m, nb::class_<Device>& device) {
 
     device.def("write_config",
         [](Device& self) {
-            ComPtr<IDeckLinkConfiguration> config;
-            if (self.dl->QueryInterface(IID_IDeckLinkConfiguration, (void**)config.put()) != S_OK)
-                throw std::runtime_error("Device does not support configuration");
-            HRESULT hr = config->WriteConfigurationToPreferences();
+            HRESULT hr = self.config()->WriteConfigurationToPreferences();
             if (hr != S_OK)
                 throw std::runtime_error("WriteConfigurationToPreferences failed (HRESULT " + std::to_string(hr) + ")");
         },

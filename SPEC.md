@@ -529,6 +529,13 @@ Wraps `IDeckLinkConfiguration`:
 
 Used for SDI mode selection (4:4:4 vs 4:2:2), connector mapping, etc.
 
+The `Device` holds one `IDeckLinkConfiguration` for its lifetime, shared
+by every config accessor. DeckLink applies `SetFlag` / `SetInt` to the
+live session only while that interface is retained; a transient
+per-call interface discards the change the instant it is released, so
+runtime configuration silently has no effect. The interface is acquired
+lazily on first use.
+
 ### Enums
 
 Bound from DeckLink SDK types via `nb::enum_<>`:

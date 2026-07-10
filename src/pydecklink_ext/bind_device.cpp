@@ -37,6 +37,18 @@ Device::~Device() {
         profile_manager_->mgr->SetCallback(nullptr);
 }
 
+IDeckLinkConfiguration* Device::config() {
+    // Hold one configuration interface for the device's lifetime. DeckLink
+    // applies SetFlag / SetInt to the live session only while the
+    // IDeckLinkConfiguration instance is retained; a per-call interface that
+    // is released immediately drops the change before it takes effect.
+    if (!config_) {
+        if (dl->QueryInterface(IID_IDeckLinkConfiguration, (void**)config_.put()) != S_OK)
+            throw std::runtime_error("Device does not support configuration");
+    }
+    return config_.get();
+}
+
 Device::Device(int index) {
     auto iter = require_iterator();
     int i = 0;
