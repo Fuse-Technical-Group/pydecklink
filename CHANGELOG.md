@@ -1,3 +1,10 @@
+## [0.3.4](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.3.3...v0.3.4) (2026-07-10)
+
+
+### Bug Fixes
+
+* **config:** hold IDeckLinkConfiguration for the device lifetime ([#201](https://github.com/Fuse-Technical-Group/pydecklink/issues/201)) ([25cff80](https://github.com/Fuse-Technical-Group/pydecklink/commit/25cff802b03e3eac3d318bb72886785a24d65d26))
+
 ## [0.3.3](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.3.2...v0.3.3) (2026-06-18)
 
 
