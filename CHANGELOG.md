@@ -1,3 +1,10 @@
+# [0.5.0](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.4.0...v0.5.0) (2026-07-10)
+
+
+### Features
+
+* **enums:** bind BMDLinkConfiguration as LinkConfiguration enum ([b07d391](https://github.com/Fuse-Technical-Group/pydecklink/commit/b07d3915b8cd2786381891e206af0841a9dbab57))
+
 # [0.4.0](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.3.4...v0.4.0) (2026-07-10)
 
 
