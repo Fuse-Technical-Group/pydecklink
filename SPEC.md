@@ -944,9 +944,11 @@ pack` is identity. The non-goal stands.
   pulls in no packing code.
 - A packed buffer survives the real output → SDI → capture path: a v210
   pattern round-trips bit-exactly through hardware loopback
-  (§spec:integration-testing). 4:2:2 formats are validated on the wire at
-  1.5G HD-SDI; 4:4:4 RGB exceeds that link's bandwidth (it needs 3G or
-  dual-link) and is verified in memory only.
+  (§spec:integration-testing). 4:2:2 formats are validated on the SDI
+  wire. 4:4:4 RGB is verified in memory only: single-link SDI loopback
+  reduces it to 4:2:2 (dropping alternate pixels' R/B) regardless of
+  frame rate or 3G level, so on-the-wire RGB validation requires a
+  4:4:4-capable transport (dual-link SDI or HDMI).
 
 ### Citations
 
