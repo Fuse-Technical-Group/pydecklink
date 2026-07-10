@@ -944,11 +944,15 @@ pack` is identity. The non-goal stands.
   pulls in no packing code.
 - A packed buffer survives the real output → SDI → capture path: a v210
   pattern round-trips bit-exactly through hardware loopback
-  (§spec:integration-testing). 4:2:2 formats are validated on the SDI
-  wire. 4:4:4 RGB is verified in memory only: single-link SDI loopback
-  reduces it to 4:2:2 (dropping alternate pixels' R/B) regardless of
-  frame rate or 3G level, so on-the-wire RGB validation requires a
-  4:4:4-capable transport (dual-link SDI or HDMI).
+  (§spec:integration-testing), exercising the shared pack → DMA → wire →
+  capture → unpack path. 4:4:4 RGB packing is validated in memory
+  (byte-exact against the SDK layout tables). On-the-wire RGB needs a
+  4:4:4-capable link: HD/3G single-link SDI carries only 4:2:2, so RGB
+  traverses SDI only at 4K on 12G (2160p ≤30, where 4:4:4 fits the link),
+  and there the SMPTE 2082 sub-image (2SI) mapping permutes pixel
+  positions — a transport property, not a packing one. Bit-exact RGB wire
+  validation is therefore deferred to a 4:4:4 transport without that
+  remapping (HDMI, or 4K SDI with 2SI handling).
 
 ### Citations
 
