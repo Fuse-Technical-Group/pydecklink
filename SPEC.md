@@ -1289,12 +1289,22 @@ No changes to the signatures of `enable_video_output`,
 `set_config_int`, `get_attribute_flag`, or
 `schedule_output_frame`.
 
+Engaging the group depends on the held configuration interface
+(§spec:configuration): `set_config_int(PlaybackGroup, ...)` reaches the
+hardware only because the `Device` retains its `IDeckLinkConfiguration`
+across the subsequent `enable_video_output`. A transient interface
+discards the group assignment before output is enabled, so each output
+carries the synchronize flag but is never assigned to the group — the
+outputs free-run and the same-instant guarantee is silently lost.
+
 ### Citations
 
 - Blackmagic DeckLink SDK 15.3 ReadMe — "SynchronizedPlayback"
   sample, `bmdVideoOutputSynchronizeToPlaybackGroup`,
   `bmdDeckLinkConfigPlaybackGroup`,
   `BMDDeckLinkSupportsSynchronizeToPlaybackGroup`.
+- §spec:configuration — the held configuration interface this section
+  relies on to assign the playback group.
 - §spec:canonical-gpu-passthrough — the single-output recipe this
   section extends.
 - §spec:gpu-pinned-memory — the allocator pattern reused per output.
