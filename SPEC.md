@@ -1369,6 +1369,68 @@ not to second-guess the hardware wiring — which only the operator knows.
 - DeckLink SDK 15.3 `DeckLinkAPIConfiguration.h` — `BMDLinkConfiguration`,
   `bmdDeckLinkConfigSDIOutputLinkConfiguration`.
 
+## HDR Metadata Capture §spec:hdr-metadata-capture
+
+*Status: not started*
+
+### Problem
+
+§spec:hdr-metadata attaches HDR10 static metadata to *output* frames, but
+the binding cannot read the HDR metadata carried by a *captured* frame.
+Two gaps follow. A monitoring or QC consumer cannot report what HDR
+signalling an input carries (EOTF, mastering-display volume, content
+light levels) — only whether a signal is present. And the output surface
+cannot be verified over a loopback: a frame emitted with
+`set_hdr_metadata` crosses the wire, but nothing on the capture side reads
+it back to confirm it round-tripped.
+
+### Behavior
+
+`CaptureFrame` and `CaptureFrameRef` expose the received HDR10 static
+metadata, mirroring the output write surface:
+
+- `frame.hdr_metadata → HDRMetadata | None` — reads the captured frame's
+  `IDeckLinkVideoFrameMetadataExtensions` (the read interface, IID distinct
+  from the mutable one used on output). Returns `None` when the frame does
+  not carry HDR metadata (`FrameFlag.ContainsHDRMetadata` absent), so the
+  common SDR path costs nothing and callers gate on presence.
+
+The returned `HDRMetadata` reuses the type from §spec:hdr-metadata: same
+`eotf`, `colorspace`, primaries/white-point chromaticities, mastering
+luminance range, `max_cll`, `max_fall`.
+
+### Transport
+
+The DeckLink SDK populates the captured frame's metadata extension from
+the received HDR signalling. HDMI carries HDR10 in the CTA-861.3 Dynamic
+Range and Mastering InfoFrame; SDI carries it in VANC (SMPTE ST 2108-1).
+The reader surfaces whatever the SDK decoded, independent of transport —
+HDMI loopback is the more reliable path for an end-to-end round-trip test
+because the InfoFrame is natively detected, while SDI VANC handling is
+device- and driver-dependent.
+
+### Why symmetric with output
+
+§spec:binding-philosophy mirrors the SDK surface. The SDK exposes HDR
+metadata on both mutable (output) and read-only (input) frame extensions;
+§spec:hdr-metadata bound only the write half. A read accessor completes
+the pair, gives capture/monitoring consumers the incoming HDR state, and
+makes §spec:hdr-metadata verifiable over a loopback
+(§spec:integration-testing). Depends on the output HDR surface
+(§spec:hdr-metadata / PR #198), which
+defines the shared `HDRMetadata`, `EOTF`, and `Colorspace` types.
+
+### Citations
+
+- §spec:hdr-metadata — the output write counterpart and shared
+  `HDRMetadata` type.
+- §spec:capture — the `CaptureFrame` / `CaptureFrameRef` surface this
+  accessor extends.
+- §spec:binding-philosophy — mirror-the-SDK principle; the read half
+  completes the metadata pair.
+- DeckLink SDK 15.3 `DeckLinkAPI.h` — `IDeckLinkVideoFrameMetadataExtensions`;
+  CTA-861.3 (HDMI InfoFrame) and SMPTE ST 2108-1 (SDI VANC) HDR carriage.
+
 ## Latency Characterization §spec:latency-characterization
 
 *Status: in progress*
