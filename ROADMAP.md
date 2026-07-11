@@ -60,6 +60,27 @@ read the values back through the frame's metadata extension
 (`GetInt`/`GetFloat` return what was set) and assert
 `FrameFlag.ContainsHDRMetadata` is present in the frame flags.
 
+## HDR metadata capture §road:hdr-metadata-capture
+
+Expose received HDR10 static metadata on captured frames, mirroring the
+output write surface. Add `hdr_metadata → HDRMetadata | None` to
+`CaptureFrame` and `CaptureFrameRef` in `bind_input.{h,cpp}`: query
+`IID_IDeckLinkVideoFrameMetadataExtensions` (the read interface) off the
+captured `IDeckLinkVideoInputFrame`, read the mastering-display,
+white-point, and content-light-level IDs plus the EOTF/colorspace, and
+return `None` when `FrameFlag.ContainsHDRMetadata` is absent. Reuse the
+`HDRMetadata` / `EOTF` / `Colorspace` types from the output surface.
+§spec:hdr-metadata-capture. Builds on the output HDR surface
+(§spec:hdr-metadata / PR #198).
+
+**Verify:** With an HDMI OUT → IN loopback on an `supports_hdr` device,
+build a frame, `set_hdr_metadata(EOTF.PQ, Colorspace.Rec2020,
+max_cll=10000)`, display it, capture it back, and assert
+`frame.hdr_metadata` reports the same EOTF, colorspace, and MaxCLL.
+Without hardware: assert `hdr_metadata` returns `None` for a plain SDR
+capture and that the accessor exists on both `CaptureFrame` and
+`CaptureFrameRef`.
+
 ## Future §road:future
 
 - **audio-streams**: Audio capture/playout via
