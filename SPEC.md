@@ -923,16 +923,92 @@ SLOW-path growth on the SDK input thread.
 
 *Status: not started*
 
-bmd-signal-gen currently uses a ctypes wrapper for DeckLink output.
-pydecklink replaces that wrapper. Signal-gen's pattern generation
-(solids, gradients) produces numpy buffers that pydecklink outputs
-directly. HDR test patterns additionally attach HDR10 static
-metadata to a caller-built frame and display it synchronously
-(§spec:hdr-metadata) — the metadata signalling is signal-gen's core
-function and the last blocker to retiring its ctypes wrapper.
+### Problem
 
-The integration path mirrors pyntv2's: a narrow
-`FrameOutput` protocol in signal-gen that either backend can satisfy.
+bmd-signal-gen reaches DeckLink through its own `extern "C"` + ctypes
+wrapper over the SDK (§spec:problem-statement, prior art). That wrapper
+duplicates what pydecklink already binds, so every SDK revision costs two
+implementations, and it is macOS-only — signal-gen cannot follow
+pydecklink onto Linux or Windows. Retiring it removes the duplicate
+binding and the platform ceiling in one step.
+
+The blocker was HDR10 metadata signalling, signal-gen's core function.
+§spec:hdr-metadata closed it. pydecklink's output surface is now
+sufficient for signal-gen's whole wrapper.
+
+### Behavior
+
+pydecklink covers signal-gen's output path end to end: device
+enumeration and open, output enable/disable, display-mode selection,
+caller-built frames, pixel packing (§spec:pixel-packing), HDR10 metadata
+attachment, synchronous display, HDR capability query, and the running
+Desktop Video runtime version. Signal-gen's pattern generation (solids,
+gradients, charts) produces integer pixel arrays that
+`pydecklink.packing` packs into `MutableFrame.data`; HDR patterns attach
+metadata to that frame and display it synchronously (§spec:hdr-metadata).
+
+Two surfaces differ in shape from the wrapper's and are load-bearing for
+the port:
+
+- **Pixel format is per frame, not device state.** The wrapper holds a
+  current format on the device (`set_pixel_format`, then create-frame).
+  pydecklink takes it as an argument to frame creation and display. Why:
+  the SDK requires the format at every frame-construction call regardless,
+  so holding a second copy in the binding adds state that can drift from
+  what the caller passes. A consumer wanting device-scoped format holds it
+  itself, where its lifetime is visible.
+- **Supported formats are a predicate, not a list.** The SDK offers
+  `DoesSupportVideoMode` and no enumeration; pydecklink mirrors that with
+  `does_support_video_mode` (§spec:binding-philosophy). Why: the wrapper's
+  "supported format list" is itself derived by testing a hardcoded
+  candidate array against that predicate. Binding an enumeration would
+  invent SDK surface and freeze a candidate list in the wrong repo. The
+  consumer keeps the loop, now over `PixelFormat`.
+
+The compile-time SDK header version is readable alongside the runtime
+`api_version()`. Why: the wrapper exposed both, and the pair is what
+diagnoses header/runtime skew — a runtime version alone cannot show that
+the installed Desktop Video predates the headers pydecklink built
+against.
+
+Observably:
+
+- Every capability signal-gen's ctypes wrapper exposes is reachable
+  through pydecklink's public API, with no DeckLink SDK symbol imported by
+  signal-gen.
+- An HDR test pattern built as an integer pixel array, packed, given HDR10
+  metadata, and displayed synchronously produces the signalling a
+  downstream analyzer reports — the wrapper's behaviour, unchanged.
+- The compile-time SDK header version and the runtime Desktop Video
+  version are separately readable, and differ when the installed runtime
+  and vendored headers disagree.
+
+### Scope boundary
+
+pydecklink supplies the I/O surface and nothing above it. The
+`FrameOutput` protocol, its mock implementation, backend selection, and
+pattern generation stay in signal-gen. Why: §spec:problem-statement's
+scope boundary keeps pipeline orchestration and consumer abstractions out
+of the binding. Signal-gen's mock is a test double for *its own* protocol,
+letting pattern and CLI tests run without hardware; it stands in for a
+consumer-side interface, not for the SDK, so it has no counterpart here.
+Mirroring pyntv2's integration path, the protocol is narrow enough that
+either backend satisfies it, which lets signal-gen cut over incrementally
+rather than in one commit.
+
+Work to retire the wrapper is tracked in bmd-signal-gen. This section
+records only what pydecklink owes that migration and why the surface takes
+the shape it does.
+
+### Citations
+
+- §spec:problem-statement — scope boundary this section stays inside;
+  names bmd-signal-gen as prior art and its macOS-only ctypes approach.
+- §spec:hdr-metadata — the metadata surface that unblocked the migration.
+- §spec:pixel-packing — packs signal-gen's pixel arrays; its reference
+  implementation is signal-gen's `cpp/pixel_packing.{h,cpp}`.
+- §spec:binding-philosophy — mirror-the-SDK principle behind the
+  predicate-not-enumeration and per-frame-format decisions.
 
 ## Pixel Packing §spec:pixel-packing
 
