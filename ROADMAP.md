@@ -56,22 +56,6 @@ Without hardware: assert `hdr_metadata` returns `None` for a plain SDR
 capture and that the accessor exists on both `CaptureFrame` and
 `CaptureFrameRef`.
 
-## macOS wheel deployment target §road:macos-deployment-target
-
-Pin `MACOSX_DEPLOYMENT_TARGET` to 14.0 for the macOS wheel build in
-`.github/workflows/build-wheels.yml`, so the published platform tag is
-chosen rather than inherited from the `macos-latest` runner image.
-Pinning the runner to a dated `macos-N` label instead re-couples the
-floor to a label that rolls over again. Blocks §spec:test-pattern-generation:
-bmd-signal-gen is macOS-targeted and cannot consume a macOS-26-only
-wheel. §spec:distribution. Reported in #208.
-
-**Verify:** A macOS wheel from a tagged build lists `macosx_14_0_arm64`
-in its filename (`python -m zipfile -l`, or the release artifact
-listing), not `macosx_26_0_arm64`. On macOS 14 or 15, `uv add
-pydecklink` resolves to the newest release rather than 0.3.3. The
-extension imports and `api_version()` returns on a machine at the floor.
-
 ## Future §road:future
 
 - **audio-streams**: Audio capture/playout via
