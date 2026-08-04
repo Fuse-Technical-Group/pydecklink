@@ -1,3 +1,10 @@
+## [0.6.1](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.6.0...v0.6.1) (2026-08-04)
+
+
+### Bug Fixes
+
+* **build:** pin macOS wheel deployment target to 14.0 ([#211](https://github.com/Fuse-Technical-Group/pydecklink/issues/211)) ([b520e50](https://github.com/Fuse-Technical-Group/pydecklink/commit/b520e5094cfc609755a3dcf285237a447436491b)), closes [#208](https://github.com/Fuse-Technical-Group/pydecklink/issues/208)
+
 # [0.6.0](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.5.0...v0.6.0) (2026-08-04)
 
 
