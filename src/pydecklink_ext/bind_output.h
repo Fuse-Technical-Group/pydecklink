@@ -2,6 +2,7 @@
 
 #include <nanobind/nanobind.h>
 #include "bind_device.h"
+#include "bind_enums.h"
 #include <atomic>
 #include <condition_variable>
 #include <mutex>
@@ -11,6 +12,46 @@
 #include <vector>
 
 namespace nb = nanobind;
+
+/// HDR10 static metadata defaults: Rec.2020 (ITU-R BT.2020) reference
+/// display primaries, the D65 white point, and the SMPTE ST 2086 /
+/// CTA-861.3 mastering-display and content-light-level defaults ported
+/// from bmd-signal-gen (§spec:hdr-metadata).
+namespace hdr_defaults {
+    constexpr double kRec2020RedX = 0.708;
+    constexpr double kRec2020RedY = 0.292;
+    constexpr double kRec2020GreenX = 0.170;
+    constexpr double kRec2020GreenY = 0.797;
+    constexpr double kRec2020BlueX = 0.131;
+    constexpr double kRec2020BlueY = 0.046;
+    constexpr double kD65WhiteX = 0.3127;
+    constexpr double kD65WhiteY = 0.3290;
+    constexpr double kMaxDisplayMasteringLuminance = 1000.0;   // cd/m²
+    constexpr double kMinDisplayMasteringLuminance = 0.0001;   // cd/m²
+    constexpr double kMaxCLL = 1000.0;                         // cd/m²
+    constexpr double kMaxFALL = 50.0;                          // cd/m²
+}
+
+/// HDR10 static metadata for an output frame — SMPTE ST 2086
+/// mastering-display colour volume plus CTA-861.3 content light levels.
+/// Defaults describe a Rec.2020 / PQ HDR10 signal; override any field
+/// before ``MutableFrame.set_hdr_metadata`` (§spec:hdr-metadata).
+struct HDRMetadata {
+    EOTF eotf = EOTF::PQ;
+    _BMDColorspace colorspace = bmdColorspaceRec2020;
+    double red_x = hdr_defaults::kRec2020RedX;
+    double red_y = hdr_defaults::kRec2020RedY;
+    double green_x = hdr_defaults::kRec2020GreenX;
+    double green_y = hdr_defaults::kRec2020GreenY;
+    double blue_x = hdr_defaults::kRec2020BlueX;
+    double blue_y = hdr_defaults::kRec2020BlueY;
+    double white_x = hdr_defaults::kD65WhiteX;
+    double white_y = hdr_defaults::kD65WhiteY;
+    double max_display_mastering_luminance = hdr_defaults::kMaxDisplayMasteringLuminance;
+    double min_display_mastering_luminance = hdr_defaults::kMinDisplayMasteringLuminance;
+    double max_cll = hdr_defaults::kMaxCLL;
+    double max_fall = hdr_defaults::kMaxFALL;
+};
 
 /// Tracks scheduled frame completion statistics.
 struct OutputStatus {
