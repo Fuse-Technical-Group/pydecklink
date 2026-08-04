@@ -1,3 +1,11 @@
+# [0.6.0](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.5.0...v0.6.0) (2026-08-04)
+
+
+### Features
+
+* **enums:** add EOTF and Colorspace enums for HDR metadata ([796a82a](https://github.com/Fuse-Technical-Group/pydecklink/commit/796a82af77a140fac5ddc42e1b423aad02d3f1ff))
+* **output:** attach HDR10 metadata to output frames ([13e3c70](https://github.com/Fuse-Technical-Group/pydecklink/commit/13e3c7043fda18868b8d5d2d0f2bec3502a11170))
+
 # [0.5.0](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.4.0...v0.5.0) (2026-07-10)
 
 
