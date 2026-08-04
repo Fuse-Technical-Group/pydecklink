@@ -79,6 +79,16 @@ jobs:
       - name: Build wheel (macOS/Windows)
         if: matrix.platform != 'linux'
         run: uv build --wheel
+        env:
+          # Pin the macOS platform tag instead of inheriting the runner's SDK
+          # default. When the macos-latest label rolled to macOS 26 the tag
+          # silently moved from macosx_15_0 to macosx_26_0 (0.3.4), and
+          # installers resolve an incompatible wheel to an older release
+          # rather than erroring — so consumers below the floor sat two minor
+          # versions back with no diagnostic. 14.0 is the declared floor
+          # (§spec:distribution); it moves only by editing this value.
+          # Ignored by the Windows leg, which shares this step.
+          MACOSX_DEPLOYMENT_TARGET: "14.0"
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

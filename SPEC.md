@@ -81,7 +81,7 @@ to build without the SDK on any platform.
 
 ## Distribution and Platform Support §spec:distribution
 
-*Status: not started*
+*Status: complete*
 
 ### Problem
 
