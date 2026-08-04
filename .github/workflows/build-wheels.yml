@@ -34,7 +34,7 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Full history + tags so setuptools_scm can derive the version
           # from the release tag (pyproject [project] dynamic = version).
@@ -49,11 +49,11 @@ jobs:
 
       - name: Install system deps (Windows)
         if: matrix.platform == 'windows'
-        uses: TheMrMilchmann/setup-msvc-dev@79dac248aac9d0059f86eae9d8b5bfab4e95e97c # v4.0.0
+        uses: TheMrMilchmann/setup-msvc-dev@368ef7d1ee4d1171b31d4a7f67f4d954f903f5a9 # v4.1.0
         with:
           arch: x64
 
-      - uses: astral-sh/setup-uv@d31148d669074a8d0a63714ba94f3201e7020bc3 # v8.3.0
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
 
       # setuptools_scm reads the version from git, but the manylinux container
       # has no git history. Derive it on the host (full history via
@@ -70,7 +70,7 @@ jobs:
       # linux_x86_64 platform tag to manylinux so PyPI accepts the wheel.
       - name: Build manylinux wheel (Linux)
         if: matrix.platform == 'linux'
-        uses: pypa/cibuildwheel@294735312765b09d24a2fbec22660ce817587d55 # v4.1.0
+        uses: pypa/cibuildwheel@4726cd35bb13f7bde50cf2761f2499ac7b3aa32c # v4.1.1
         with:
           output-dir: dist
         env:
