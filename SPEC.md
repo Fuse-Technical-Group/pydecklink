@@ -79,6 +79,72 @@ to build without the SDK on any platform.
 - Windows requires Visual Studio with the Desktop development with
   C++ workload (MSVC + Windows SDK for MIDL).
 
+## Distribution and Platform Support §spec:distribution
+
+*Status: not started*
+
+### Problem
+
+pydecklink publishes binary wheels to PyPI, but declares nowhere which
+platforms and OS versions they target. The macOS deployment target is
+therefore inherited from whatever the CI runner image happens to default
+to. When the `macos-latest` label moved to macOS 26, the published wheel
+tag changed from `macosx_15_0_arm64` to `macosx_26_0_arm64` with no
+change to the project.
+
+The failure is silent. Installers do not error on an incompatible wheel;
+they resolve to the last compatible release, so a consumer on an older
+macOS gets a version several releases behind, missing features, with no
+diagnostic pointing at the platform tag. Reported in #208.
+
+### Behavior
+
+Published wheels declare a platform floor that is chosen, not inherited:
+
+- macOS wheels target macOS 14 (Sonoma), independent of the runner image.
+- The floor moves only by explicit edit. Changing the runner image does
+  not move it.
+
+Why macOS 14: it is the oldest release inside Apple's current
+security-support window (26, 15, 14). That gives a rule for when the
+floor may rise — the window advances — rather than a number chosen once
+and left to rot.
+
+macOS is the only platform whose floor needed deciding. Linux wheels take
+their baseline from the manylinux build container, which pins it
+explicitly; Windows wheels carry no OS-version floor.
+
+Observably:
+
+- A macOS wheel from a tagged build carries the pinned platform tag, not
+  the runner's.
+- On a macOS release at or above the floor, installing pydecklink
+  resolves to the newest published version rather than an older one.
+- Changing the CI runner image leaves the published platform tag
+  unchanged.
+
+### Installability is not hardware availability
+
+The floor states where pydecklink installs and imports. Operating
+DeckLink hardware additionally requires a Blackmagic Desktop Video
+release supporting that macOS, which the consumer installs and which
+Blackmagic versions on its own schedule (§spec:development-environment).
+
+Why keep them separate: coupling the wheel floor to Desktop Video's own
+minimum would bind the package to a third-party support window the
+project does not control and cannot verify at build time. A consumer on
+an older macOS runs the Desktop Video release that supports it. Wheels
+install across the declared range; whether hardware is reachable is a
+runtime property the binding already reports (§spec:api-information).
+
+### Citations
+
+- §spec:development-environment — build toolchain, and the SDK-version
+  constraint the runtime caveat above refers to.
+- §spec:api-information — reports the running Desktop Video runtime, the
+  runtime half of the install/operate split.
+- Reported in #208.
+
 ## Binding Technology §spec:binding-technology
 
 *Status: complete*
