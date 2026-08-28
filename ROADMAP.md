@@ -24,13 +24,13 @@ address matches the configured one.
 
 ## Sub-frame phase tuning §road:config-reference-input-timing-offset
 
-Add `ConfigInt.ReferenceInputTimingOffset` to `bind_enums.cpp` and the
-`.pyi` stub, and a `--phase-sweep` mode to
-`examples/cuda_loopback_latency.py` that walks the timing offset across
-one frame period in configurable steps and reports RTT at each step.
-Requires REF IN wired to an external reference for the sweep to have
-an anchor; the SDK does not expose locking the output PLL to the SDI
-input clock. §spec:latency-characterization.
+Add a `--phase-sweep` mode to `examples/cuda_loopback_latency.py` that
+walks the timing offset across one frame period in configurable steps
+and reports RTT at each step. The `ConfigurationID.ConfigReferenceInputTimingOffset`
+and `AttributeID.SupportsFullFrameReferenceInputTimingOffset` enums it
+drives are already bound (9c66a02). Requires REF IN wired to an external
+reference for the sweep to have an anchor; the SDK does not expose locking
+the output PLL to the SDI input clock. §spec:latency-characterization.
 
 **Verify:** With REF IN connected to an external reference shared with
 the upstream source, run `python examples/cuda_loopback_latency.py
