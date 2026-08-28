@@ -1,3 +1,10 @@
+# [0.7.0](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.6.1...v0.7.0) (2026-08-28)
+
+
+### Features
+
+* **ethernet:** reach a DeckLink IP's address, PTP role and link state ([0a0c5e7](https://github.com/Fuse-Technical-Group/pydecklink/commit/0a0c5e782661246e5917098944819eda860f48d6))
+
 ## [0.6.1](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.6.0...v0.6.1) (2026-08-04)
 
 
