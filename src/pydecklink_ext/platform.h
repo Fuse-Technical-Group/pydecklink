@@ -69,6 +69,28 @@ inline IDeckLinkAPIInformation* CreateDeckLinkAPIInformationInstance() {
     return info;
 }
 
+// A DeckLink string the caller owns for the length of one call, freed on
+// scope exit. `SetString` copies what it is handed, so the SDK never holds
+// this pointer (§spec:ethernet).
+class DeckLinkStringFromStd {
+   public:
+    explicit DeckLinkStringFromStd(const std::string& text) {
+        int wlen = ::MultiByteToWideChar(CP_UTF8, 0, text.data(),
+                                         static_cast<int>(text.size()), nullptr, 0);
+        std::wstring wide(static_cast<size_t>(wlen), L'\0');
+        ::MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.size()),
+                              wide.data(), wlen);
+        value_ = ::SysAllocStringLen(wide.data(), static_cast<UINT>(wlen));
+    }
+    ~DeckLinkStringFromStd() { if (value_) ::SysFreeString(value_); }
+    DeckLinkStringFromStd(const DeckLinkStringFromStd&) = delete;
+    DeckLinkStringFromStd& operator=(const DeckLinkStringFromStd&) = delete;
+    dlstring_t get() const { return value_; }
+
+   private:
+    BSTR value_ = nullptr;
+};
+
 // DeckLink string type on Windows is BSTR (wide string).
 // Helper to convert BSTR -> std::string and free it.
 inline std::string DeckLinkStringToStd(BSTR bstr) {
@@ -97,6 +119,24 @@ using dlbool_t = bool;
 
 // On macOS, CreateDeckLinkIteratorInstance is provided by
 // DeckLinkAPIDispatch.cpp — no wrapper needed.
+
+// See the Windows definition: one call's worth of DeckLink string,
+// released on scope exit (§spec:ethernet).
+class DeckLinkStringFromStd {
+   public:
+    explicit DeckLinkStringFromStd(const std::string& text)
+        : value_(CFStringCreateWithBytes(kCFAllocatorDefault,
+                                         reinterpret_cast<const UInt8*>(text.data()),
+                                         static_cast<CFIndex>(text.size()),
+                                         kCFStringEncodingUTF8, false)) {}
+    ~DeckLinkStringFromStd() { if (value_) CFRelease(value_); }
+    DeckLinkStringFromStd(const DeckLinkStringFromStd&) = delete;
+    DeckLinkStringFromStd& operator=(const DeckLinkStringFromStd&) = delete;
+    dlstring_t get() const { return value_; }
+
+   private:
+    CFStringRef value_ = nullptr;
+};
 
 // On macOS, DeckLink strings are CFStringRef.  Convert to std::string
 // and release the CF object.
@@ -131,6 +171,20 @@ using dlbool_t = bool;
 
 // On Linux, CreateDeckLinkIteratorInstance is provided by
 // DeckLinkAPIDispatch.cpp — no wrapper needed.
+
+// See the Windows definition. On Linux a DeckLink string is a plain
+// `const char*`, so this borrows the caller's buffer and allocates nothing
+// (§spec:ethernet).
+class DeckLinkStringFromStd {
+   public:
+    explicit DeckLinkStringFromStd(const std::string& text) : value_(text) {}
+    DeckLinkStringFromStd(const DeckLinkStringFromStd&) = delete;
+    DeckLinkStringFromStd& operator=(const DeckLinkStringFromStd&) = delete;
+    dlstring_t get() const { return value_.c_str(); }
+
+   private:
+    std::string value_;
+};
 
 // On Linux, DeckLink strings are const char* allocated with malloc.
 inline std::string DeckLinkStringToStd(const char* str) {

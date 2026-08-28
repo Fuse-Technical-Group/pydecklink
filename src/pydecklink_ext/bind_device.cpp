@@ -277,6 +277,22 @@ nb::class_<Device> init_decklink_device(nb::module_& m) {
             },
             nb::arg("status_id"),
             "Get an integer runtime status value via IDeckLinkStatus.")
+        .def("get_status_string",
+            [](Device& self, _BMDDeckLinkStatusID statusID) -> std::string {
+                ComPtr<IDeckLinkStatus> status;
+                if (self.dl->QueryInterface(IID_IDeckLinkStatus, (void**)status.put()) != S_OK)
+                    throw std::runtime_error("Device does not support status");
+                dlstring_t value = nullptr;
+                HRESULT hr = status->GetString(statusID, &value);
+                if (hr != S_OK)
+                    throw std::runtime_error("GetString failed (HRESULT " + std::to_string(hr) + ")");
+                // Takes ownership and frees on return.
+                return DeckLinkStringToStd(value);
+            },
+            nb::arg("status_id"),
+            "Get a string runtime status value via IDeckLinkStatus. The "
+            "Ethernet addresses a DeckLink IP resolves are strings, not "
+            "integers (§spec:ethernet).")
         .def_prop_ro("reference_status",
             [](Device& self) -> ReferenceStatus {
                 // Gate on HasReferenceInput: devices without a REF BNC
