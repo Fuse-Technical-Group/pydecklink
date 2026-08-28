@@ -592,10 +592,13 @@ Wraps `IDeckLinkConfiguration`:
 - `device.get_config_flag(flag) → bool`
 - `device.set_config_int(setting, value)`
 - `device.get_config_int(setting) → int`
+- `device.set_config_string(setting, value)`
+- `device.get_config_string(setting) → str`
 - `device.write_config()` — persists changes via
   `WriteConfigurationToPreferences`.
 
-Used for SDI mode selection (4:4:4 vs 4:2:2), connector mapping, etc.
+Used for SDI mode selection (4:4:4 vs 4:2:2), connector mapping, the
+Ethernet settings of a DeckLink IP (§spec:ethernet), etc.
 
 The `Device` holds one `IDeckLinkConfiguration` for its lifetime, shared
 by every config accessor. DeckLink applies `SetFlag` / `SetInt` to the
@@ -603,6 +606,37 @@ live session only while that interface is retained; a transient
 per-call interface discards the change the instant it is released, so
 runtime configuration silently has no effect. The interface is acquired
 lazily on first use.
+
+### Ethernet §spec:ethernet
+
+A DeckLink IP carries its own IP stack. The host sees **no network device**
+for the card's media port — no `ip addr`, no `ethtool`, nothing in
+`/sys/class/net` — so the address, the PTP role and the output multicast
+groups are set through `IDeckLinkConfiguration` or not at all. That is why
+these IDs are bound rather than left to a caller: an unbound value is not
+merely undocumented, it is unreachable, because nanobind refuses a raw
+integer naming no enum member.
+
+**The addresses are strings, and the link state is an integer.** The SDK
+groups them so: `Network Strings` for the local address, the subnet mask,
+the gateway, the DNS servers and the video, audio and ancillary output
+groups; `Network Integers` for the PTP domain, priorities and announce
+interval; `Network Flags` for DHCP, `PTPFollowerOnly` and
+`PTPUseUDPEncapsulation`. A `SetInt` on an address answers `E_INVALIDARG`,
+which reads as an unsupported device rather than as the wrong accessor —
+hence `set_config_string` and `get_config_string`, and `get_status_string`
+beside them.
+
+`StatusID.EthernetLink` reports one of `bmdEthernetLinkState`:
+`Disconnected`, `ConnectedUnbound` or `ConnectedBound`. The resolved
+address, mask, gateway and grandmaster identity are **status strings and
+are unavailable while the link is down** — `GetString` answers `S_FALSE`
+rather than an empty string, so a reader distinguishes *not yet* from
+*none*. The configured address is readable at any time; the two differ
+whenever DHCP is on or the link is down, so a diagnostic reports both.
+
+`PTPFollowerOnly` is what keeps the card out of the grandmaster election
+where something else on the fabric is the reference.
 
 ### Enums
 
@@ -624,6 +658,8 @@ Bound from DeckLink SDK types via `nb::enum_<>`:
 | `ProfileID` | `BMDProfileID` | Connector profile selection |
 | `DuplexMode` | `BMDDuplexMode` | Full, half, simplex, inactive |
 | `LinkConfiguration` | `BMDLinkConfiguration` | Single, dual, quad link (§spec:sdi-link-configuration) |
+| `ConfigurationID` | `BMDDeckLinkConfigurationID` | Includes the Ethernet and PTP settings of a DeckLink IP (§spec:ethernet) |
+| `StatusID` | `BMDDeckLinkStatusID` | Reference signal, and the Ethernet link and addresses (§spec:ethernet) |
 
 ### Format Metadata
 

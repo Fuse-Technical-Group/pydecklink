@@ -342,6 +342,38 @@ class ConfigurationID(enum.Enum):
 
     ConfigSwapSerialRxTx = 1936945780
 
+    ConfigEthernetUseDHCP = 1145586512
+
+    ConfigEthernetStaticLocalIPAddress = 1853057392
+
+    ConfigEthernetStaticSubnetMask = 1853059949
+
+    ConfigEthernetStaticGatewayIPAddress = 1853056887
+
+    ConfigEthernetStaticPrimaryDNS = 1853059172
+
+    ConfigEthernetStaticSecondaryDNS = 1853059940
+
+    ConfigEthernetVideoOutputAddress = 1852793206
+
+    ConfigEthernetAudioOutputAddress = 1852793185
+
+    ConfigEthernetAncillaryOutputAddress = 1852793153
+
+    ConfigEthernetAudioOutputChannelOrder = 1667326831
+
+    ConfigEthernetPTPFollowerOnly = 1347702886
+
+    ConfigEthernetPTPUseUDPEncapsulation = 1347702869
+
+    ConfigEthernetPTPDomain = 1347702852
+
+    ConfigEthernetPTPPriority1 = 1347702833
+
+    ConfigEthernetPTPPriority2 = 1347702834
+
+    ConfigEthernetPTPLogAnnounceInterval = 1347702849
+
 class AttributeID(enum.Enum):
     SupportsInternalKeying = 1801812329
 
@@ -503,6 +535,30 @@ class StatusID(enum.Enum):
 
     ReferenceSignalFlags = 1919247974
 
+    EthernetLink = 1936026739
+
+    EthernetLinkMbps = 1936028528
+
+    EthernetLocalIPAddress = 1936025968
+
+    EthernetSubnetMask = 1936028525
+
+    EthernetGatewayIPAddress = 1936025463
+
+    EthernetPrimaryDNS = 1936027748
+
+    EthernetSecondaryDNS = 1936028516
+
+    EthernetPTPGrandmasterIdentity = 1936746852
+
+    EthernetVideoOutputAddress = 1936679286
+
+    EthernetAudioOutputAddress = 1936679265
+
+    EthernetAncillaryOutputAddress = 1936679233
+
+    EthernetAudioInputChannelOrder = 1935762287
+
 class DeviceInfo:
     @property
     def model_name(self) -> str: ...
@@ -562,6 +618,11 @@ class Device:
 
     def get_status_int(self, status_id: StatusID) -> int:
         """Get an integer runtime status value via IDeckLinkStatus."""
+
+    def get_status_string(self, status_id: StatusID) -> str:
+        """
+        Get a string runtime status value via IDeckLinkStatus. The Ethernet addresses a DeckLink IP resolves are strings, not integers (§spec:ethernet).
+        """
 
     @property
     def reference_status(self) -> ReferenceStatus:
@@ -647,6 +708,14 @@ class Device:
 
     def get_config_int(self, setting: ConfigurationID) -> int:
         """Get an integer configuration value."""
+
+    def set_config_string(self, setting: ConfigurationID, value: str) -> None:
+        """
+        Set a string configuration value. A DeckLink IP's addresses are strings in dotted-quad form, not packed integers (§spec:ethernet).
+        """
+
+    def get_config_string(self, setting: ConfigurationID) -> str:
+        """Get a string configuration value."""
 
     def write_config(self) -> None:
         """Persist configuration changes to preferences."""

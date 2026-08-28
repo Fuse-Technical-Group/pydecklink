@@ -412,6 +412,28 @@ void init_decklink_output(nb::module_& m, nb::class_<Device>& device) {
         nb::arg("setting"),
         "Get an integer configuration value.");
 
+    device.def("set_config_string",
+        [](Device& self, _BMDDeckLinkConfigurationID cfgID, const std::string& value) {
+            DeckLinkStringFromStd held(value);
+            HRESULT hr = self.config()->SetString(cfgID, held.get());
+            if (hr != S_OK)
+                throw std::runtime_error("SetString failed (HRESULT " + std::to_string(hr) + ")");
+        },
+        nb::arg("setting"), nb::arg("value"),
+        "Set a string configuration value. A DeckLink IP's addresses are "
+        "strings in dotted-quad form, not packed integers (§spec:ethernet).");
+
+    device.def("get_config_string",
+        [](Device& self, _BMDDeckLinkConfigurationID cfgID) -> std::string {
+            dlstring_t value = nullptr;
+            HRESULT hr = self.config()->GetString(cfgID, &value);
+            if (hr != S_OK)
+                throw std::runtime_error("GetString failed (HRESULT " + std::to_string(hr) + ")");
+            return DeckLinkStringToStd(value);
+        },
+        nb::arg("setting"),
+        "Get a string configuration value.");
+
     device.def("write_config",
         [](Device& self) {
             HRESULT hr = self.config()->WriteConfigurationToPreferences();
