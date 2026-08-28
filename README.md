@@ -1,7 +1,8 @@
 # pydecklink
 
 Python bindings for the [Blackmagic DeckLink SDK](https://www.blackmagicdesign.com/developer/product/capture-and-playback),
-exposing the capture and scheduled playback APIs via CPU buffers (numpy).
+exposing the capture and scheduled playback APIs via CPU buffers (numpy),
+and the network surface of the DeckLink IP cards that carry SMPTE ST 2110.
 
 ## Requirements
 
@@ -83,12 +84,23 @@ marker, so editors and `mypy` see the full typed surface. Key entry points:
 - *Zero-copy passthrough*: `schedule_capture_frame(...)` forwards a captured
   frame straight to output with no memcpy.
 
+**DeckLink IP** — the card runs its own IP stack, so the host has no network
+device for its media port and the address is set through the SDK or not at
+all. `ConfigurationID.ConfigEthernet*` covers the address, subnet, gateway
+and the multicast group each stream sends to; `ConfigurationID.ConfigEthernetPTP*`
+covers the PTP domain, priorities and `FollowerOnly`. `StatusID.Ethernet*`
+reports what the card resolved and negotiated. Addresses are dotted-quad
+**strings** — use `set_config_string` / `get_config_string` and
+`get_status_string`, since `set_config_int` on one answers `E_INVALIDARG`.
+
 **Frames** — `CaptureFrame`, `CaptureFrameRef` (zero-copy), and `MutableFrame`
 expose pixel data as a numpy array via `.data`, alongside `.width`,
 `.height`, `.row_bytes`.
 
 **Enums** — `DisplayMode`, `PixelFormat`, `VideoConnection`, `VideoInputFlag`,
-`VideoOutputFlag`, `FieldDominance`, and related SDK constants.
+`VideoOutputFlag`, `FieldDominance`, and the `ConfigurationID`, `AttributeID`
+and `StatusID` identifier sets the config, attribute and status accessors
+take.
 
 **Custom memory** — `VideoBufferAllocator` / `VideoBufferAllocatorProvider`
 back capture and playback with caller-owned buffers (e.g. CUDA pinned memory)
