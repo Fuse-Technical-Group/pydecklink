@@ -2,6 +2,26 @@
 
 Derived from [SPEC.md](SPEC.md). Sections are in build-dependency order.
 
+## DeckLink IP as an ST 2110 far end §road:decklink-ip-streams
+
+The address, the PTP role and the output groups are reachable now
+(§spec:ethernet), and the card on the bench is configured static on the
+media fabric as a PTP follower. What is not delivered is the stream half:
+choosing the video output group per device, reading the groups a receiver
+is bound to, and the SDP that names them — so a peer can be pointed at
+this card without the Desktop Video GUI.
+
+**Blocked on cabling, not on code.** The bench card reports
+`EthernetLink: Disconnected` at 0 Mbps on every one of its eight
+sub-devices, while the ConnectX-6 port facing it carries a 100G link with
+zero packets received. One of those two readings is of a wire that is not
+there. Until the card's own port reports `ConnectedUnbound` or better,
+nothing here can be measured.
+
+**Verify:** With the link up, a `packet_engine` receive stream on the
+ConnectX-6 port digests a flow this card sends, and the card's status
+address matches the configured one.
+
 ## Sub-frame phase tuning §road:config-reference-input-timing-offset
 
 Add `ConfigInt.ReferenceInputTimingOffset` to `bind_enums.cpp` and the

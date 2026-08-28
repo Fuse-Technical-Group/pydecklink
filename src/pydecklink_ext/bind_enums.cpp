@@ -215,7 +215,44 @@ void init_decklink_enums(nb::module_& m) {
         .value("ConfigVideoInputConnection", bmdDeckLinkConfigVideoInputConnection)
         .value("ConfigCapturePassThroughMode", bmdDeckLinkConfigCapturePassThroughMode)
         // Serial port
-        .value("ConfigSwapSerialRxTx", bmdDeckLinkConfigSwapSerialRxTx);
+        .value("ConfigSwapSerialRxTx", bmdDeckLinkConfigSwapSerialRxTx)
+        // -- Ethernet, on a DeckLink IP (§spec:ethernet) --
+        // The card carries its own IP stack: the host sees no network
+        // device for the media port, so an address is set here or not at
+        // all. Every address below is a *string* in dotted-quad form and is
+        // reached with set_config_string / get_config_string; SetInt on one
+        // answers E_INVALIDARG.
+        .value("ConfigEthernetUseDHCP", bmdDeckLinkConfigEthernetUseDHCP)
+        .value("ConfigEthernetStaticLocalIPAddress",
+               bmdDeckLinkConfigEthernetStaticLocalIPAddress)
+        .value("ConfigEthernetStaticSubnetMask",
+               bmdDeckLinkConfigEthernetStaticSubnetMask)
+        .value("ConfigEthernetStaticGatewayIPAddress",
+               bmdDeckLinkConfigEthernetStaticGatewayIPAddress)
+        .value("ConfigEthernetStaticPrimaryDNS",
+               bmdDeckLinkConfigEthernetStaticPrimaryDNS)
+        .value("ConfigEthernetStaticSecondaryDNS",
+               bmdDeckLinkConfigEthernetStaticSecondaryDNS)
+        // Where this device's own essence is sent.
+        .value("ConfigEthernetVideoOutputAddress",
+               bmdDeckLinkConfigEthernetVideoOutputAddress)
+        .value("ConfigEthernetAudioOutputAddress",
+               bmdDeckLinkConfigEthernetAudioOutputAddress)
+        .value("ConfigEthernetAncillaryOutputAddress",
+               bmdDeckLinkConfigEthernetAncillaryOutputAddress)
+        .value("ConfigEthernetAudioOutputChannelOrder",
+               bmdDeckLinkConfigEthernetAudioOutputChannelOrder)
+        // PTP. `FollowerOnly` is what keeps the card off the grandmaster
+        // election when something else on the fabric is the reference.
+        .value("ConfigEthernetPTPFollowerOnly",
+               bmdDeckLinkConfigEthernetPTPFollowerOnly)
+        .value("ConfigEthernetPTPUseUDPEncapsulation",
+               bmdDeckLinkConfigEthernetPTPUseUDPEncapsulation)
+        .value("ConfigEthernetPTPDomain", bmdDeckLinkConfigEthernetPTPDomain)
+        .value("ConfigEthernetPTPPriority1", bmdDeckLinkConfigEthernetPTPPriority1)
+        .value("ConfigEthernetPTPPriority2", bmdDeckLinkConfigEthernetPTPPriority2)
+        .value("ConfigEthernetPTPLogAnnounceInterval",
+               bmdDeckLinkConfigEthernetPTPLogAnnounceInterval);
 
     // -- BMDDeckLinkAttributeID (subset relevant to phase 1) --
     nb::enum_<_BMDDeckLinkAttributeID>(m, "AttributeID")
@@ -339,9 +376,29 @@ void init_decklink_enums(nb::module_& m) {
     // -- BMDDeckLinkStatusID (reference-signal subset) --
     // Runtime hardware state read via IDeckLinkStatus (§spec:5.11). Only
     // the reference-signal members are bound; the rest of the enum is
-    // reachable through get_status_flag / get_status_int by raw value.
     nb::enum_<_BMDDeckLinkStatusID>(m, "StatusID")
         .value("ReferenceSignalLocked", bmdDeckLinkStatusReferenceSignalLocked)
         .value("ReferenceSignalMode", bmdDeckLinkStatusReferenceSignalMode)
-        .value("ReferenceSignalFlags", bmdDeckLinkStatusReferenceSignalFlags);
+        .value("ReferenceSignalFlags", bmdDeckLinkStatusReferenceSignalFlags)
+        // -- Ethernet, on a DeckLink IP (§spec:ethernet) --
+        // What the card negotiated and what it resolved, as against what
+        // the configuration asked for. The two differ while DHCP is on,
+        // and while a link is down.
+        .value("EthernetLink", bmdDeckLinkStatusEthernetLink)
+        .value("EthernetLinkMbps", bmdDeckLinkStatusEthernetLinkMbps)
+        .value("EthernetLocalIPAddress", bmdDeckLinkStatusEthernetLocalIPAddress)
+        .value("EthernetSubnetMask", bmdDeckLinkStatusEthernetSubnetMask)
+        .value("EthernetGatewayIPAddress", bmdDeckLinkStatusEthernetGatewayIPAddress)
+        .value("EthernetPrimaryDNS", bmdDeckLinkStatusEthernetPrimaryDNS)
+        .value("EthernetSecondaryDNS", bmdDeckLinkStatusEthernetSecondaryDNS)
+        .value("EthernetPTPGrandmasterIdentity",
+               bmdDeckLinkStatusEthernetPTPGrandmasterIdentity)
+        .value("EthernetVideoOutputAddress",
+               bmdDeckLinkStatusEthernetVideoOutputAddress)
+        .value("EthernetAudioOutputAddress",
+               bmdDeckLinkStatusEthernetAudioOutputAddress)
+        .value("EthernetAncillaryOutputAddress",
+               bmdDeckLinkStatusEthernetAncillaryOutputAddress)
+        .value("EthernetAudioInputChannelOrder",
+               bmdDeckLinkStatusEthernetAudioInputChannelOrder);
 }
