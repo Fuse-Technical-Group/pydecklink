@@ -404,18 +404,24 @@ Module-level enumeration:
 
 ### Display Modes
 
-`IDeckLinkDisplayMode` properties exposed as a Python object:
+`IDeckLinkDisplayMode` properties exposed as a Python object. The record
+is `DisplayModeInfo` and the mode itself is the `DisplayMode` enum; the
+two were named the other way round here, which left the enum's real name
+unwritten and the record's fictional:
 
-- `DisplayMode.mode → DisplayModeEnum` — the `BMDDisplayMode` value.
-- `DisplayMode.name → str`
-- `DisplayMode.width → int`
-- `DisplayMode.height → int`
-- `DisplayMode.frame_rate → tuple[int, int]` — (duration, timescale).
-- `DisplayMode.field_dominance → FieldDominance`
+- `DisplayModeInfo.mode → DisplayMode` — the `BMDDisplayMode` value.
+- `DisplayModeInfo.name → str`
+- `DisplayModeInfo.width → int`
+- `DisplayModeInfo.height → int`
+- `DisplayModeInfo.frame_rate → tuple[int, int]` — (duration, timescale).
+- `DisplayModeInfo.field_dominance → FieldDominance`
+- `DisplayModeInfo.flags → int` — a bitmask of `DisplayModeFlag` values,
+  handed back raw rather than as the enum.
 
 Device-level queries:
 
-- `device.get_display_mode_iterator() → Iterator[DisplayMode]`
+- `device.list_output_modes() → list[DisplayModeInfo]`
+- `device.get_display_mode(mode) → DisplayModeInfo`
 - `device.does_support_video_mode(mode, pixel_format, direction) → bool`
 
 ### Capture §spec:capture
@@ -642,24 +648,41 @@ where something else on the fabric is the reference.
 
 Bound from DeckLink SDK types via `nb::enum_<>`:
 
+One Python name per SDK type, and the whole of what `bind_enums.cpp`
+binds — a name absent here is a name a caller cannot reach, because
+nanobind refuses a raw value naming no member.
+
 | Python name | SDK type | Notes |
 |---|---|---|
-| `DisplayModeEnum` | `BMDDisplayMode` | SD through 8K |
+| `DisplayMode` | `BMDDisplayMode` | SD through 8K |
+| `DisplayModeFlag` | `BMDDisplayModeFlags` | 3D, colourspace support |
 | `PixelFormat` | `BMDPixelFormat` | YUV 8/10-bit, RGB 8/10/12-bit |
+| `Colorspace` | `BMDColorspace` | Rec.601, Rec.709, Rec.2020 |
+| `EOTF` | `EOTF` | SDR, PQ, HLG (§spec:hdr-metadata) |
 | `VideoInputFlag` | `BMDVideoInputFlags` | Format detection, etc. |
 | `VideoOutputFlag` | `BMDVideoOutputFlags` | VANC, RP188, etc. |
+| `VideoOutputConversionMode` | `BMDVideoOutputConversionMode` | Letterbox, anamorphic, centre cut |
+| `SupportedVideoModeFlag` | `BMDSupportedVideoModeFlags` | What a mode query asks about |
+| `VideoConnection` | `BMDVideoConnection` | SDI, HDMI, optical, Ethernet |
+| `VideoIOSupport` | `BMDVideoIOSupport` | Capture, playback, or both |
 | `FieldDominance` | `BMDFieldDominance` | Progressive, upper, lower |
 | `FrameFlag` | `BMDFrameFlags` | HDR, colorspace, no signal |
 | `DetectedInputFormat` | `BMDDetectedVideoInputFormatFlags` | YCbCr/RGB, bit depth |
 | `OutputFrameResult` | `BMDOutputFrameCompletionResult` | Completed, late, dropped |
-| `ConfigFlag` | `BMDDeckLinkConfigurationID` | Flag-type config IDs |
-| `ConfigInt` | `BMDDeckLinkConfigurationID` | Int-type config IDs |
-| `DeviceAttribute` | `BMDDeckLinkAttributeID` | Capability query IDs |
+| `ConfigurationID` | `BMDDeckLinkConfigurationID` | Every configuration ID, whatever its type — including the Ethernet and PTP settings of a DeckLink IP (§spec:ethernet) |
+| `AttributeID` | `BMDDeckLinkAttributeID` | Capability query IDs |
+| `StatusID` | `BMDDeckLinkStatusID` | Reference signal, and the Ethernet link and addresses (§spec:ethernet) |
 | `ProfileID` | `BMDProfileID` | Connector profile selection |
 | `DuplexMode` | `BMDDuplexMode` | Full, half, simplex, inactive |
 | `LinkConfiguration` | `BMDLinkConfiguration` | Single, dual, quad link (§spec:sdi-link-configuration) |
-| `ConfigurationID` | `BMDDeckLinkConfigurationID` | Includes the Ethernet and PTP settings of a DeckLink IP (§spec:ethernet) |
-| `StatusID` | `BMDDeckLinkStatusID` | Reference signal, and the Ethernet link and addresses (§spec:ethernet) |
+
+**One enum carries every configuration ID, not one per value type.**
+`ConfigFlag` and `ConfigInt` were named here and neither exists: the
+binding is `ConfigurationID` throughout, and which of `set_config_flag`,
+`set_config_int` or `set_config_string` a given ID takes is the SDK's
+grouping rather than a separate Python type (§spec:configuration,
+§spec:ethernet). `DeviceAttribute` and `DisplayModeEnum` were the same
+kind of error, for `AttributeID` and `DisplayMode`.
 
 ### Format Metadata
 
@@ -1803,10 +1826,10 @@ The benchmark is an example, not a public API. It surfaces small
 additions justified by the same need any latency-sensitive consumer
 faces:
 
-- `ConfigInt.ReferenceInputTimingOffset` — sub-frame timing offset
+- `ConfigurationID.ConfigReferenceInputTimingOffset` — sub-frame timing offset
   between REF and output VBI. Without it, consumers pass raw FourCC
   values to `set_config_int`.
-- `AttributeFlag.SupportsFullFrameReferenceInputTimingOffset` —
+- `AttributeID.SupportsFullFrameReferenceInputTimingOffset` —
   capability flag gating the supported range of the offset above.
   When true, the offset accepts ± half the total pixels in the
   video frame; when false (or absent), the offset is limited to
