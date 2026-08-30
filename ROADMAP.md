@@ -79,8 +79,9 @@ capture and that the accessor exists on both `CaptureFrame` and
 ## Hoist packing to a shared library §road:hoist-packing
 
 Move `pydecklink.packing`'s layout table and its pack/unpack
-implementations into a standalone, array-namespace-generic package, and
-consume it here — keeping `_FORMATS`, the map from `PixelFormat` to a
+implementations into `Fuse-Technical-Group/pypixelpack` — a standalone,
+array-namespace-generic package, sibling to this repository and
+pyst2110 — and consume it here — keeping `_FORMATS`, the map from `PixelFormat` to a
 layout name, which is the only Blackmagic-specific thing in the module.
 §spec:pixel-packing.
 
@@ -111,6 +112,21 @@ Two things to settle in the work: whether `2vuy` gains a layout entry, as
 pack today; and whether `r10b`, `r10l`, `r12b` and `r12l` are standards
 or SDK spellings, which is unresolved and does not block the cut — an
 ambiguous layout costs nothing in a string-keyed table.
+
+**Prior art, checked 2026-08-29.** Nothing on PyPI packs these layouts:
+`pypixelpack`, `v210`, `pyv210`, `pixelpack`, `pixel-packing` and `uyvy`
+are all unregistered, and imagecodecs, PyAV, vidgear and pyffmpeg name
+none of these formats. The closest are libp2p, a C++ template library
+with a special-cased v210, and FFmpeg's own v210/r210 codecs reachable
+through PyAV — which operate on `AVFrame` and so require a copy in and
+out, defeating in-place packing on a device and unable to touch a torch
+tensor. Neither is a usable dependency here; both are worth reading as a
+byte-layout oracle for the tests, and FFmpeg's format list would settle
+whether `r10b`, `r10l`, `r12b` and `r12l` are standards.
+
+The layouts are well documented elsewhere, so this is a re-implementation
+rather than new ground. What does not exist is a pure-array,
+namespace-generic one, which is what the device path needs.
 
 **Verify:** `pack`/`unpack` keep their surface and their
 `unpack(pack(x)) == x` property for every format; importing
