@@ -134,6 +134,24 @@ The layouts are well documented elsewhere, so this is a re-implementation
 rather than new ground. What does not exist is a pure-array,
 namespace-generic one, which is what the device path needs.
 
+### Consume pypixelpack's layouts §road:consume-pypixelpack
+
+Replace every `_pack_*`/`_unpack_*` implementation and the `_LAYOUT`
+table in `pydecklink/packing.py` with imports from `pypixelpack`,
+keeping `_FORMATS` (the `PixelFormat` → layout-name map) and the
+`pack`/`unpack` surface unchanged; pin pypixelpack by git tag as
+display-patterns is pinned by its consumers. §spec:pixel-packing.
+Blocked — pypixelpack has no release yet (`§road:first-release`
+there). Unblocked when v0.1.0 is tagged.
+
+### Record the moved boundary §road:packing-spec-boundary
+
+Rewrite §spec:pixel-packing so it describes what this repository still
+holds — the enum map and the surface — and points at pypixelpack for
+the layouts, replacing the "keyed entirely to `PixelFormat`" and
+co-location rationale that no longer describe the module.
+§spec:pixel-packing. Depends on §road:consume-pypixelpack.
+
 **Verify:** `pack`/`unpack` keep their surface and their
 `unpack(pack(x)) == x` property for every format; importing
 `pydecklink` still pulls no packing code; the same shared source packs
