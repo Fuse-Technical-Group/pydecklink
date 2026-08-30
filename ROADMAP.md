@@ -76,6 +76,49 @@ Without hardware: assert `hdr_metadata` returns `None` for a plain SDR
 capture and that the accessor exists on both `CaptureFrame` and
 `CaptureFrameRef`.
 
+## Hoist packing to a shared library §road:hoist-packing
+
+Move `pydecklink.packing`'s layout table and its pack/unpack
+implementations into a standalone, array-namespace-generic package, and
+consume it here — keeping `_FORMATS`, the map from `PixelFormat` to a
+layout name, which is the only Blackmagic-specific thing in the module.
+§spec:pixel-packing.
+
+**The condition §spec:pixel-packing set has arrived.** That section
+co-locates packing "until packing earns an independent release
+lifecycle (per YAGNI)". A second consumer now exists that cannot use
+this implementation: backlit_molecule converts RGB→V210 on the GPU and
+DMAs the packed result into a pinned SDK frame
+(`§road:shared-pixel-packing` there). Routing that through a NumPy host
+packer would drag an uncompressed frame back across PCIe every frame and
+defeat its `torch.compile` fusion, so it keeps its own copy today — the
+strand-reusable-code outcome this section exists to prevent, arrived at
+from the other direction.
+
+**The skew argument is weaker than the section states.** Packing is not
+"keyed entirely to `PixelFormat`": `_LAYOUT` and every pack/unpack are
+keyed on plain strings, and only `_FORMATS` touches the enum. Keeping
+that dict here leaves the enum and its map in one package, so there is
+no version skew to invite.
+
+Scope is every layout, not v210 alone. `r210` is uncompressed 10-bit RGB
+4:4:4 — a QuickTime FourCC FFmpeg also reads — so an RGB 4:4:4 SDI
+consumer needs a device-side packer for it exactly as it does for v210,
+and hoisting one format would reopen this on the next.
+
+Two things to settle in the work: whether `2vuy` gains a layout entry, as
+`PixelFormatType` names an 8-bit 4:2:2 format that neither codebase can
+pack today; and whether `r10b`, `r10l`, `r12b` and `r12l` are standards
+or SDK spellings, which is unresolved and does not block the cut — an
+ambiguous layout costs nothing in a string-keyed table.
+
+**Verify:** `pack`/`unpack` keep their surface and their
+`unpack(pack(x)) == x` property for every format; importing
+`pydecklink` still pulls no packing code; the same shared source packs
+byte-identically on numpy here and on torch in backlit_molecule; and
+§spec:pixel-packing records the moved boundary rather than describing a
+module that no longer holds the layouts.
+
 ## Future §road:future
 
 - **audio-streams**: Audio capture/playout via
