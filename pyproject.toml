@@ -34,10 +34,10 @@ test = ["pytest>=8", "psutil>=5.9"]
 cuda-examples = ["cuda-python>=12"]
 
 [tool.uv.sources]
-# Pinned by commit (v1.0.0): a tag can be moved by any collaborator and
+# Pinned by commit (v1.2.0): a tag can be moved by any collaborator and
 # uv.lock is not committed here, so only a hash makes the pin immutable.
 # Rationale in SPEC.md §spec:pixel-packing.
-pypixelpack = { git = "https://github.com/Fuse-Technical-Group/pypixelpack.git", rev = "4b3e4c2135adbc16220f512b2ea50dd98f02190a" }
+pypixelpack = { git = "https://github.com/Fuse-Technical-Group/pypixelpack.git", rev = "8b6d064a5dc41f086d01658eaf7c2b878afb7611" }
 
 [dependency-groups]
 dev = ["pytest>=8", "mypy>=1.13", "psutil>=5.9"]
