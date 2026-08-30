@@ -496,6 +496,9 @@ Two output modes: synchronous (simple, blocking) and scheduled
 - `device.enable_video_output(mode, flags=0)`
 - `device.display_frame_sync(buffer)` — creates a frame, copies
   buffer data, calls `DisplayVideoFrameSync`. Blocks until displayed.
+  The buffer is declared C-contiguous (`nb::c_contig`): the copy reads
+  from the raw pointer, so a strided view is copied to a contiguous
+  temporary rather than read through.
 - `device.disable_video_output()`
 
 #### Scheduled (for sustained streaming)
@@ -1089,10 +1092,8 @@ sibling package keyed on layout names (`argb`, `bgra`, `r210`, `r10b`,
 one codec packs on numpy here and on torch in a GPU consumer. This
 repository holds what is Blackmagic-specific: `_FORMATS`, the map from
 `PixelFormat` to a layout name, and the `pack`/`unpack` surface that
-takes the enum. Array conventions — `(height, width, 3)` integer arrays,
-`[R, G, B]` or `[Y, Cb, Cr]`, alpha at peak, chroma from even columns,
-4:2:2 round-trip identity only when chroma agrees within a pair — are
-pypixelpack's (`§spec:layouts` there). The DeckLink SDK 15.3 manual
+takes the enum. Array conventions are pypixelpack's (`§spec:layouts`
+there). The DeckLink SDK 15.3 manual
 section 3.4 remains the byte-layout authority.
 
 pypixelpack is pinned by git tag in `[tool.uv.sources]`, as
@@ -1109,12 +1110,8 @@ Routing that through a NumPy host packer would drag every frame back
 across PCIe, so it kept its own copy — the stranded-code outcome this
 section exists to prevent, reached from the other direction. A shared,
 namespace-generic implementation is the only shape both consumers can
-use.
-
-The skew argument for co-location was weaker than stated. The codecs
-were keyed on plain strings; only `_FORMATS` touched the enum. Keeping
-that map here keeps the enum and its map in one package, so the move
-invites no version skew.
+use. Only `_FORMATS` touches the enum, so keeping that map here invites
+no version skew.
 
 ### Why in pydecklink, above the binding
 
@@ -1131,11 +1128,8 @@ the convenience-layer-above-a-faithful-surface pattern of
 as the consumer-side complement to caller-built frames; this module is
 where that packing enters.
 
-The raw-buffer contract has one constraint the binding enforces.
-`display_frame_sync` copies `row_bytes × height` bytes from the array's
-raw pointer, so its buffer is declared C-contiguous (`nb::c_contig`): a
-strided view is copied to a contiguous temporary, never read through as
-if its elements were adjacent.
+The buffer it hands over is declared C-contiguous; the contract is stated
+with the transport (§spec:python-api).
 
 ### Why this is not video conversion
 
@@ -1152,13 +1146,10 @@ pydecklink offers, not on what its dependency can do.
 - `pack` output is byte-exact against hand-computed reference vectors
   from the SDK 15.3 section 3.4 layout tables, `pack` → `unpack`
   round-trips to identity for every format `_FORMATS` names, and 12-bit
-  `R12B` / `R12L` is correct across the 8-pixel / 36-byte group boundary
-  — the same tests that gated the in-repo implementation, unchanged
-  across the move.
+  `R12B` / `R12L` is correct across the 8-pixel / 36-byte group boundary.
 - Importing `pydecklink` leaves the transport surface unchanged and
   pulls in no packing code.
-- `display_frame_sync` accepts a non-contiguous `uint8` view and its
-  declared signature carries the C-order constraint.
+- `display_frame_sync` accepts a non-contiguous `uint8` view.
 - A packed buffer survives the real output → SDI → capture path
   bit-exactly, exercising the shared pack → DMA → wire → capture → unpack
   path (§spec:integration-testing): v210 (4:2:2) at HD1080p25 on

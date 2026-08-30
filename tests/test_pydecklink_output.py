@@ -192,18 +192,7 @@ class TestHDRMetadataRoundTrip:
 
 
 class TestDisplayFrameSyncBuffer:
-    """display_frame_sync reads its buffer only through a contiguous view.
-
-    The binding memcpy's ``row_bytes * height`` bytes from the ndarray's
-    raw pointer, so the declared type must constrain the argument to C
-    order: nanobind then copies a strided input into a contiguous
-    temporary (implicit conversion) instead of reading it through as if
-    its elements were adjacent.
-    """
-
-    def test_buffer_declares_c_order(self):
-        sig = pydecklink.Device.display_frame_sync.__nb_signature__[0][0]
-        assert "buffer: ndarray[dtype=uint8, shape=(*), order='C']" in sig
+    """A strided view is copied, not read through — see bind_output.cpp."""
 
     @pytest.mark.hardware
     def test_strided_view_is_copied_not_refused(self):

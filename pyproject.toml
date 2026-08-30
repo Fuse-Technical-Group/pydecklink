@@ -34,9 +34,7 @@ test = ["pytest>=8", "psutil>=5.9"]
 cuda-examples = ["cuda-python>=12"]
 
 [tool.uv.sources]
-# Pinned by git tag, as display-patterns is pinned by its consumers: a
-# release tag, not a branch, so the resolved layouts cannot drift under
-# the byte-exact tests.
+# Release tag, not a branch — rationale in SPEC.md §spec:pixel-packing.
 pypixelpack = { git = "https://github.com/Fuse-Technical-Group/pypixelpack.git", tag = "v1.0.0" }
 
 [dependency-groups]
