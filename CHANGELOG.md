@@ -1,3 +1,15 @@
+# [0.8.0](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.7.0...v0.8.0) (2026-08-30)
+
+
+### Bug Fixes
+
+* **output:** constrain display_frame_sync's buffer to C order ([aeb340e](https://github.com/Fuse-Technical-Group/pydecklink/commit/aeb340ed95225050840d0d3de569cf7df05b2cf7))
+
+
+### Features
+
+* **packing:** consume pypixelpack's layouts ([94ab60c](https://github.com/Fuse-Technical-Group/pydecklink/commit/94ab60cd7d72c3751679f0bfb7db093203960420))
+
 # [0.7.0](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.6.1...v0.7.0) (2026-08-28)
 
 
