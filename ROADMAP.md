@@ -86,17 +86,15 @@ encoding step, not layout alone: colour matrix (parameterised, BT.709
 and BT.2020 at least), range, chroma subsampling, and layout. The
 measure layer defines a patch as what the processor receives and must
 declare an encoding for SDI without implementing one, so the conversion
-that today lives only in backlit_molecule moves with the layouts
-(umbrella `§spec:architecture` in color-wrangler) — keeping `_FORMATS`, the map from `PixelFormat` to a
-layout name, which is the only Blackmagic-specific thing in the module.
+that today lives only in a GPU render pipeline moves with the layouts,
+keeping `_FORMATS`, the map from `PixelFormat` to a layout name, which is the only Blackmagic-specific thing in the module.
 §spec:pixel-packing.
 
 **The condition §spec:pixel-packing set has arrived.** That section
 co-locates packing "until packing earns an independent release
 lifecycle (per YAGNI)". A second consumer now exists that cannot use
-this implementation: backlit_molecule converts RGB→V210 on the GPU and
-DMAs the packed result into a pinned SDK frame
-(`§road:shared-pixel-packing` there). Routing that through a NumPy host
+this implementation: a GPU render pipeline converts RGB→V210 on the
+device and DMAs the packed result into a pinned SDK frame. Routing that through a NumPy host
 packer would drag an uncompressed frame back across PCIe every frame and
 defeat its `torch.compile` fusion, so it keeps its own copy today — the
 strand-reusable-code outcome this section exists to prevent, arrived at
@@ -159,7 +157,8 @@ co-location rationale that no longer describe the module.
 **Verify:** `pack`/`unpack` keep their surface and their
 `unpack(pack(x)) == x` property for every format; importing
 `pydecklink` still pulls no packing code; the same shared source packs
-byte-identically on numpy here and on torch in backlit_molecule; and
+byte-identically on numpy here and on torch in a GPU render pipeline;
+and
 §spec:pixel-packing records the moved boundary rather than describing a
 module that no longer holds the layouts.
 
