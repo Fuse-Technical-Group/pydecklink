@@ -1096,10 +1096,11 @@ takes the enum. Array conventions are pypixelpack's (`§spec:layouts`
 there). The DeckLink SDK 15.3 manual
 section 3.4 remains the byte-layout authority.
 
-pypixelpack is pinned by git tag in `[tool.uv.sources]`, as
-display-patterns is pinned by its consumers: a release tag, not a
-branch, so the byte-exact tests here cannot drift under a moved
-dependency.
+pypixelpack is pinned by commit hash in `[tool.uv.sources]`, the hash
+v1.0.0 names. A tag is not a pin: any collaborator can move one, and
+`uv.lock` is not committed in this repository, so nothing else would
+turn a moved tag into a visible diff. The hash is what keeps the
+byte-exact tests here from drifting under a substituted dependency.
 
 ### Why the layouts moved out
 
