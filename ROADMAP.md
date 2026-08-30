@@ -140,7 +140,11 @@ Replace every `_pack_*`/`_unpack_*` implementation and the `_LAYOUT`
 table in `pydecklink/packing.py` with imports from `pypixelpack`,
 keeping `_FORMATS` (the `PixelFormat` → layout-name map) and the
 `pack`/`unpack` surface unchanged; pin pypixelpack by git tag as
-display-patterns is pinned by its consumers. §spec:pixel-packing.
+display-patterns is pinned by its consumers; and declare
+`nb::c_contig` on `display_frame_sync`'s buffer argument
+(`src/pydecklink_ext/bind_output.cpp`), which memcpy's from an
+unconstrained ndarray's raw pointer today, so a strided input is copied
+or refused rather than read through. §spec:pixel-packing.
 Blocked — pypixelpack has no release yet (`§road:first-release`
 there). Unblocked when v0.1.0 is tagged.
 
