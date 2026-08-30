@@ -81,7 +81,13 @@ capture and that the accessor exists on both `CaptureFrame` and
 Move `pydecklink.packing`'s layout table and its pack/unpack
 implementations into `Fuse-Technical-Group/pypixelpack` — a standalone,
 array-namespace-generic package, sibling to this repository and
-pyst2110 — and consume it here — keeping `_FORMATS`, the map from `PixelFormat` to a
+pyst2110 — and consume it here. pypixelpack's scope is the whole
+encoding step, not layout alone: colour matrix (parameterised, BT.709
+and BT.2020 at least), range, chroma subsampling, and layout. The
+measure layer defines a patch as what the processor receives and must
+declare an encoding for SDI without implementing one, so the conversion
+that today lives only in backlit_molecule moves with the layouts
+(umbrella `§spec:architecture` in color-wrangler) — keeping `_FORMATS`, the map from `PixelFormat` to a
 layout name, which is the only Blackmagic-specific thing in the module.
 §spec:pixel-packing.
 
