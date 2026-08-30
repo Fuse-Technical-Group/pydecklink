@@ -22,9 +22,9 @@ pinned-buffer pools, synchronized stream start, and zero-copy capture
 references. It does not own pipeline orchestration, threading models,
 GPU kernels, or model code, and imports no GPU toolkit
 (§spec:gpu-pinned-memory). Those concerns live in the consumer: for
-example a depth-matting inference kernel and its host runtime (the
-matte_rt / backlit_molecule projects), which compose pydecklink as one
-interchangeable I/O backend. Why: keeping the binding free of pipeline
+example a depth-matting inference kernel and its host runtime, or a GPU
+render pipeline, each composing pydecklink as one interchangeable I/O
+backend. Why: keeping the binding free of pipeline
 and model assumptions lets it serve any consumer — ML inference, QC,
 monitoring, live production tooling — without inheriting one pipeline's
 design, and keeps GPU-framework choices on the consumer side.
