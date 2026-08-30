@@ -1064,8 +1064,9 @@ the shape it does.
 - §spec:problem-statement — scope boundary this section stays inside;
   names bmd-signal-gen as prior art and its macOS-only ctypes approach.
 - §spec:hdr-metadata — the metadata surface that unblocked the migration.
-- §spec:pixel-packing — packs signal-gen's pixel arrays; its reference
-  implementation is signal-gen's `cpp/pixel_packing.{h,cpp}`.
+- §spec:pixel-packing — packs signal-gen's pixel arrays; the layouts
+  now live in pypixelpack, with signal-gen's `cpp/pixel_packing.{h,cpp}`
+  as prior art.
 - §spec:binding-philosophy — mirror-the-SDK principle behind the
   predicate-not-enumeration and per-frame-format decisions.
 
@@ -1081,77 +1082,90 @@ pixel values into DeckLink's in-memory layouts and unpacks the inverse.
 pixel values from a raw `CaptureFrame.data`. The module is imported
 explicitly; importing `pydecklink` alone pulls in no pixel-packing code.
 
-Covered layouts are those the DeckLink SDK defines (SDK 15.3 section 3.4,
-pixel formats), keyed by the existing `PixelFormat` enum: 8-bit `ARGB` /
-`BGRA`, 10-bit RGB `r210` / `R10b` / `R10l`, 10-bit YUV `v210`, and
-12-bit RGB `R12B` / `R12L`. The SDK manual is the byte-layout authority;
-this section does not restate the wire format.
+The layouts and their codecs live in
+[pypixelpack](https://github.com/Fuse-Technical-Group/pypixelpack), a
+sibling package keyed on layout names (`argb`, `bgra`, `r210`, `r10b`,
+`r10l`, `v210`, `r12b`, `r12l`) and generic over the array namespace, so
+one codec packs on numpy here and on torch in a GPU consumer. This
+repository holds what is Blackmagic-specific: `_FORMATS`, the map from
+`PixelFormat` to a layout name, and the `pack`/`unpack` surface that
+takes the enum. Array conventions — `(height, width, 3)` integer arrays,
+`[R, G, B]` or `[Y, Cb, Cr]`, alpha at peak, chroma from even columns,
+4:2:2 round-trip identity only when chroma agrees within a pair — are
+pypixelpack's (`§spec:layouts` there). The DeckLink SDK 15.3 manual
+section 3.4 remains the byte-layout authority.
 
-Pixel arrays are `(height, width, 3)` integer ndarrays. RGB formats use
-channels `[R, G, B]`; the ARGB/BGRA alpha byte is written at peak on pack
-and dropped on unpack (alpha is not a round-tripped pixel value). v210
-uses `[Y, Cb, Cr]`; chroma is sampled from even columns on pack and
-replicated across each pair on unpack, so `unpack ∘ pack` is identity
-only when chroma is equal within each horizontal pair — inherent to 4:2:2
-subsampling, not a packing loss. Widths shorter than a format's pixel
-group (v210: 6, 12-bit: 8) are zero-padded to a whole group; `row_bytes`
-must cover the packed active line.
+pypixelpack is pinned by git tag in `[tool.uv.sources]`, as
+display-patterns is pinned by its consumers: a release tag, not a
+branch, so the byte-exact tests here cannot drift under a moved
+dependency.
 
-The reference implementation is NumPy. The API is backend-swappable so a
-native (C++/SIMD) fast path can later move into the extension without a
-surface change — mirroring the allocator layering (§spec:device-model),
-where a Python API fronts optional native acceleration. Static-pattern
-consumers pack once and hold, so NumPy suffices; video-rate consumers
-motivate the future native path. It ships as a `pydecklink.packing`
-submodule rather than a separate package: co-location holds until packing
-earns an independent release lifecycle (per YAGNI).
+### Why the layouts moved out
+
+The first cut co-located packing with the enum "until packing earns an
+independent release lifecycle". It did: backlit_molecule converts
+RGB→v210 on the GPU and DMAs the packed result into a pinned SDK frame.
+Routing that through a NumPy host packer would drag every frame back
+across PCIe, so it kept its own copy — the stranded-code outcome this
+section exists to prevent, reached from the other direction. A shared,
+namespace-generic implementation is the only shape both consumers can
+use.
+
+The skew argument for co-location was weaker than stated. The codecs
+were keyed on plain strings; only `_FORMATS` touched the enum. Keeping
+that map here keeps the enum and its map in one package, so the move
+invites no version skew.
 
 ### Why in pydecklink, above the binding
 
-Packing is format knowledge, not consumer logic. It is keyed entirely to
-`PixelFormat` — living in a foreign package invites version skew against
-the enum it depends on. It is generic to any DeckLink RGB playout or
-capture consumer, not specific to one tool, so leaving it in
-bmd-signal-gen (its reference implementation) strands reusable code.
-Co-locating it with the enum gives one install, one release cadence, and
-no cross-repo skew.
-
-The module sits strictly above the binding. §spec:problem-statement's
-scope boundary keeps the transport thin — `MutableFrame.data` and
+The enum map is format knowledge, not consumer logic, and generic to any
+DeckLink RGB playout or capture consumer, so it belongs with the enum.
+It sits strictly above the binding: §spec:problem-statement's scope
+boundary keeps the transport thin — `MutableFrame.data` and
 `display_frame_sync` take a raw `uint8` buffer plus `row_bytes` and do no
 pixel interpretation. Putting packing in the core would break that
-contract; leaving it out of the repo entirely strands it. An opt-in
-module resolves the tension: the core gains no pixel semantics, and
-consumers that need packing import it deliberately. This is the
-convenience-layer-above-a-faithful-surface pattern of
-§spec:binding-philosophy — the raw transport stays fully expressive
-underneath. §spec:hdr-metadata already names custom pixel packing as the
-consumer-side complement to caller-built frames; this section is where
-that packing lives.
+contract; an opt-in module resolves the tension. The core gains no pixel
+semantics, and consumers that need packing import it deliberately —
+the convenience-layer-above-a-faithful-surface pattern of
+§spec:binding-philosophy. §spec:hdr-metadata names custom pixel packing
+as the consumer-side complement to caller-built frames; this module is
+where that packing enters.
+
+The raw-buffer contract has one constraint the binding enforces.
+`display_frame_sync` copies `row_bytes × height` bytes from the array's
+raw pointer, so its buffer is declared C-contiguous (`nb::c_contig`): a
+strided view is copied to a contiguous temporary, never read through as
+if its elements were adjacent.
 
 ### Why this is not video conversion
 
 §spec:non-goals excludes colour-space conversion and scaling. Packing is
 neither: it rearranges given integer pixel values into a byte layout
 without altering colorimetry, resolution, or sample values. `unpack ∘
-pack` is identity. The non-goal stands.
+pack` is identity. The non-goal stands. pypixelpack's scope does reach
+encoding — matrix, range, subsampling (`§spec:encoding` there) — but
+this module exposes only its layouts; the non-goal is a boundary on what
+pydecklink offers, not on what its dependency can do.
 
 ### Behaviour
 
 - `pack` output is byte-exact against hand-computed reference vectors
-  derived from the SDK 15.3 section 3.4 layout tables for each format.
-- `pack` → `unpack` round-trips to identity for each format.
-- 12-bit `R12B` / `R12L` is correct across the 8-pixel / 36-byte group
-  boundary — the historically error-prone case.
+  from the SDK 15.3 section 3.4 layout tables, `pack` → `unpack`
+  round-trips to identity for every format `_FORMATS` names, and 12-bit
+  `R12B` / `R12L` is correct across the 8-pixel / 36-byte group boundary
+  — the same tests that gated the in-repo implementation, unchanged
+  across the move.
 - Importing `pydecklink` leaves the transport surface unchanged and
   pulls in no packing code.
+- `display_frame_sync` accepts a non-contiguous `uint8` view and its
+  declared signature carries the C-order constraint.
 - A packed buffer survives the real output → SDI → capture path
   bit-exactly, exercising the shared pack → DMA → wire → capture → unpack
   path (§spec:integration-testing): v210 (4:2:2) at HD1080p25 on
   single-link HD-SDI, and r210 (10-bit RGB 4:4:4) at 4K 2160p30 on
   single-link 12G-SDI. 4:4:4 doubles the sample rate of 4:2:2, so RGB
   needs a 4K/12G mode to fit the link; and the SDI output link
-  configuration must be forced to single link — the default is dual link,
+  configuration is forced to single link — the default is dual link,
   which splits the raster across two cables and drops half the picture
   over a single-cable loopback.
 
@@ -1165,11 +1179,12 @@ pack` is identity. The non-goal stands.
   not to cross.
 - §spec:hdr-metadata — names custom pixel packing as the consumer-side
   complement this section supplies.
+- pypixelpack `§spec:layouts`, `§spec:backend`, `§spec:consumers` — the
+  layouts, the namespace-generic codec, and the GPU consumer that forced
+  the move.
 - DeckLink SDK 15.3 manual section 3.4 — byte-layout authority and
   byte-exactness oracle.
-- bmd-signal-gen `cpp/pixel_packing.{h,cpp}` — prior-art reference
-  implementation of the same layouts.
-- Reported in #195.
+- Reported in #195; hoisted per #221 and #222.
 
 ## Explicit Non-Goals (Phase 1) §spec:non-goals
 
