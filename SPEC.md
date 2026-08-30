@@ -1097,7 +1097,7 @@ there). The DeckLink SDK 15.3 manual
 section 3.4 remains the byte-layout authority.
 
 pypixelpack is pinned by commit hash in `[tool.uv.sources]`, the hash
-v1.2.0 names. A tag is not a pin: any collaborator can move one, and
+v0.1.0 names. A tag is not a pin: any collaborator can move one, and
 `uv.lock` is not committed in this repository, so nothing else would
 turn a moved tag into a visible diff. The hash is what keeps the
 byte-exact tests here from drifting under a substituted dependency.
@@ -1105,8 +1105,9 @@ byte-exact tests here from drifting under a substituted dependency.
 ### Why the layouts moved out
 
 The first cut co-located packing with the enum "until packing earns an
-independent release lifecycle". It did: backlit_molecule converts
-RGB→v210 on the GPU and DMAs the packed result into a pinned SDK frame.
+independent release lifecycle". It did: a GPU render pipeline converts
+RGB→v210 on the device and DMAs the packed result into a pinned SDK
+frame.
 Routing that through a NumPy host packer would drag every frame back
 across PCIe, so it kept its own copy — the stranded-code outcome this
 section exists to prevent, reached from the other direction. A shared,
