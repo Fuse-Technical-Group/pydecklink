@@ -256,8 +256,11 @@ void init_decklink_output(nb::module_& m, nb::class_<Device>& device) {
         nb::arg("pixel_format"),
         "Create a mutable video frame for output.");
 
+    // c_contig: the copy below reads through buffer.data() as if the
+    // elements were adjacent, so a strided view must arrive as a contiguous
+    // temporary (nanobind's implicit conversion), never as its raw pointer.
     device.def("display_frame_sync",
-        [](Device& self, nb::ndarray<uint8_t, nb::ndim<1>> buffer,
+        [](Device& self, nb::ndarray<uint8_t, nb::ndim<1>, nb::c_contig> buffer,
            int32_t width, int32_t height, int32_t row_bytes,
            _BMDPixelFormat pixel_format) {
             if (!self.output_)
@@ -295,7 +298,8 @@ void init_decklink_output(nb::module_& m, nb::class_<Device>& device) {
         },
         nb::arg("buffer"), nb::arg("width"), nb::arg("height"),
         nb::arg("row_bytes"), nb::arg("pixel_format"),
-        "Display a frame synchronously (blocking). Copies buffer into a new frame.");
+        "Display a frame synchronously (blocking). Copies buffer into a new frame; "
+        "a non-contiguous buffer is copied to a contiguous temporary first.");
 
     device.def("display_frame_sync_frame",
         [](Device& self, MutableFrame& mf) {

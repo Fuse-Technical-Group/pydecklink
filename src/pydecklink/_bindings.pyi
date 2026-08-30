@@ -670,9 +670,9 @@ class Device:
     def create_video_frame(self, width: int, height: int, row_bytes: int, pixel_format: PixelFormat) -> MutableFrame:
         """Create a mutable video frame for output."""
 
-    def display_frame_sync(self, buffer: Annotated[NDArray[numpy.uint8], dict(shape=(None,))], width: int, height: int, row_bytes: int, pixel_format: PixelFormat) -> None:
+    def display_frame_sync(self, buffer: Annotated[NDArray[numpy.uint8], dict(shape=(None,), order='C')], width: int, height: int, row_bytes: int, pixel_format: PixelFormat) -> None:
         """
-        Display a frame synchronously (blocking). Copies buffer into a new frame.
+        Display a frame synchronously (blocking). Copies buffer into a new frame; a non-contiguous buffer is copied to a contiguous temporary first.
         """
 
     def display_frame_sync_frame(self, frame: MutableFrame) -> None:
