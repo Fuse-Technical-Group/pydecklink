@@ -22,7 +22,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 requires-python = ">=3.12"
-dependencies = ["numpy>=1.26"]
+dependencies = ["numpy>=1.26", "pypixelpack"]
 
 [project.urls]
 Homepage = "https://github.com/Fuse-Technical-Group/pydecklink"
@@ -32,6 +32,12 @@ Issues = "https://github.com/Fuse-Technical-Group/pydecklink/issues"
 [project.optional-dependencies]
 test = ["pytest>=8", "psutil>=5.9"]
 cuda-examples = ["cuda-python>=12"]
+
+[tool.uv.sources]
+# Pinned by commit (v0.1.0): a tag can be moved by any collaborator and
+# uv.lock is not committed here, so only a hash makes the pin immutable.
+# Rationale in SPEC.md §spec:pixel-packing.
+pypixelpack = { git = "https://github.com/Fuse-Technical-Group/pypixelpack.git", rev = "82e249e4531df297e0b81099e2b24eb08190a8d6" }
 
 [dependency-groups]
 dev = ["pytest>=8", "mypy>=1.13", "psutil>=5.9"]

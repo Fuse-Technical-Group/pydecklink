@@ -189,3 +189,26 @@ class TestHDRMetadataRoundTrip:
             assert frame.flags & pydecklink.FrameFlag.ContainsHDRMetadata.value
         finally:
             dev.disable_video_output()
+
+
+class TestDisplayFrameSyncBuffer:
+    """A strided view is copied, not read through — see bind_output.cpp."""
+
+    @pytest.mark.hardware
+    def test_strided_view_is_copied_not_refused(self):
+        import numpy as np
+
+        dev = pydecklink.Device(0)
+        mode = pydecklink.DisplayMode.HD1080p2997
+        pf = pydecklink.PixelFormat.Format8BitBGRA
+        width = pydecklink.get_mode_width(mode)
+        height = pydecklink.get_mode_height(mode)
+        dev.enable_video_output(mode)
+        try:
+            row_bytes = dev.row_bytes_for_pixel_format(pf, width)
+            buf = np.zeros(row_bytes * height, dtype=np.uint8)
+            view = buf[::-1]
+            assert not view.flags.c_contiguous
+            dev.display_frame_sync(view, width, height, row_bytes, pf)
+        finally:
+            dev.disable_video_output()
