@@ -588,6 +588,31 @@ class StatisticID(enum.Enum):
 
     ParamEthernetSFPDynamicInfo = 1936093299
 
+class IPFlowDirection(enum.Enum):
+    Output = 0
+
+    Input = 1
+
+class IPFlowType(enum.Enum):
+    Video = 0
+
+    Audio = 1
+
+    Ancillary = 2
+
+class IPFlowAttributeID(enum.Enum):
+    ID = 845570409
+
+    Direction = 845570404
+
+    Type = 845570420
+
+class IPFlowStatusID(enum.Enum):
+    SDP = 845570419
+
+class IPFlowSettingID(enum.Enum):
+    PeerSDP = 845574259
+
 class DeviceInfo:
     @property
     def model_name(self) -> str: ...
@@ -839,6 +864,12 @@ class Device:
     def set_profile(self, profile_id: ProfileID) -> None:
         """
         Activate a connector profile. Affects all sub-devices on this card. Equivalent to ``device.profile_manager.get_profile(profile_id).set_active()``.
+        """
+
+    @property
+    def ip_extensions(self) -> IPExtensions | None:
+        """
+        Return the sub-device's ``IPExtensions``, or ``None`` if it is not a DeckLink IP.
         """
 
 class ReferenceStatus:
@@ -1289,5 +1320,63 @@ class ProfileManager:
         """
         Register a ``ProfileCallback``. Pass ``None`` to clear. The SDK accepts one callback per manager; subsequent calls replace prior registrations.
         """
+
+    def __repr__(self) -> str: ...
+
+class IPFlow:
+    """
+    Wraps ``IDeckLinkIPFlow``: one essence, one direction, of one sub-device of a DeckLink IP (§spec:ip-flows).
+    """
+
+    def enable(self) -> None:
+        """Start the flow sending or receiving."""
+
+    def disable(self) -> None:
+        """Stop the flow sending or receiving."""
+
+    def get_attribute_int(self, attr_id: IPFlowAttributeID) -> int:
+        """Get an integer flow attribute via IDeckLinkIPFlowAttributes."""
+
+    def get_status_string(self, status_id: IPFlowStatusID) -> str:
+        """
+        Get a string flow status value via IDeckLinkIPFlowStatus — the SDP the sub-device offers for this essence, which its input and output flows both read (§spec:ip-flows).
+        """
+
+    def get_setting_string(self, setting_id: IPFlowSettingID) -> str:
+        """
+        Get a string flow setting via IDeckLinkIPFlowSetting — the SDP an input flow receives.
+        """
+
+    def set_setting_string(self, setting_id: IPFlowSettingID, value: str) -> None:
+        """
+        Set a string flow setting via IDeckLinkIPFlowSetting — the SDP an input flow receives. A value the card rejects answers S_OK and changes nothing, so read it back (§spec:ip-flows).
+        """
+
+    @property
+    def id(self) -> int:
+        """
+        The flow's identifier, unique within its sub-device and not across the card.
+        """
+
+    @property
+    def direction(self) -> IPFlowDirection:
+        """Whether the flow sends or receives."""
+
+    @property
+    def type(self) -> IPFlowType:
+        """The essence the flow carries."""
+
+    def __repr__(self) -> str: ...
+
+class IPExtensions:
+    """
+    Wraps ``IDeckLinkIPExtensions``. Obtained via ``Device.ip_extensions``.
+    """
+
+    def get_ip_flows(self) -> list[IPFlow]:
+        """Return every IP flow of this sub-device."""
+
+    def get_ip_flow_by_id(self, flow_id: int) -> IPFlow:
+        """Look up one of this sub-device's IP flows by its identifier."""
 
     def __repr__(self) -> str: ...
