@@ -11,6 +11,7 @@ namespace nb = nanobind;
 #include "bind_allocator.h"
 #include "bind_api_info.h"
 #include "bind_profile.h"
+#include "bind_ip_flow.h"
 #endif
 
 NB_MODULE(_bindings, m) {
@@ -25,6 +26,7 @@ NB_MODULE(_bindings, m) {
     init_decklink_allocator(m, device_cls);
     init_decklink_api_info(m);
     init_decklink_profile(m, device_cls);
+    init_decklink_ip_flow(m, device_cls);
 #else
     m.attr("HAS_SDK") = false;
 #endif

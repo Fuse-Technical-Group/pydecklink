@@ -4,22 +4,23 @@ Derived from [SPEC.md](SPEC.md). Sections are in build-dependency order.
 
 ## DeckLink IP as an ST 2110 far end §road:decklink-ip-streams
 
-Each connector's address and output groups, the device-wide PTP role, and
-the link, packet counters and optical module of each connector are
-reachable now (§spec:ethernet, §spec:statistics). What is not delivered
-is the stream half: `IDeckLinkIPExtensions` and the `IDeckLinkIPFlow`
-family, which read the groups a receiver is bound to and the SDP that
-names a flow, and accept a peer's SDP — so a peer can be pointed at this
-card without the Desktop Video GUI.
+Each connector's address and output groups, the device-wide PTP role, the
+link, packet counters and optical module of each connector, and the stream
+half — each sub-device's IP flows, the SDP the card offers and the peer SDP
+it receives — are reachable now (§spec:ethernet, §spec:statistics,
+§spec:ip-flows). What is not done is the check against a far end: a
+receiver outside the card digesting a flow it sends, and the card
+receiving a flow a peer sends.
 
 **The link is up.** Passive QSFP28 DACs never brought the bench card's
 port up — the ConnectX-6 facing it trained, the card reported
 `Disconnected` — and 100G optical modules did: both connectors report
 `ConnectedBound` at 100000 Mbps, and traffic crosses in both directions.
 
-**Verify:** With the link up, a `packet_engine` receive stream on the
-ConnectX-6 port digests a flow this card sends, and the card's status
-address matches the configured one.
+**Verify:** A hardware-timestamping receiver on the ConnectX-6 port
+digests the video flow this card sends, at the groups its status SDP
+names; and an input flow given the SDP of a sender on that port, and
+enabled, delivers its frames to `pop_capture_frame`.
 
 ## Sub-frame phase tuning §road:config-reference-input-timing-offset
 

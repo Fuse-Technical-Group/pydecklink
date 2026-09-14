@@ -108,14 +108,31 @@ dev.get_status_int_with_param(status.ParamEthernetLink, 1)
 `StatisticID` reads PTP lock, temperature, per-connector packet counts and
 the optical module's readings through `get_statistic_*`.
 
+Each sub-device's streams are `IPFlow`s, one per essence and direction,
+from `dev.ip_extensions`. An output flow's status reads the SDP the card
+offers; an input flow takes the SDP of the peer it receives, and `enable()`
+starts it. The card answers success to an SDP it rejects and keeps the
+previous one, so read the setting back:
+
+```python
+D, T, S = pydecklink.IPFlowDirection, pydecklink.IPFlowType, pydecklink.IPFlowSettingID
+video_in = next(
+    f for f in dev.ip_extensions.get_ip_flows()
+    if f.direction == D.Input and f.type == T.Video
+)
+video_in.set_setting_string(S.PeerSDP, peer_sdp)
+assert video_in.get_setting_string(S.PeerSDP) == peer_sdp
+video_in.enable()
+```
+
 **Frames** — `CaptureFrame`, `CaptureFrameRef` (zero-copy), and `MutableFrame`
 expose pixel data as a numpy array via `.data`, alongside `.width`,
 `.height`, `.row_bytes`.
 
 **Enums** — `DisplayMode`, `PixelFormat`, `VideoConnection`, `VideoInputFlag`,
-`VideoOutputFlag`, `FieldDominance`, and the `ConfigurationID`, `AttributeID`
-and `StatusID` identifier sets the config, attribute and status accessors
-take.
+`VideoOutputFlag`, `FieldDominance`, `IPFlowDirection`, `IPFlowType`, and
+the `ConfigurationID`, `AttributeID`, `StatusID` and `IPFlow*ID` identifier
+sets the config, attribute, status and flow accessors take.
 
 **Custom memory** — `VideoBufferAllocator` / `VideoBufferAllocatorProvider`
 back capture and playback with caller-owned buffers (e.g. CUDA pinned memory)

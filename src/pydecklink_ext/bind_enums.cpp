@@ -433,4 +433,31 @@ void init_decklink_enums(nb::module_& m) {
         // The optical module's SFF-8636 dynamic fields, as a JSON string.
         .value("ParamEthernetSFPDynamicInfo",
                bmdDeckLinkStatisticParamEthernetSFPDynamicInfo);
+
+    // -- IP flows, on a DeckLink IP (§spec:ip-flows) --
+    // SDK 16 declares these five without the `_BMD…` enum names the older
+    // IDs carry on Linux and macOS; the unprefixed name is the enum type on
+    // all three platforms (a typedef of it under the Windows IDL).
+    nb::enum_<BMDIPFlowDirection>(m, "IPFlowDirection")
+        .value("Output", bmdDeckLinkIPFlowDirectionOutput)
+        .value("Input", bmdDeckLinkIPFlowDirectionInput);
+
+    nb::enum_<BMDIPFlowType>(m, "IPFlowType")
+        .value("Video", bmdDeckLinkIPFlowTypeVideo)
+        .value("Audio", bmdDeckLinkIPFlowTypeAudio)
+        .value("Ancillary", bmdDeckLinkIPFlowTypeAncillary);
+
+    nb::enum_<BMDDeckLinkIPFlowAttributeID>(m, "IPFlowAttributeID")
+        .value("ID", bmdDeckLinkIPFlowID)
+        .value("Direction", bmdDeckLinkIPFlowDirection)
+        .value("Type", bmdDeckLinkIPFlowType);
+
+    // The SDP the card offers for an output flow.
+    nb::enum_<BMDDeckLinkIPFlowStatusID>(m, "IPFlowStatusID")
+        .value("SDP", bmdDeckLinkIPFlowSDP);
+
+    // The SDP an input flow receives. The header bounds it at 1000 bytes;
+    // the 16.4 runtime accepts longer (§spec:ip-flows).
+    nb::enum_<BMDDeckLinkIPFlowSettingID>(m, "IPFlowSettingID")
+        .value("PeerSDP", bmdDeckLinkIPFlowPeerSDP);
 }

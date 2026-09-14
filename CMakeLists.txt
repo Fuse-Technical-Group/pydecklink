@@ -24,6 +24,7 @@ set(_sdk_bind_sources
   src/pydecklink_ext/bind_allocator.cpp
   src/pydecklink_ext/bind_api_info.cpp
   src/pydecklink_ext/bind_profile.cpp
+  src/pydecklink_ext/bind_ip_flow.cpp
 )
 
 if(WIN32 AND EXISTS "${DECKLINK_SDK_DIR}/DeckLinkAPI.idl")

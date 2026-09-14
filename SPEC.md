@@ -740,6 +740,67 @@ relative — lane against lane, or against their own history.
 The on-board temperature moved here from `IDeckLinkStatus`, where SDK
 15.3 carried it under a different four-character code.
 
+### IP Flows §spec:ip-flows
+
+Wraps `IDeckLinkIPExtensions` and the `IDeckLinkIPFlow` family, new in
+SDK 16. They carry the stream half of a DeckLink IP: the SDP the card
+offers for what it sends, and the SDP of the peer it receives. With them a
+peer is pointed at the card, and the card at a peer, through the SDK alone.
+
+- `device.ip_extensions → IPExtensions | None` — `None` on a device that
+  is not a DeckLink IP
+- `IPExtensions.get_ip_flows() → list[IPFlow]` — drains the flow iterator
+- `IPExtensions.get_ip_flow_by_id(flow_id) → IPFlow`
+- `IPFlow.enable()`, `IPFlow.disable()`
+- `IPFlow.get_attribute_int(attr_id)`, `IPFlow.get_status_string(status_id)`,
+  `IPFlow.get_setting_string(setting_id)`,
+  `IPFlow.set_setting_string(setting_id, value)` — the flow's attribute,
+  status and setting interfaces
+- `IPFlow.id`, `IPFlow.direction`, `IPFlow.type` — a convenience over
+  `get_attribute_int`, typed as `IPFlowDirection` and `IPFlowType`
+  (§spec:binding-philosophy)
+
+The accessors bind the one value type each ID set uses: integer attributes,
+a string status and a string setting.
+
+Measured on the bench DeckLink IP 100G under Desktop Video 16.4:
+
+**Each sub-device carries six flows.** Video, audio and ancillary, in each
+direction — the senders and receivers the card's NMOS node advertises. The
+IDs run from zero on every sub-device, so an ID names a flow only within
+the `IPExtensions` it came from.
+
+**An essence's two flows share one SDP and one peer SDP.** The status SDP
+reads the same through the input and the output flow of an essence: the
+card's offer, with a `DUP` group naming both connectors' groups — the ones
+`StatusID.ParamEthernetVideoOutputAddress` reports. The peer SDP, likewise,
+reads the same through both. What an input flow is bound to is its peer
+SDP, never its status SDP.
+
+**The peer SDP survives the handle that set it.** A fresh flow handle reads
+back a peer SDP another handle wrote, so the setting interface need not be
+held the way the configuration interface is (§spec:configuration).
+
+**A peer SDP the card rejects answers `S_OK` and changes nothing.** An empty
+string, text that is not SDP, and an SDP with no media section each leave
+the previous value in place, and `SetString` reports success. A caller
+reads the setting back to learn whether a write took. It follows that **no
+write clears a peer SDP**: once set, a flow holds one, and neither the SDK
+nor the card's IS-05 endpoint, which refuses a null transport file, returns
+it to none.
+
+**The header's 1000-byte bound is not enforced.** The SDK header limits a
+peer SDP to 1000 bytes; the runtime stores and returns one of 4000 bytes
+unaltered. The binding enforces neither bound, since it mirrors the SDK.
+
+**`enable()` is IS-05's `master_enable`.** Enabling an input flow sets the
+card's NMOS receiver active, with the peer SDP as its transport file, and
+`disable()` clears it.
+
+The `IPFlowStatusChanged` and `IPFlowSettingChanged` notifications are not
+bound. They belong with the notification queue §spec:device-status
+specifies, which the binding does not yet carry.
+
 ### Enums
 
 Bound from DeckLink SDK types via `nb::enum_<>`:
@@ -769,6 +830,11 @@ nanobind refuses a raw value naming no member.
 | `AttributeID` | `BMDDeckLinkAttributeID` | Capability query IDs, including the Ethernet connector count and per-connector MAC (§spec:ethernet) |
 | `StatusID` | `BMDDeckLinkStatusID` | Reference signal, and the per-connector Ethernet link, addresses and module identity (§spec:ethernet) |
 | `StatisticID` | `BMDDeckLinkStatisticID` | PTP lock, temperature, per-connector packet counts and module readings (§spec:statistics) |
+| `IPFlowDirection` | `BMDIPFlowDirection` | Output, input (§spec:ip-flows) |
+| `IPFlowType` | `BMDIPFlowType` | Video, audio, ancillary |
+| `IPFlowAttributeID` | `BMDDeckLinkIPFlowAttributeID` | A flow's ID, direction and type |
+| `IPFlowStatusID` | `BMDDeckLinkIPFlowStatusID` | The SDP the card offers |
+| `IPFlowSettingID` | `BMDDeckLinkIPFlowSettingID` | The peer SDP an input flow receives |
 | `ProfileID` | `BMDProfileID` | Connector profile selection |
 | `DuplexMode` | `BMDDuplexMode` | Full, half, simplex, inactive |
 | `LinkConfiguration` | `BMDLinkConfiguration` | Single, dual, quad link (§spec:sdi-link-configuration) |
