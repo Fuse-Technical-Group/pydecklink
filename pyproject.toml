@@ -12,17 +12,22 @@ license-files = ["LICENSE"]
 authors = [{ name = "Fuse Technical Group" }]
 keywords = ["decklink", "blackmagic", "sdi", "video-capture", "broadcast"]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
+    "Operating System :: MacOS",
     "Operating System :: POSIX :: Linux",
     "Operating System :: Microsoft :: Windows",
     "Topic :: Multimedia :: Video :: Capture",
     "Typing :: Typed",
 ]
 requires-python = ">=3.12"
-dependencies = ["numpy>=1.26", "pypixelpack"]
+# Every entry shall resolve from PyPI: a wheel naming a package the index
+# lacks cannot install, and the unclaimed name is one anyone could register
+# (§spec:distribution). pypixelpack is bounded below its 1.0, where its
+# layouts may break.
+dependencies = ["numpy>=1.26", "pypixelpack>=0.2,<1"]
 
 [project.urls]
 Homepage = "https://github.com/Fuse-Technical-Group/pydecklink"
@@ -34,10 +39,12 @@ test = ["pytest>=8", "psutil>=5.9"]
 cuda-examples = ["cuda-python>=12"]
 
 [tool.uv.sources]
-# Pinned by commit (v0.1.0): a tag can be moved by any collaborator and
-# uv.lock is not committed here, so only a hash makes the pin immutable.
-# Rationale in SPEC.md §spec:pixel-packing.
-pypixelpack = { git = "https://github.com/Fuse-Technical-Group/pypixelpack.git", rev = "82e249e4531df297e0b81099e2b24eb08190a8d6" }
+# Development only: builds from this checkout take pypixelpack from this
+# commit (v0.2.0, the release on PyPI), so CI tests what an install from
+# PyPI resolves. A tag can be moved by any collaborator and uv.lock is not
+# committed here, so only a hash makes the pin immutable. Rationale in
+# SPEC.md §spec:pixel-packing.
+pypixelpack = { git = "https://github.com/Fuse-Technical-Group/pypixelpack.git", rev = "6b85f3c9c2900c6d3e5a8eac436e34e02e130713" }
 
 [dependency-groups]
 dev = ["pytest>=8", "mypy>=1.13", "psutil>=5.9"]
