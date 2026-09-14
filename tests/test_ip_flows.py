@@ -222,9 +222,7 @@ def test_a_peer_sdp_round_trips_on_an_input_flow(
     held = flow.get_setting_string(setting)
     if not held:
         pytest.skip("the flow holds no peer SDP, and none can be restored")
-    probe = next(
-        _probe_sdp(g) for g in PROBE_GROUPS if _groups(held) != [g]
-    )
+    probe = next(_probe_sdp(g) for g in PROBE_GROUPS if _groups(held) != [g])
     try:
         flow.set_setting_string(setting, probe)
         del flow
