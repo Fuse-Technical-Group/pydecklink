@@ -81,6 +81,13 @@ public:
         return S_OK;
     }
 
+    // SDK 16 added GetSize to IDeckLinkVideoBuffer.
+    HRESULT GetSize(uint64_t* size) override {
+        if (!size) return E_INVALIDARG;
+        *size = pooled_->size;
+        return S_OK;
+    }
+
     HRESULT StartAccess(BMDBufferAccessFlags) override { return S_OK; }
     HRESULT EndAccess(BMDBufferAccessFlags) override { return S_OK; }
 

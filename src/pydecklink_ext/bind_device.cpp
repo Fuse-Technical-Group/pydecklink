@@ -290,9 +290,108 @@ nb::class_<Device> init_decklink_device(nb::module_& m) {
                 return DeckLinkStringToStd(value);
             },
             nb::arg("status_id"),
-            "Get a string runtime status value via IDeckLinkStatus. The "
-            "Ethernet addresses a DeckLink IP resolves are strings, not "
-            "integers (§spec:ethernet).")
+            "Get a string runtime status value via IDeckLinkStatus.")
+        // -- Parameterised status (SDK 16) --
+        // ``param`` selects the member a `Param` ID names; for the
+        // Ethernet IDs, the zero-based connector index (§spec:ethernet).
+        .def("get_status_flag_with_param",
+            [](Device& self, _BMDDeckLinkStatusID statusID, uint64_t param) -> bool {
+                ComPtr<IDeckLinkStatus> status;
+                if (self.dl->QueryInterface(IID_IDeckLinkStatus, (void**)status.put()) != S_OK)
+                    throw std::runtime_error("Device does not support status");
+                dlbool_t value = false;
+                HRESULT hr = status->GetFlagWithParam(statusID, param, &value);
+                if (hr != S_OK)
+                    throw std::runtime_error("GetFlagWithParam failed (HRESULT " + std::to_string(hr) + ")");
+                return static_cast<bool>(value);
+            },
+            nb::arg("status_id"), nb::arg("param"),
+            "Get a parameterised boolean status value via IDeckLinkStatus.")
+        .def("get_status_int_with_param",
+            [](Device& self, _BMDDeckLinkStatusID statusID, uint64_t param) -> int64_t {
+                ComPtr<IDeckLinkStatus> status;
+                if (self.dl->QueryInterface(IID_IDeckLinkStatus, (void**)status.put()) != S_OK)
+                    throw std::runtime_error("Device does not support status");
+                int64_t value = 0;
+                HRESULT hr = status->GetIntWithParam(statusID, param, &value);
+                if (hr != S_OK)
+                    throw std::runtime_error("GetIntWithParam failed (HRESULT " + std::to_string(hr) + ")");
+                return value;
+            },
+            nb::arg("status_id"), nb::arg("param"),
+            "Get a parameterised integer status value via IDeckLinkStatus.")
+        .def("get_status_string_with_param",
+            [](Device& self, _BMDDeckLinkStatusID statusID, uint64_t param) -> std::string {
+                ComPtr<IDeckLinkStatus> status;
+                if (self.dl->QueryInterface(IID_IDeckLinkStatus, (void**)status.put()) != S_OK)
+                    throw std::runtime_error("Device does not support status");
+                dlstring_t value = nullptr;
+                HRESULT hr = status->GetStringWithParam(statusID, param, &value);
+                if (hr != S_OK)
+                    throw std::runtime_error("GetStringWithParam failed (HRESULT " + std::to_string(hr) + ")");
+                return DeckLinkStringToStd(value);
+            },
+            nb::arg("status_id"), nb::arg("param"),
+            "Get a parameterised string status value via IDeckLinkStatus. "
+            "The addresses a DeckLink IP connector resolves are strings, not "
+            "integers; while its link is down they answer S_FALSE, which "
+            "raises (§spec:ethernet).")
+        .def("get_attribute_string_with_param",
+            [](Device& self, _BMDDeckLinkAttributeID attrID, uint64_t param) -> std::string {
+                ComPtr<IDeckLinkProfileAttributes> attrs;
+                if (self.dl->QueryInterface(IID_IDeckLinkProfileAttributes, (void**)attrs.put()) != S_OK)
+                    throw std::runtime_error("Device does not support profile attributes");
+                dlstring_t value = nullptr;
+                HRESULT hr = attrs->GetStringWithParam(attrID, param, &value);
+                if (hr != S_OK)
+                    throw std::runtime_error("GetStringWithParam failed (HRESULT " + std::to_string(hr) + ")");
+                return DeckLinkStringToStd(value);
+            },
+            nb::arg("attr_id"), nb::arg("param"),
+            "Get a parameterised string profile attribute — a DeckLink IP "
+            "connector's MAC address (§spec:ethernet).")
+        // -- Statistics (SDK 16, §spec:statistics) --
+        .def("get_statistic_int",
+            [](Device& self, _BMDDeckLinkStatisticID statID) -> int64_t {
+                ComPtr<IDeckLinkStatistics> stats;
+                if (self.dl->QueryInterface(IID_IDeckLinkStatistics, (void**)stats.put()) != S_OK)
+                    throw std::runtime_error("Device does not support statistics");
+                int64_t value = 0;
+                HRESULT hr = stats->GetInt(statID, &value);
+                if (hr != S_OK)
+                    throw std::runtime_error("GetInt failed (HRESULT " + std::to_string(hr) + ")");
+                return value;
+            },
+            nb::arg("statistic_id"),
+            "Get an integer statistic via IDeckLinkStatistics.")
+        .def("get_statistic_int_with_param",
+            [](Device& self, _BMDDeckLinkStatisticID statID, uint64_t param) -> int64_t {
+                ComPtr<IDeckLinkStatistics> stats;
+                if (self.dl->QueryInterface(IID_IDeckLinkStatistics, (void**)stats.put()) != S_OK)
+                    throw std::runtime_error("Device does not support statistics");
+                int64_t value = 0;
+                HRESULT hr = stats->GetIntWithParam(statID, param, &value);
+                if (hr != S_OK)
+                    throw std::runtime_error("GetIntWithParam failed (HRESULT " + std::to_string(hr) + ")");
+                return value;
+            },
+            nb::arg("statistic_id"), nb::arg("param"),
+            "Get a parameterised integer statistic — a per-connector packet "
+            "counter — via IDeckLinkStatistics.")
+        .def("get_statistic_string_with_param",
+            [](Device& self, _BMDDeckLinkStatisticID statID, uint64_t param) -> std::string {
+                ComPtr<IDeckLinkStatistics> stats;
+                if (self.dl->QueryInterface(IID_IDeckLinkStatistics, (void**)stats.put()) != S_OK)
+                    throw std::runtime_error("Device does not support statistics");
+                dlstring_t value = nullptr;
+                HRESULT hr = stats->GetStringWithParam(statID, param, &value);
+                if (hr != S_OK)
+                    throw std::runtime_error("GetStringWithParam failed (HRESULT " + std::to_string(hr) + ")");
+                return DeckLinkStringToStd(value);
+            },
+            nb::arg("statistic_id"), nb::arg("param"),
+            "Get a parameterised string statistic — a connector's optical "
+            "module readings as JSON — via IDeckLinkStatistics.")
         .def_prop_ro("reference_status",
             [](Device& self) -> ReferenceStatus {
                 // Gate on HasReferenceInput: devices without a REF BNC

@@ -9,7 +9,7 @@ find_package(nanobind CONFIG REQUIRED)
 # from pyproject.toml / env).  Resolve relative paths against the *source*
 # directory so out-of-tree builds (sdist isolation) still find the headers
 # when pointed at an absolute host path.
-set(DECKLINK_SDK_DIR "${CMAKE_SOURCE_DIR}/vendor/Blackmagic DeckLink SDK 15.3/Linux/include" CACHE PATH "Path to DeckLink SDK include directory")
+set(DECKLINK_SDK_DIR "${CMAKE_SOURCE_DIR}/vendor/Blackmagic DeckLink SDK 16.0/Linux/include" CACHE PATH "Path to DeckLink SDK include directory")
 if(NOT IS_ABSOLUTE "${DECKLINK_SDK_DIR}")
   set(DECKLINK_SDK_DIR "${CMAKE_SOURCE_DIR}/${DECKLINK_SDK_DIR}")
 endif()
