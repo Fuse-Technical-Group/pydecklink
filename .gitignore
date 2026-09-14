@@ -17,17 +17,17 @@ build/
 # Blackmagic's license). Exclude the rest of the SDK (samples,
 # binaries, docs) and any other vendored content.
 vendor/*
-!vendor/Blackmagic DeckLink SDK 15.3/
-vendor/Blackmagic DeckLink SDK 15.3/*
-!vendor/Blackmagic DeckLink SDK 15.3/Linux/
-vendor/Blackmagic DeckLink SDK 15.3/Linux/*
-!vendor/Blackmagic DeckLink SDK 15.3/Linux/include/
-!vendor/Blackmagic DeckLink SDK 15.3/Mac/
-vendor/Blackmagic DeckLink SDK 15.3/Mac/*
-!vendor/Blackmagic DeckLink SDK 15.3/Mac/include/
-!vendor/Blackmagic DeckLink SDK 15.3/Win/
-vendor/Blackmagic DeckLink SDK 15.3/Win/*
-!vendor/Blackmagic DeckLink SDK 15.3/Win/include/
+!vendor/Blackmagic DeckLink SDK 16.0/
+vendor/Blackmagic DeckLink SDK 16.0/*
+!vendor/Blackmagic DeckLink SDK 16.0/Linux/
+vendor/Blackmagic DeckLink SDK 16.0/Linux/*
+!vendor/Blackmagic DeckLink SDK 16.0/Linux/include/
+!vendor/Blackmagic DeckLink SDK 16.0/Mac/
+vendor/Blackmagic DeckLink SDK 16.0/Mac/*
+!vendor/Blackmagic DeckLink SDK 16.0/Mac/include/
+!vendor/Blackmagic DeckLink SDK 16.0/Win/
+vendor/Blackmagic DeckLink SDK 16.0/Win/*
+!vendor/Blackmagic DeckLink SDK 16.0/Win/include/
 
 # Local-only working files (e.g. symphonize/conduct progress trackers)
 *.local.md

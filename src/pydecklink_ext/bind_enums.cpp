@@ -219,29 +219,37 @@ void init_decklink_enums(nb::module_& m) {
         // -- Ethernet, on a DeckLink IP (§spec:ethernet) --
         // The card carries its own IP stack: the host sees no network
         // device for the media port, so an address is set here or not at
-        // all. Every address below is a *string* in dotted-quad form and is
-        // reached with set_config_string / get_config_string; SetInt on one
-        // answers E_INVALIDARG.
-        .value("ConfigEthernetUseDHCP", bmdDeckLinkConfigEthernetUseDHCP)
-        .value("ConfigEthernetStaticLocalIPAddress",
-               bmdDeckLinkConfigEthernetStaticLocalIPAddress)
-        .value("ConfigEthernetStaticSubnetMask",
-               bmdDeckLinkConfigEthernetStaticSubnetMask)
-        .value("ConfigEthernetStaticGatewayIPAddress",
-               bmdDeckLinkConfigEthernetStaticGatewayIPAddress)
-        .value("ConfigEthernetStaticPrimaryDNS",
-               bmdDeckLinkConfigEthernetStaticPrimaryDNS)
-        .value("ConfigEthernetStaticSecondaryDNS",
-               bmdDeckLinkConfigEthernetStaticSecondaryDNS)
-        // Where this device's own essence is sent.
-        .value("ConfigEthernetVideoOutputAddress",
-               bmdDeckLinkConfigEthernetVideoOutputAddress)
-        .value("ConfigEthernetAudioOutputAddress",
-               bmdDeckLinkConfigEthernetAudioOutputAddress)
-        .value("ConfigEthernetAncillaryOutputAddress",
-               bmdDeckLinkConfigEthernetAncillaryOutputAddress)
+        // all. The `Param` IDs belong to one Ethernet connector and are
+        // reached only through the *_with_param accessors, the parameter
+        // being the connector's zero-based index. Every address is a
+        // *string* in dotted-quad form; SetInt on one answers E_INVALIDARG.
+        .value("ConfigParamEthernetUseDHCP", bmdDeckLinkConfigParamEthernetUseDHCP)
+        .value("ConfigParamEthernetStaticLocalIPAddress",
+               bmdDeckLinkConfigParamEthernetStaticLocalIPAddress)
+        .value("ConfigParamEthernetStaticSubnetMask",
+               bmdDeckLinkConfigParamEthernetStaticSubnetMask)
+        .value("ConfigParamEthernetStaticGatewayIPAddress",
+               bmdDeckLinkConfigParamEthernetStaticGatewayIPAddress)
+        .value("ConfigParamEthernetStaticPrimaryDNS",
+               bmdDeckLinkConfigParamEthernetStaticPrimaryDNS)
+        .value("ConfigParamEthernetStaticSecondaryDNS",
+               bmdDeckLinkConfigParamEthernetStaticSecondaryDNS)
+        // Where this device's own essence is sent, per connector.
+        .value("ConfigParamEthernetVideoOutputAddress",
+               bmdDeckLinkConfigParamEthernetVideoOutputAddress)
+        .value("ConfigParamEthernetAudioOutputAddress",
+               bmdDeckLinkConfigParamEthernetAudioOutputAddress)
+        .value("ConfigParamEthernetAncillaryOutputAddress",
+               bmdDeckLinkConfigParamEthernetAncillaryOutputAddress)
+        // Device-wide: the rest are unparameterised.
         .value("ConfigEthernetAudioOutputChannelOrder",
                bmdDeckLinkConfigEthernetAudioOutputChannelOrder)
+        .value("ConfigEthernetVideoOutputIP10", bmdDeckLinkConfigEthernetVideoOutputIP10)
+        // A manual NMOS registry, used instead of DNS-SD discovery when set.
+        .value("ConfigEthernetUseManualNMOSRegistry",
+               bmdDeckLinkConfigEthernetUseManualNMOSRegistry)
+        .value("ConfigEthernetNMOSRegistryAddress",
+               bmdDeckLinkConfigEthernetNMOSRegistryAddress)
         // PTP. `FollowerOnly` is what keeps the card off the grandmaster
         // election when something else on the fabric is the reference.
         .value("ConfigEthernetPTPFollowerOnly",
@@ -284,11 +292,15 @@ void init_decklink_enums(nb::module_& m) {
         .value("Duplex", BMDDeckLinkDuplex)
         .value("MinimumPrerollFrames", BMDDeckLinkMinimumPrerollFrames)
         .value("ProfileID", BMDDeckLinkProfileID)
+        // How many connectors the `Param` Ethernet IDs index (§spec:ethernet).
+        .value("NumberOfEthernetConnectors", BMDDeckLinkNumberOfEthernetConnectors)
         // Strings
         .value("VendorName", BMDDeckLinkVendorName)
         .value("DisplayName", BMDDeckLinkDisplayName)
         .value("ModelName", BMDDeckLinkModelName)
-        .value("DeviceHandle", BMDDeckLinkDeviceHandle);
+        .value("DeviceHandle", BMDDeckLinkDeviceHandle)
+        // Parameterised strings, one per Ethernet connector.
+        .value("ParamEthernetMACAddress", BMDDeckLinkParamEthernetMACAddress);
 
     // -- BMDColorspace --
     // Frame colour volume signalled via
@@ -383,22 +395,42 @@ void init_decklink_enums(nb::module_& m) {
         // -- Ethernet, on a DeckLink IP (§spec:ethernet) --
         // What the card negotiated and what it resolved, as against what
         // the configuration asked for. The two differ while DHCP is on,
-        // and while a link is down.
-        .value("EthernetLink", bmdDeckLinkStatusEthernetLink)
-        .value("EthernetLinkMbps", bmdDeckLinkStatusEthernetLinkMbps)
-        .value("EthernetLocalIPAddress", bmdDeckLinkStatusEthernetLocalIPAddress)
-        .value("EthernetSubnetMask", bmdDeckLinkStatusEthernetSubnetMask)
-        .value("EthernetGatewayIPAddress", bmdDeckLinkStatusEthernetGatewayIPAddress)
-        .value("EthernetPrimaryDNS", bmdDeckLinkStatusEthernetPrimaryDNS)
-        .value("EthernetSecondaryDNS", bmdDeckLinkStatusEthernetSecondaryDNS)
+        // and while a link is down. Device-wide first; the `Param` IDs
+        // belong to one connector and take the *_with_param accessors.
         .value("EthernetPTPGrandmasterIdentity",
                bmdDeckLinkStatusEthernetPTPGrandmasterIdentity)
-        .value("EthernetVideoOutputAddress",
-               bmdDeckLinkStatusEthernetVideoOutputAddress)
-        .value("EthernetAudioOutputAddress",
-               bmdDeckLinkStatusEthernetAudioOutputAddress)
-        .value("EthernetAncillaryOutputAddress",
-               bmdDeckLinkStatusEthernetAncillaryOutputAddress)
         .value("EthernetAudioInputChannelOrder",
-               bmdDeckLinkStatusEthernetAudioInputChannelOrder);
+               bmdDeckLinkStatusEthernetAudioInputChannelOrder)
+        .value("EthernetManualNMOSRegistry", bmdDeckLinkStatusEthernetManualNMOSRegistry)
+        .value("EthernetCurrentNMOSRegistry", bmdDeckLinkStatusEthernetCurrentNMOSRegistry)
+        .value("ParamEthernetLink", bmdDeckLinkStatusParamEthernetLink)
+        .value("ParamEthernetLinkMbps", bmdDeckLinkStatusParamEthernetLinkMbps)
+        .value("ParamEthernetLocalIPAddress", bmdDeckLinkStatusParamEthernetLocalIPAddress)
+        .value("ParamEthernetSubnetMask", bmdDeckLinkStatusParamEthernetSubnetMask)
+        .value("ParamEthernetGatewayIPAddress",
+               bmdDeckLinkStatusParamEthernetGatewayIPAddress)
+        .value("ParamEthernetPrimaryDNS", bmdDeckLinkStatusParamEthernetPrimaryDNS)
+        .value("ParamEthernetSecondaryDNS", bmdDeckLinkStatusParamEthernetSecondaryDNS)
+        // The optical module's SFF-8636 static fields, as a JSON string.
+        .value("ParamEthernetSFPStaticInfo", bmdDeckLinkStatusParamEthernetSFPStaticInfo)
+        .value("ParamEthernetVideoOutputAddress",
+               bmdDeckLinkStatusParamEthernetVideoOutputAddress)
+        .value("ParamEthernetAudioOutputAddress",
+               bmdDeckLinkStatusParamEthernetAudioOutputAddress)
+        .value("ParamEthernetAncillaryOutputAddress",
+               bmdDeckLinkStatusParamEthernetAncillaryOutputAddress);
+
+    // -- BMDDeckLinkStatisticID --
+    // Counters and readings via IDeckLinkStatistics (§spec:statistics).
+    // The `Param` IDs take a zero-based Ethernet connector index.
+    nb::enum_<_BMDDeckLinkStatisticID>(m, "StatisticID")
+        .value("PTPLossOfLock", bmdDeckLinkStatisticPTPLossOfLock)
+        .value("PTPDPLLMarginOfError", bmdDeckLinkStatisticPTPDPLLMarginOfError)
+        .value("DeviceTemperature", bmdDeckLinkStatisticDeviceTemperature)
+        .value("ParamEthernetRxPackets", bmdDeckLinkStatisticParamEthernetRxPackets)
+        .value("ParamEthernetRxDroppedPackets",
+               bmdDeckLinkStatisticParamEthernetRxDroppedPackets)
+        // The optical module's SFF-8636 dynamic fields, as a JSON string.
+        .value("ParamEthernetSFPDynamicInfo",
+               bmdDeckLinkStatisticParamEthernetSFPDynamicInfo);
 }

@@ -342,25 +342,31 @@ class ConfigurationID(enum.Enum):
 
     ConfigSwapSerialRxTx = 1936945780
 
-    ConfigEthernetUseDHCP = 1145586512
+    ConfigParamEthernetUseDHCP = 1145586512
 
-    ConfigEthernetStaticLocalIPAddress = 1853057392
+    ConfigParamEthernetStaticLocalIPAddress = 1853057392
 
-    ConfigEthernetStaticSubnetMask = 1853059949
+    ConfigParamEthernetStaticSubnetMask = 1853059949
 
-    ConfigEthernetStaticGatewayIPAddress = 1853056887
+    ConfigParamEthernetStaticGatewayIPAddress = 1853056887
 
-    ConfigEthernetStaticPrimaryDNS = 1853059172
+    ConfigParamEthernetStaticPrimaryDNS = 1853059172
 
-    ConfigEthernetStaticSecondaryDNS = 1853059940
+    ConfigParamEthernetStaticSecondaryDNS = 1853059940
 
-    ConfigEthernetVideoOutputAddress = 1852793206
+    ConfigParamEthernetVideoOutputAddress = 1852793206
 
-    ConfigEthernetAudioOutputAddress = 1852793185
+    ConfigParamEthernetAudioOutputAddress = 1852793185
 
-    ConfigEthernetAncillaryOutputAddress = 1852793153
+    ConfigParamEthernetAncillaryOutputAddress = 1852793153
 
     ConfigEthernetAudioOutputChannelOrder = 1667326831
+
+    ConfigEthernetVideoOutputIP10 = 1229992240
+
+    ConfigEthernetUseManualNMOSRegistry = 1852666480
+
+    ConfigEthernetNMOSRegistryAddress = 1852666469
 
     ConfigEthernetPTPFollowerOnly = 1347702886
 
@@ -417,6 +423,8 @@ class AttributeID(enum.Enum):
 
     ProfileID = 1886546276
 
+    NumberOfEthernetConnectors = 1852142696
+
     VendorName = 1986946162
 
     DisplayName = 1685287022
@@ -424,6 +432,8 @@ class AttributeID(enum.Enum):
     ModelName = 1835297902
 
     DeviceHandle = 1684371048
+
+    ParamEthernetMACAddress = 1884111171
 
 class Colorspace(enum.Enum):
     Rec601 = 1916153905
@@ -535,29 +545,48 @@ class StatusID(enum.Enum):
 
     ReferenceSignalFlags = 1919247974
 
-    EthernetLink = 1936026739
-
-    EthernetLinkMbps = 1936028528
-
-    EthernetLocalIPAddress = 1936025968
-
-    EthernetSubnetMask = 1936028525
-
-    EthernetGatewayIPAddress = 1936025463
-
-    EthernetPrimaryDNS = 1936027748
-
-    EthernetSecondaryDNS = 1936028516
-
     EthernetPTPGrandmasterIdentity = 1936746852
 
-    EthernetVideoOutputAddress = 1936679286
-
-    EthernetAudioOutputAddress = 1936679265
-
-    EthernetAncillaryOutputAddress = 1936679233
-
     EthernetAudioInputChannelOrder = 1935762287
+
+    EthernetManualNMOSRegistry = 1852665189
+
+    EthernetCurrentNMOSRegistry = 1852666469
+
+    ParamEthernetLink = 1936026739
+
+    ParamEthernetLinkMbps = 1936028528
+
+    ParamEthernetLocalIPAddress = 1936025968
+
+    ParamEthernetSubnetMask = 1936028525
+
+    ParamEthernetGatewayIPAddress = 1936025463
+
+    ParamEthernetPrimaryDNS = 1936027748
+
+    ParamEthernetSecondaryDNS = 1936028516
+
+    ParamEthernetSFPStaticInfo = 1936093289
+
+    ParamEthernetVideoOutputAddress = 1936679286
+
+    ParamEthernetAudioOutputAddress = 1936679265
+
+    ParamEthernetAncillaryOutputAddress = 1936679233
+
+class StatisticID(enum.Enum):
+    PTPLossOfLock = 1852600172
+
+    PTPDPLLMarginOfError = 1886679141
+
+    DeviceTemperature = 1400139120
+
+    ParamEthernetRxPackets = 1853125240
+
+    ParamEthernetRxDroppedPackets = 1852076664
+
+    ParamEthernetSFPDynamicInfo = 1936093299
 
 class DeviceInfo:
     @property
@@ -620,8 +649,35 @@ class Device:
         """Get an integer runtime status value via IDeckLinkStatus."""
 
     def get_status_string(self, status_id: StatusID) -> str:
+        """Get a string runtime status value via IDeckLinkStatus."""
+
+    def get_status_flag_with_param(self, status_id: StatusID, param: int) -> bool:
+        """Get a parameterised boolean status value via IDeckLinkStatus."""
+
+    def get_status_int_with_param(self, status_id: StatusID, param: int) -> int:
+        """Get a parameterised integer status value via IDeckLinkStatus."""
+
+    def get_status_string_with_param(self, status_id: StatusID, param: int) -> str:
         """
-        Get a string runtime status value via IDeckLinkStatus. The Ethernet addresses a DeckLink IP resolves are strings, not integers (§spec:ethernet).
+        Get a parameterised string status value via IDeckLinkStatus. The addresses a DeckLink IP connector resolves are strings, not integers; while its link is down they answer S_FALSE, which raises (§spec:ethernet).
+        """
+
+    def get_attribute_string_with_param(self, attr_id: AttributeID, param: int) -> str:
+        """
+        Get a parameterised string profile attribute — a DeckLink IP connector's MAC address (§spec:ethernet).
+        """
+
+    def get_statistic_int(self, statistic_id: StatisticID) -> int:
+        """Get an integer statistic via IDeckLinkStatistics."""
+
+    def get_statistic_int_with_param(self, statistic_id: StatisticID, param: int) -> int:
+        """
+        Get a parameterised integer statistic — a per-connector packet counter — via IDeckLinkStatistics.
+        """
+
+    def get_statistic_string_with_param(self, statistic_id: StatisticID, param: int) -> str:
+        """
+        Get a parameterised string statistic — a connector's optical module readings as JSON — via IDeckLinkStatistics.
         """
 
     @property
@@ -716,6 +772,26 @@ class Device:
 
     def get_config_string(self, setting: ConfigurationID) -> str:
         """Get a string configuration value."""
+
+    def set_config_flag_with_param(self, flag: ConfigurationID, param: int, value: bool) -> None:
+        """Set a parameterised boolean configuration flag."""
+
+    def get_config_flag_with_param(self, flag: ConfigurationID, param: int) -> bool:
+        """Get a parameterised boolean configuration flag."""
+
+    def set_config_int_with_param(self, setting: ConfigurationID, param: int, value: int) -> None:
+        """Set a parameterised integer configuration value."""
+
+    def get_config_int_with_param(self, setting: ConfigurationID, param: int) -> int:
+        """Get a parameterised integer configuration value."""
+
+    def set_config_string_with_param(self, setting: ConfigurationID, param: int, value: str) -> None:
+        """
+        Set a parameterised string configuration value — a DeckLink IP connector's address, in dotted-quad form (§spec:ethernet).
+        """
+
+    def get_config_string_with_param(self, setting: ConfigurationID, param: int) -> str:
+        """Get a parameterised string configuration value."""
 
     def write_config(self) -> None:
         """Persist configuration changes to preferences."""

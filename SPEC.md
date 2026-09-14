@@ -52,7 +52,7 @@ reproducibility.
 
 ### SDK integration
 
-SDK headers are vendored in `vendor/` at a pinned version (15.3).
+SDK headers are vendored in `vendor/` at a pinned version (16.0).
 The build system detects the platform and uses the appropriate SDK
 artefacts:
 
@@ -69,6 +69,15 @@ from all binding code.
 
 CMake conditionally includes SDK sources when present, allowing CI
 to build without the SDK on any platform.
+
+**The runtime shall be Desktop Video 16.0 or later.** SDK 16 gave new
+interface IDs to `IDeckLinkConfiguration`, `IDeckLinkInput`,
+`IDeckLinkOutput`, `IDeckLinkStatus`, `IDeckLinkProfileAttributes`,
+`IDeckLinkNotification` and the video-buffer interfaces, and kept the 15.3
+shapes under `_v15_3_1` names. A 16 runtime serves both; a 15.x runtime
+knows only the old IDs, so a binding built on these headers finds no
+configuration, input or output on it. 16.0 is also the first release that
+supports the DeckLink IP 100G.
 
 ### Constraints
 
@@ -195,7 +204,8 @@ are allocated. The binding exposes these as `VideoBufferAllocator`
 and `VideoBufferAllocatorProvider`. Each `AllocateVideoBuffer` call
 returns a `ManagedBuffer` — a per-issuance `IDeckLinkVideoBuffer`
 handle wrapping a pooled memory chunk owned by the allocator's
-free-list.
+free-list. SDK 16 added `GetSize` to `IDeckLinkVideoBuffer`; the
+handle answers it with the pooled chunk's size.
 
 By default, allocators use malloc/free. Users can supply custom
 Python callables for alloc/free at construction time. The allocator
@@ -603,6 +613,10 @@ Wraps `IDeckLinkConfiguration`:
 - `device.get_config_int(setting) → int`
 - `device.set_config_string(setting, value)`
 - `device.get_config_string(setting) → str`
+- `device.set_config_flag_with_param(flag, param, value)`,
+  `device.get_config_flag_with_param(flag, param) → bool`, and the
+  `int` and `string` pairs likewise — the SDK 16 `*WithParam` methods, for
+  a `ConfigParam*` ID naming one member of a set (§spec:ethernet)
 - `device.write_config()` — persists changes via
   `WriteConfigurationToPreferences`.
 
@@ -626,17 +640,31 @@ these IDs are bound rather than left to a caller: an unbound value is not
 merely undocumented, it is unreachable, because nanobind refuses a raw
 integer naming no enum member.
 
-**The addresses are strings, and the link state is an integer.** The SDK
-groups them so: `Network Strings` for the local address, the subnet mask,
-the gateway, the DNS servers and the video, audio and ancillary output
-groups; `Network Integers` for the PTP domain, priorities and announce
-interval; `Network Flags` for DHCP, `PTPFollowerOnly` and
-`PTPUseUDPEncapsulation`. A `SetInt` on an address answers `E_INVALIDARG`,
-which reads as an unsupported device rather than as the wrong accessor —
-hence `set_config_string` and `get_config_string`, and `get_status_string`
-beside them.
+**Each connector has its own address.** A DeckLink IP 100G carries two
+QSFP28 connectors, the two legs of an ST 2022-7 pair, and each binds its
+own address. SDK 16 moved every per-connector setting onto a `Param` ID
+taking the connector's zero-based index — `ConfigParamEthernet*`,
+`StatusID.ParamEthernet*`, `AttributeID.ParamEthernetMACAddress` —
+reached only through the `*_with_param` accessors.
+`AttributeID.NumberOfEthernetConnectors` says how many indices exist. The
+`Param` IDs reuse the four-character codes 15.3 had for the same settings
+unparameterised; 15.3's names are gone, and with them the only path it had
+to a second connector. PTP, the NMOS registry and the audio channel order
+stay device-wide and unparameterised.
 
-`StatusID.EthernetLink` reports one of `bmdEthernetLinkState`:
+**The addresses are strings, and the link state is an integer.** A
+`SetInt` on an address answers `E_INVALIDARG`, which reads as an
+unsupported device rather than as the wrong accessor — hence
+`set_config_string_with_param`, `get_config_string_with_param` and
+`get_status_string_with_param`.
+
+**An address write applies at once.** The connector drops to
+`ConnectedUnbound` within tens of milliseconds and rebinds about a second
+later, before any `write_config()`. Writing an address is therefore a link
+interruption, and a test that writes one waits for the link state it
+found before it ends.
+
+`StatusID.ParamEthernetLink` reports one of `bmdEthernetLinkState`:
 `Disconnected`, `ConnectedUnbound` or `ConnectedBound`. The resolved
 address, mask, gateway and grandmaster identity are **status strings and
 are unavailable while the link is down** — `GetString` answers `S_FALSE`
@@ -644,8 +672,41 @@ rather than an empty string, so a reader distinguishes *not yet* from
 *none*. The configured address is readable at any time; the two differ
 whenever DHCP is on or the link is down, so a diagnostic reports both.
 
+`StatusID.ParamEthernetSFPStaticInfo` returns the optical module's
+SFF-8636 identity — vendor, part number, compliance code — as a JSON
+string, so the module is readable without host privilege; the host sees
+no network device to point `ethtool -m` at.
+
 `PTPFollowerOnly` is what keeps the card out of the grandmaster election
 where something else on the fabric is the reference.
+
+### Statistics §spec:statistics
+
+Wraps `IDeckLinkStatistics`, new in SDK 16:
+
+- `device.get_statistic_int(statistic_id) → int`
+- `device.get_statistic_int_with_param(statistic_id, param) → int`
+- `device.get_statistic_string_with_param(statistic_id, param) → str`
+
+`StatisticID` names PTP loss-of-lock events, the PTP DPLL margin of
+error, and the on-board temperature in °C, device-wide; and per Ethernet
+connector, the received and dropped packet counts and the optical
+module's SFF-8636 dynamic readings — temperature, supply voltage, per-lane
+bias, transmit and receive power — as JSON. Where the card has
+sub-devices, a connector's counters sum across every sub-device sharing
+it.
+
+**The JSON's power figures are Blackmagic's, not re-derived.** On the
+bench card with CWDM4 modules, the "mW" figures read 7–11 per lane
+received and 9–14 transmitted, on a link running without error. The CWDM4
+MSA caps each lane's launch at +2.5 dBm (1.78 mW) and puts the receiver's
+damage threshold at +3.5 dBm (2.24 mW), so the figures cannot be literal;
+a tenfold slip in SFF-8636's 0.1 µW unit would put them in range. The
+binding returns the string unaltered, and a consumer reads the powers as
+relative — lane against lane, or against their own history.
+
+The on-board temperature moved here from `IDeckLinkStatus`, where SDK
+15.3 carried it under a different four-character code.
 
 ### Enums
 
@@ -672,9 +733,10 @@ nanobind refuses a raw value naming no member.
 | `FrameFlag` | `BMDFrameFlags` | HDR, colorspace, no signal |
 | `DetectedInputFormat` | `BMDDetectedVideoInputFormatFlags` | YCbCr/RGB, bit depth |
 | `OutputFrameResult` | `BMDOutputFrameCompletionResult` | Completed, late, dropped |
-| `ConfigurationID` | `BMDDeckLinkConfigurationID` | Every configuration ID, whatever its type — including the Ethernet and PTP settings of a DeckLink IP (§spec:ethernet) |
-| `AttributeID` | `BMDDeckLinkAttributeID` | Capability query IDs |
-| `StatusID` | `BMDDeckLinkStatusID` | Reference signal, and the Ethernet link and addresses (§spec:ethernet) |
+| `ConfigurationID` | `BMDDeckLinkConfigurationID` | Every configuration ID, whatever its type — including the per-connector Ethernet and device-wide PTP settings of a DeckLink IP (§spec:ethernet) |
+| `AttributeID` | `BMDDeckLinkAttributeID` | Capability query IDs, including the Ethernet connector count and per-connector MAC (§spec:ethernet) |
+| `StatusID` | `BMDDeckLinkStatusID` | Reference signal, and the per-connector Ethernet link, addresses and module identity (§spec:ethernet) |
+| `StatisticID` | `BMDDeckLinkStatisticID` | PTP lock, temperature, per-connector packet counts and module readings (§spec:statistics) |
 | `ProfileID` | `BMDProfileID` | Connector profile selection |
 | `DuplexMode` | `BMDDuplexMode` | Full, half, simplex, inactive |
 | `LinkConfiguration` | `BMDLinkConfiguration` | Single, dual, quad link (§spec:sdi-link-configuration) |
@@ -682,9 +744,9 @@ nanobind refuses a raw value naming no member.
 **One enum carries every configuration ID, not one per value type.**
 `ConfigFlag` and `ConfigInt` were named here and neither exists: the
 binding is `ConfigurationID` throughout, and which of `set_config_flag`,
-`set_config_int` or `set_config_string` a given ID takes is the SDK's
-grouping rather than a separate Python type (§spec:configuration,
-§spec:ethernet). `DeviceAttribute` and `DisplayModeEnum` were the same
+`set_config_int` or `set_config_string` a given ID takes — and whether it
+takes the `_with_param` form — is the SDK's grouping rather than a
+separate Python type (§spec:configuration, §spec:ethernet). `DeviceAttribute` and `DisplayModeEnum` were the same
 kind of error, for `AttributeID` and `DisplayMode`.
 
 ### Format Metadata
@@ -755,6 +817,10 @@ Generic accessors mirror the existing attribute surface:
 
 - `device.get_status_flag(status_id) → bool`
 - `device.get_status_int(status_id) → int`
+- `device.get_status_string(status_id) → str`
+- `device.get_status_{flag,int,string}_with_param(status_id, param)` —
+  for a `Param` status ID, such as one Ethernet connector's link
+  (§spec:ethernet)
 - `StatusID` enum bound from `BMDDeckLinkStatusID`.
 
 Narrow convenience for the reference input:
@@ -1887,7 +1953,7 @@ proves common a future spec section may propose one.
 
 `pydecklink.api_version() -> APIVersion` reports the running Desktop
 Video runtime version (`libDeckLinkAPI.so` / CoreFoundation plug-in /
-COM server). The SDK header version is pinned at build time (15.3,
+COM server). The SDK header version is pinned at build time (16.0,
 vendored); the runtime version is opaque without this surface, so
 diagnostics, bug reports, and CI fingerprints had to shell out to a
 Blackmagic CLI to recover what is already inside the process.
@@ -1921,14 +1987,15 @@ matching that shape keeps one failure idiom across the binding.
 ### Scope
 
 - Reads `BMDDeckLinkAPIVersion` only — the only attribute
-  `BMDDeckLinkAPIInformationID` defines in SDK 15.3.
+  `BMDDeckLinkAPIInformationID` defines in SDK 16.0.
 - The reported version is the runtime, not the vendored SDK headers
   pydecklink builds against. Detecting mismatch between the two is
-  left to consumers.
+  left to consumers; a runtime older than 16.0 is the mismatch that
+  matters (§spec:development-environment).
 
 ### Citations
 
-- §spec:development-environment Development Environment — vendored SDK header version (15.3)
+- §spec:development-environment Development Environment — vendored SDK header version (16.0)
   that this surface complements at runtime.
 - §spec:device Device — module-level enumeration pattern
   (`device_count()`, `list_devices()`) this function follows.

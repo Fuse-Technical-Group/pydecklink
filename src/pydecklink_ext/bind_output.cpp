@@ -438,6 +438,72 @@ void init_decklink_output(nb::module_& m, nb::class_<Device>& device) {
         nb::arg("setting"),
         "Get a string configuration value.");
 
+    // -- Parameterised configuration (SDK 16) --
+    // A `Param` ID names a setting of one member of a set; ``param``
+    // selects the member. For the Ethernet IDs it is the zero-based
+    // connector index (§spec:ethernet).
+    device.def("set_config_flag_with_param",
+        [](Device& self, _BMDDeckLinkConfigurationID cfgID, uint64_t param, bool value) {
+            HRESULT hr = self.config()->SetFlagWithParam(cfgID, param, static_cast<dlbool_t>(value));
+            if (hr != S_OK)
+                throw std::runtime_error("SetFlagWithParam failed (HRESULT " + std::to_string(hr) + ")");
+        },
+        nb::arg("flag"), nb::arg("param"), nb::arg("value"),
+        "Set a parameterised boolean configuration flag.");
+
+    device.def("get_config_flag_with_param",
+        [](Device& self, _BMDDeckLinkConfigurationID cfgID, uint64_t param) -> bool {
+            dlbool_t value = false;
+            HRESULT hr = self.config()->GetFlagWithParam(cfgID, param, &value);
+            if (hr != S_OK)
+                throw std::runtime_error("GetFlagWithParam failed (HRESULT " + std::to_string(hr) + ")");
+            return static_cast<bool>(value);
+        },
+        nb::arg("flag"), nb::arg("param"),
+        "Get a parameterised boolean configuration flag.");
+
+    device.def("set_config_int_with_param",
+        [](Device& self, _BMDDeckLinkConfigurationID cfgID, uint64_t param, int64_t value) {
+            HRESULT hr = self.config()->SetIntWithParam(cfgID, param, value);
+            if (hr != S_OK)
+                throw std::runtime_error("SetIntWithParam failed (HRESULT " + std::to_string(hr) + ")");
+        },
+        nb::arg("setting"), nb::arg("param"), nb::arg("value"),
+        "Set a parameterised integer configuration value.");
+
+    device.def("get_config_int_with_param",
+        [](Device& self, _BMDDeckLinkConfigurationID cfgID, uint64_t param) -> int64_t {
+            int64_t value = 0;
+            HRESULT hr = self.config()->GetIntWithParam(cfgID, param, &value);
+            if (hr != S_OK)
+                throw std::runtime_error("GetIntWithParam failed (HRESULT " + std::to_string(hr) + ")");
+            return value;
+        },
+        nb::arg("setting"), nb::arg("param"),
+        "Get a parameterised integer configuration value.");
+
+    device.def("set_config_string_with_param",
+        [](Device& self, _BMDDeckLinkConfigurationID cfgID, uint64_t param, const std::string& value) {
+            DeckLinkStringFromStd held(value);
+            HRESULT hr = self.config()->SetStringWithParam(cfgID, param, held.get());
+            if (hr != S_OK)
+                throw std::runtime_error("SetStringWithParam failed (HRESULT " + std::to_string(hr) + ")");
+        },
+        nb::arg("setting"), nb::arg("param"), nb::arg("value"),
+        "Set a parameterised string configuration value — a DeckLink IP "
+        "connector's address, in dotted-quad form (§spec:ethernet).");
+
+    device.def("get_config_string_with_param",
+        [](Device& self, _BMDDeckLinkConfigurationID cfgID, uint64_t param) -> std::string {
+            dlstring_t value = nullptr;
+            HRESULT hr = self.config()->GetStringWithParam(cfgID, param, &value);
+            if (hr != S_OK)
+                throw std::runtime_error("GetStringWithParam failed (HRESULT " + std::to_string(hr) + ")");
+            return DeckLinkStringToStd(value);
+        },
+        nb::arg("setting"), nb::arg("param"),
+        "Get a parameterised string configuration value.");
+
     device.def("write_config",
         [](Device& self) {
             HRESULT hr = self.config()->WriteConfigurationToPreferences();

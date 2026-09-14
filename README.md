@@ -8,7 +8,8 @@ and the network surface of the DeckLink IP cards that carry SMPTE ST 2110.
 
 - **Linux**, **macOS**, or **Windows** with
   [Blackmagic Desktop Video](https://www.blackmagicdesign.com/support/family/capture-and-playback)
-  installed
+  16.0 or later installed — the binding is built against the 16.0 SDK
+  headers, whose interfaces an older runtime does not serve
 - Blackmagic DeckLink hardware
 - Python 3.12+
 
@@ -86,12 +87,26 @@ marker, so editors and `mypy` see the full typed surface. Key entry points:
 
 **DeckLink IP** — the card runs its own IP stack, so the host has no network
 device for its media port and the address is set through the SDK or not at
-all. `ConfigurationID.ConfigEthernet*` covers the address, subnet, gateway
-and the multicast group each stream sends to; `ConfigurationID.ConfigEthernetPTP*`
-covers the PTP domain, priorities and `FollowerOnly`. `StatusID.Ethernet*`
-reports what the card resolved and negotiated. Addresses are dotted-quad
-**strings** — use `set_config_string` / `get_config_string` and
-`get_status_string`, since `set_config_int` on one answers `E_INVALIDARG`.
+all. Each Ethernet connector has its own address:
+`ConfigurationID.ConfigParamEthernet*` covers a connector's address, subnet,
+gateway and the multicast group each stream sends to, and
+`StatusID.ParamEthernet*` reports what that connector resolved and
+negotiated. Reach them with the `*_with_param` accessors, passing the
+connector's zero-based index; `AttributeID.NumberOfEthernetConnectors`
+counts them. `ConfigurationID.ConfigEthernetPTP*` covers the device-wide
+PTP domain, priorities and `FollowerOnly`. Addresses are dotted-quad
+**strings**, since `set_config_int` on one answers `E_INVALIDARG`:
+
+```python
+cfg, status = pydecklink.ConfigurationID, pydecklink.StatusID
+dev.set_config_string_with_param(
+    cfg.ConfigParamEthernetStaticLocalIPAddress, 1, "192.0.2.40"
+)
+dev.get_status_int_with_param(status.ParamEthernetLink, 1)
+```
+
+`StatisticID` reads PTP lock, temperature, per-connector packet counts and
+the optical module's readings through `get_statistic_*`.
 
 **Frames** — `CaptureFrame`, `CaptureFrameRef` (zero-copy), and `MutableFrame`
 expose pixel data as a numpy array via `.data`, alongside `.width`,

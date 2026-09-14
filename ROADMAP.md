@@ -4,19 +4,18 @@ Derived from [SPEC.md](SPEC.md). Sections are in build-dependency order.
 
 ## DeckLink IP as an ST 2110 far end §road:decklink-ip-streams
 
-The address, the PTP role and the output groups are reachable now
-(§spec:ethernet), and the card on the bench is configured static on the
-media fabric as a PTP follower. What is not delivered is the stream half:
-choosing the video output group per device, reading the groups a receiver
-is bound to, and the SDP that names them — so a peer can be pointed at
-this card without the Desktop Video GUI.
+Each connector's address and output groups, the device-wide PTP role, and
+the link, packet counters and optical module of each connector are
+reachable now (§spec:ethernet, §spec:statistics). What is not delivered
+is the stream half: `IDeckLinkIPExtensions` and the `IDeckLinkIPFlow`
+family, which read the groups a receiver is bound to and the SDP that
+names a flow, and accept a peer's SDP — so a peer can be pointed at this
+card without the Desktop Video GUI.
 
-**Blocked on cabling, not on code.** The bench card reports
-`EthernetLink: Disconnected` at 0 Mbps on every one of its eight
-sub-devices, while the ConnectX-6 port facing it carries a 100G link with
-zero packets received. One of those two readings is of a wire that is not
-there. Until the card's own port reports `ConnectedUnbound` or better,
-nothing here can be measured.
+**The link is up.** Passive QSFP28 DACs never brought the bench card's
+port up — the ConnectX-6 facing it trained, the card reported
+`Disconnected` — and 100G optical modules did: both connectors report
+`ConnectedBound` at 100000 Mbps, and traffic crosses in both directions.
 
 **Verify:** With the link up, a `packet_engine` receive stream on the
 ConnectX-6 port digests a flow this card sends, and the card's status

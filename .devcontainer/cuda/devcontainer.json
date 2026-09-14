@@ -29,7 +29,7 @@
 
   "containerEnv": {
     "SSH_AUTH_SOCK": "/tmp/ssh-agent.sock",
-    "DECKLINK_SDK_DIR": "/workspaces/pydecklink/vendor/Blackmagic DeckLink SDK 15.3/Linux/include",
+    "DECKLINK_SDK_DIR": "/workspaces/pydecklink/vendor/Blackmagic DeckLink SDK 16.0/Linux/include",
     // Defensive — CDI passthrough should set these, but NGC convention is
     // to specify explicitly. `compute` for CUDA runtime, `utility` for
     // nvidia-smi. Skip `video` (NVENC/NVDEC) — pydecklink doesn't use it.
