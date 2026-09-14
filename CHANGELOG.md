@@ -1,3 +1,20 @@
+# [1.0.0](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.8.0...v1.0.0) (2026-09-14)
+
+
+* feat(sdk)!: build against DeckLink SDK 16.0, and reach each Ethernet connector ([84f9c98](https://github.com/Fuse-Technical-Group/pydecklink/commit/84f9c988a46825e81e0dd7f5f5e85fd5d50f3b3e))
+
+
+### BREAKING CHANGES
+
+* the unparameterised Ethernet names are gone, as they are
+from the SDK — `ConfigurationID.ConfigEthernetUseDHCP`,
+`ConfigEthernetStatic*` and `ConfigEthernet{Video,Audio,Ancillary}OutputAddress`
+become `ConfigParamEthernet*`, and `StatusID.EthernetLink`, `EthernetLinkMbps`
+and the resolved-address IDs become `StatusID.ParamEthernet*`, reached
+through the `*_with_param` accessors. The binding needs Desktop Video 16.0
+or later at runtime: SDK 16 gave configuration, input, output, status and
+the buffer interfaces new IDs that an older runtime does not serve.
+
 # [0.8.0](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.7.0...v0.8.0) (2026-08-30)
 
 
