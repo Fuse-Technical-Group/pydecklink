@@ -1,3 +1,10 @@
+## [1.0.1](https://github.com/Fuse-Technical-Group/pydecklink/compare/v1.0.0...v1.0.1) (2026-09-14)
+
+
+### Bug Fixes
+
+* **packaging:** bound pypixelpack to a range PyPI serves, and say what 1.0 promises ([#227](https://github.com/Fuse-Technical-Group/pydecklink/issues/227)) ([efc0192](https://github.com/Fuse-Technical-Group/pydecklink/commit/efc0192d1bc97bab66f5b71d62e5cfcb6945d8ea))
+
 # [1.0.0](https://github.com/Fuse-Technical-Group/pydecklink/compare/v0.8.0...v1.0.0) (2026-09-14)
 
 
