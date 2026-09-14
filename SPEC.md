@@ -146,12 +146,44 @@ an older macOS runs the Desktop Video release that supports it. Wheels
 install across the declared range; whether hardware is reachable is a
 runtime property the binding already reports (§spec:api-information).
 
+### Every dependency resolves from PyPI
+
+A wheel that names a package absent from PyPI cannot install, and the
+installer reports only an unsatisfiable requirement. It is also a
+dependency-confusion opening: the unclaimed name is one anyone could
+register, and every install would then take theirs. Each entry in
+`dependencies` shall therefore name a package published on PyPI, and a
+sibling package this binding depends on reaches PyPI before a
+pydecklink release that requires it. 0.8.0 declared `pypixelpack`
+before pypixelpack had been published, and 1.0.0 carried the same
+dependency; neither could install from PyPI until pypixelpack 0.2.0
+was.
+
+### Versioning
+
+pydecklink follows Semantic Versioning from 1.0.0. The public API is the
+`pydecklink` module's names and signatures — `_bindings.pyi` records
+them — together with `pydecklink.packing` and `connector_label`. Two
+consequences follow from binding the SDK as it is
+(§spec:binding-philosophy):
+
+- **A Blackmagic rename is a major.** Enum members carry the SDK's names,
+  so an SDK release that renames or removes one — as 16.0 did with the
+  Ethernet IDs — reaches callers as a breaking change.
+- **A higher Desktop Video floor is a major.** A header bump whose
+  interfaces an older runtime does not serve narrows where the binding
+  works, even with no Python name changed
+  (§spec:development-environment).
+
 ### Citations
 
 - §spec:development-environment — build toolchain, and the SDK-version
   constraint the runtime caveat above refers to.
 - §spec:api-information — reports the running Desktop Video runtime, the
   runtime half of the install/operate split.
+- §spec:binding-philosophy — why enum names track the SDK's, and so why
+  an SDK rename is a major here.
+- §spec:pixel-packing — the pypixelpack dependency and its development pin.
 - Reported in #208.
 
 ## Binding Technology §spec:binding-technology
@@ -1162,11 +1194,15 @@ takes the enum. Array conventions are pypixelpack's (`§spec:layouts`
 there). The DeckLink SDK 15.3 manual
 section 3.4 remains the byte-layout authority.
 
-pypixelpack is pinned by commit hash in `[tool.uv.sources]`, the hash
-v0.1.0 names. A tag is not a pin: any collaborator can move one, and
-`uv.lock` is not committed in this repository, so nothing else would
-turn a moved tag into a visible diff. The hash is what keeps the
-byte-exact tests here from drifting under a substituted dependency.
+**Two constraints, for two audiences.** The published wheel declares
+`pypixelpack>=0.2,<1`, which an install resolves from PyPI
+(§spec:distribution). A build from this checkout instead takes
+pypixelpack from a commit hash in `[tool.uv.sources]`, the hash v0.2.0
+names — the release on PyPI, so CI tests what an install gets. A tag is
+not a pin: any collaborator can move one, and `uv.lock` is not committed
+in this repository, so nothing else would turn a moved tag into a
+visible diff. The hash is what keeps the byte-exact tests here from
+drifting under a substituted dependency.
 
 ### Why the layouts moved out
 
