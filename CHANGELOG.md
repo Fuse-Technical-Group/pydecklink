@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/Fuse-Technical-Group/pydecklink/compare/v1.0.1...v1.1.0) (2026-09-14)
+
+
+### Features
+
+* **ip:** bind the IP flows of a DeckLink IP ([29184f4](https://github.com/Fuse-Technical-Group/pydecklink/commit/29184f4900bed5f5517d7b0b1b0d6561e1cf6aaf))
+
 ## [1.0.1](https://github.com/Fuse-Technical-Group/pydecklink/compare/v1.0.0...v1.0.1) (2026-09-14)
 
 
