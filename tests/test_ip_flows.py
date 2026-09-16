@@ -12,6 +12,7 @@ from __future__ import annotations
 import pytest
 
 import pydecklink
+from test_ethernet import LINK_DISCONNECTED
 
 _HAS_SDK = getattr(pydecklink, "HAS_SDK", False)
 
@@ -188,14 +189,23 @@ def test_an_output_flow_offers_the_groups_its_connectors_report(
     ip_devices: list[pydecklink.Device],
 ) -> None:
     """The SDP the card sends names, leg by leg, the video group each
-    connector reports it sends to (§spec:ethernet)."""
+    connector reports it sends to (§spec:ethernet).
+
+    Every connector needs link: an unlinked card offers an empty SDP, and a
+    connector without link has no resolved group to compare against."""
     device = ip_devices[0]
-    flow = _flow(device, pydecklink.IPFlowDirection.Output, pydecklink.IPFlowType.Video)
-    sdp = flow.get_status_string(pydecklink.IPFlowStatusID.SDP)
-    assert sdp.startswith("v=0")
     connectors = device.get_attribute_int(
         pydecklink.AttributeID.NumberOfEthernetConnectors
     )
+    link = pydecklink.StatusID.ParamEthernetLink
+    if any(
+        device.get_status_int_with_param(link, connector) == LINK_DISCONNECTED
+        for connector in range(connectors)
+    ):
+        pytest.skip("a connector has no link")
+    flow = _flow(device, pydecklink.IPFlowDirection.Output, pydecklink.IPFlowType.Video)
+    sdp = flow.get_status_string(pydecklink.IPFlowStatusID.SDP)
+    assert sdp.startswith("v=0")
     reported = [
         device.get_status_string_with_param(
             pydecklink.StatusID.ParamEthernetVideoOutputAddress, connector
