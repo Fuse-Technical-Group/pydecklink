@@ -1,3 +1,10 @@
+## [1.1.1](https://github.com/Fuse-Technical-Group/pydecklink/compare/v1.1.0...v1.1.1) (2026-09-16)
+
+
+### Bug Fixes
+
+* leave Python alone once nanobind cannot attach a thread state ([#231](https://github.com/Fuse-Technical-Group/pydecklink/issues/231)) ([154960c](https://github.com/Fuse-Technical-Group/pydecklink/commit/154960c9e5a8bb24897c5f7781cd13942264dc7a))
+
 # [1.1.0](https://github.com/Fuse-Technical-Group/pydecklink/compare/v1.0.1...v1.1.0) (2026-09-14)
 
 
