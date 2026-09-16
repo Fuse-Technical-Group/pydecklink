@@ -26,7 +26,7 @@ struct ProfileCallback {
 };
 
 struct PyProfileCallback : ProfileCallback {
-    NB_TRAMPOLINE(ProfileCallback, 2);
+    NB_TRAMPOLINE(ProfileCallback);
     void profile_changing(nb::object profile,
                           bool streams_will_be_forced_to_stop) override {
         NB_OVERRIDE(profile_changing, profile, streams_will_be_forced_to_stop);
@@ -56,6 +56,10 @@ public:
             // ``user_`` is an nb::object — dropping it requires the
             // GIL. The adapter may be Released from an SDK thread.
             nb::gil_scoped_acquire gil;
+            // At interpreter shutdown the acquire fails; leak the
+            // reference rather than touch a dead interpreter.
+            if (!gil.is_valid())
+                (void)user_.release();
             delete this;
         }
         return c;

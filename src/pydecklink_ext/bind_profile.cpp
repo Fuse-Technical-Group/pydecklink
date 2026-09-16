@@ -69,6 +69,8 @@ HRESULT ProfileCallbackAdapter::ProfileChanging(
         IDeckLinkProfile* profileToBeActivated,
         dlbool_t streamsWillBeForcedToStop) {
     nb::gil_scoped_acquire gil;
+    if (!gil.is_valid())
+        return S_OK;  // Interpreter shutting down; nobody left to notify.
     try {
         Profile p = wrap_profile_from_callback(profileToBeActivated);
         ProfileCallback* cb = nb::cast<ProfileCallback*>(user_);
@@ -85,6 +87,8 @@ HRESULT ProfileCallbackAdapter::ProfileChanging(
 HRESULT ProfileCallbackAdapter::ProfileActivated(
         IDeckLinkProfile* activatedProfile) {
     nb::gil_scoped_acquire gil;
+    if (!gil.is_valid())
+        return S_OK;  // Interpreter shutting down; nobody left to notify.
     try {
         Profile p = wrap_profile_from_callback(activatedProfile);
         ProfileCallback* cb = nb::cast<ProfileCallback*>(user_);

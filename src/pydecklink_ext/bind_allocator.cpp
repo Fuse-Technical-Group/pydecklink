@@ -23,6 +23,8 @@ AllocFn make_alloc_fn(std::optional<nb::callable>& alloc_fn) {
     nb::object alloc_ref = nb::borrow(*alloc_fn);
     return [alloc_ref](size_t sz) -> void* {
         nb::gil_scoped_acquire gil;
+        if (!gil.is_valid())
+            return nullptr;  // Interpreter shutting down.
         nb::object result = alloc_ref(sz);
         return reinterpret_cast<void*>(nb::cast<uintptr_t>(result));
     };
@@ -33,6 +35,8 @@ FreeFn make_free_fn(std::optional<nb::callable>& free_fn) {
     nb::object free_ref = nb::borrow(*free_fn);
     return [free_ref](void* ptr, size_t sz) {
         nb::gil_scoped_acquire gil;
+        if (!gil.is_valid())
+            return;  // Interpreter shutting down; the memory goes with it.
         free_ref(reinterpret_cast<uintptr_t>(ptr), sz);
     };
 }
