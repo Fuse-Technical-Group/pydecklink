@@ -12,3 +12,11 @@ updates:
       github-actions:
         patterns:
           - "*"
+  # For the exact pins in pyproject.toml's [build-system] table. The range
+  # requirements elsewhere in the file are already satisfied by the latest
+  # release, so Dependabot opens nothing for them. A setuptools-scm bump
+  # also belongs in build-wheels.yml, which Dependabot does not read.
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly

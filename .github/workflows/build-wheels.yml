@@ -62,7 +62,7 @@ jobs:
         id: version
         if: matrix.platform == 'linux'
         run: |
-          version=$(uv run --no-project --with setuptools-scm \
+          version=$(uv run --no-project --with setuptools-scm==10.2.3 \
             python -c 'from setuptools_scm import get_version; print(get_version())')
           echo "value=$version" >> "$GITHUB_OUTPUT"
 

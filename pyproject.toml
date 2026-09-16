@@ -1,5 +1,10 @@
 [build-system]
-requires = ["scikit-build-core>=0.10", "nanobind>=2.4", "setuptools-scm>=8"]
+# Exact pins. A source build runs in an isolated environment holding only
+# these, so a range lets an upstream release change what compiles without a
+# commit here — nanobind 3.0 broke a sibling extension that way. Dependabot's
+# pip ecosystem reads this table, and only proposes a bump when the pin
+# excludes the new release.
+requires = ["scikit-build-core==1.0.3", "nanobind==3.0.1", "setuptools-scm==10.2.3"]
 build-backend = "scikit_build_core.build"
 
 [project]
