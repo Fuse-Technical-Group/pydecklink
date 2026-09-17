@@ -12,6 +12,7 @@ updates:
       github-actions:
         patterns:
           - "*"
+        update-types: [minor, patch]
   # For the exact pins in pyproject.toml's [build-system] table. The range
   # requirements elsewhere in the file are already satisfied by the latest
   # release, so Dependabot opens nothing for them. A setuptools-scm bump
@@ -20,3 +21,7 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    groups:
+      pip-minor-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]
