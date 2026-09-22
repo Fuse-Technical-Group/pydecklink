@@ -4,7 +4,7 @@
 # commit here — nanobind 3.0 broke a sibling extension that way. Dependabot's
 # pip ecosystem reads this table, and only proposes a bump when the pin
 # excludes the new release.
-requires = ["scikit-build-core==1.0.3", "nanobind==3.0.1", "setuptools-scm==10.2.3"]
+requires = ["scikit-build-core==1.0.3", "nanobind==3.1.0", "setuptools-scm==10.2.3"]
 build-backend = "scikit_build_core.build"
 
 [project]
