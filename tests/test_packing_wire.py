@@ -28,6 +28,7 @@ import numpy as np
 import pytest
 
 import pydecklink
+from _loopback import skip_if_half_duplex_self_loopback
 
 _HAS_SDK = getattr(pydecklink, "HAS_SDK", False)
 
@@ -88,6 +89,7 @@ def test_v210_packing_round_trips_over_sdi():
     out_dev = pydecklink.Device(index=_OUTPUT_INDEX)
     # Self-loopback shares one handle; distinct indices get their own.
     if _INPUT_INDEX == _OUTPUT_INDEX:
+        skip_if_half_duplex_self_loopback(out_dev, _OUTPUT_INDEX, _INPUT_INDEX)
         in_dev = out_dev
     else:
         in_dev = pydecklink.Device(index=_INPUT_INDEX)
@@ -99,13 +101,15 @@ def test_v210_packing_round_trips_over_sdi():
     except RuntimeError:
         original_444 = None
 
-    original = _band_pattern()
-    buf = pack(original, PIXEL_FORMAT, ROW_BYTES)
-
-    out_dev.enable_video_output(MODE)
-    in_dev.enable_video_input(MODE, PIXEL_FORMAT)  # fixed mode matches the wire
-    in_dev.start_streams()
+    # Setup sits inside the try, so a failed enable still tears down: an
+    # output left enabled would deny every later test the sub-device.
     try:
+        original = _band_pattern()
+        buf = pack(original, PIXEL_FORMAT, ROW_BYTES)
+
+        out_dev.enable_video_output(MODE)
+        in_dev.enable_video_input(MODE, PIXEL_FORMAT)  # fixed mode matches the wire
+        in_dev.start_streams()
         preroll = 15
         out_dev.create_frame_pool(preroll + 5, WIDTH, HEIGHT, ROW_BYTES, PIXEL_FORMAT)
 
@@ -189,6 +193,7 @@ def test_r210_packing_round_trips_over_sdi_4k():
     pf = pydecklink.PixelFormat.Format10BitRGB
     out_dev = pydecklink.Device(index=_OUTPUT_INDEX)
     if _INPUT_INDEX == _OUTPUT_INDEX:
+        skip_if_half_duplex_self_loopback(out_dev, _OUTPUT_INDEX, _INPUT_INDEX)
         in_dev = out_dev
     else:
         in_dev = pydecklink.Device(index=_INPUT_INDEX)
@@ -205,24 +210,26 @@ def test_r210_packing_round_trips_over_sdi_4k():
     except RuntimeError:
         original_link = None
 
-    width = pydecklink.get_mode_width(mode)
-    height = pydecklink.get_mode_height(mode)
-    timescale = 10_000_000
-    duration = round(timescale / pydecklink.get_mode_fps(mode))
-
-    out_dev.enable_video_output(mode)
-    row_bytes = out_dev.row_bytes_for_pixel_format(pf, width)
-    # Distinct value at (almost) every pixel: R varies by row, B by column,
-    # both in [0x040, 0x3A3] to avoid SMPTE reserved 10-bit codes.
-    original = np.empty((height, width, 3), dtype=np.uint16)
-    original[:, :, 0] = (np.arange(height, dtype=np.uint16)[:, None] % 900) + 0x40
-    original[:, :, 1] = 0x200
-    original[:, :, 2] = (np.arange(width, dtype=np.uint16)[None, :] % 900) + 0x40
-    buf = pack(original, pf, row_bytes)
-
-    in_dev.enable_video_input(mode, pf)
-    in_dev.start_streams()
+    # Setup sits inside the try, so a failed enable still tears down: an
+    # output left enabled would deny every later test the sub-device.
     try:
+        width = pydecklink.get_mode_width(mode)
+        height = pydecklink.get_mode_height(mode)
+        timescale = 10_000_000
+        duration = round(timescale / pydecklink.get_mode_fps(mode))
+
+        out_dev.enable_video_output(mode)
+        row_bytes = out_dev.row_bytes_for_pixel_format(pf, width)
+        # Distinct value at (almost) every pixel: R varies by row, B by column,
+        # both in [0x040, 0x3A3] to avoid SMPTE reserved 10-bit codes.
+        original = np.empty((height, width, 3), dtype=np.uint16)
+        original[:, :, 0] = (np.arange(height, dtype=np.uint16)[:, None] % 900) + 0x40
+        original[:, :, 1] = 0x200
+        original[:, :, 2] = (np.arange(width, dtype=np.uint16)[None, :] % 900) + 0x40
+        buf = pack(original, pf, row_bytes)
+
+        in_dev.enable_video_input(mode, pf)
+        in_dev.start_streams()
         preroll = 20
         out_dev.create_frame_pool(preroll + 6, width, height, row_bytes, pf)
 
