@@ -588,10 +588,12 @@ internally and exposed via:
 The frame's pixel format shall carry alpha (`Format10BitYUVA`,
 `Format8BitARGB`, `Format8BitBGRA`); on a YCbCr connector the card
 drops the alpha unless the keyer is enabled. Keying is a property of
-the profile, not the card: a multi-sub-device card reports it only
-under the profile that owns the keyer, and `does_support_video_mode`
+the profile, not the card: the manual (section 2.4.11) lists the keying
+attributes among what a profile change moves, and its profile tables
+label which BNC of a sub-device carries key and fill — a keying
+sub-device emits its key on its input BNC. `does_support_video_mode`
 with `SupportedVideoModeFlag.Keying` answers for a given mode and
-format. The interface is acquired on first use and held for the
+format in the active profile. The interface is acquired on first use and held for the
 device's lifetime, like configuration; a device or profile without a
 keyer raises on that first call.
 
