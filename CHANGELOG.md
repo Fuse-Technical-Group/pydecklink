@@ -1,3 +1,10 @@
+# [1.3.0](https://github.com/Fuse-Technical-Group/pydecklink/compare/v1.2.0...v1.3.0) (2026-09-23)
+
+
+### Features
+
+* **output:** read scheduled output's lead and the allocator's free-list ([8750364](https://github.com/Fuse-Technical-Group/pydecklink/commit/8750364848087af856b900f7c51c42947d6aa561))
+
 # [1.2.0](https://github.com/Fuse-Technical-Group/pydecklink/compare/v1.1.2...v1.2.0) (2026-09-23)
 
 
