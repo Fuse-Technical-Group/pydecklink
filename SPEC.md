@@ -573,6 +573,18 @@ internally and exposed via:
 - `device.output_status → OutputStatus` — dropped count, late count,
   underrun flag.
 
+Lead — how far scheduled output runs ahead of the card's playhead — is
+read from the SDK, not inferred from the pool:
+
+- `device.buffered_video_frame_count → int` — frames scheduled but not
+  yet displayed (`GetBufferedVideoFrameCount`).
+- `device.scheduled_stream_time(timescale) → (int, float)` — the
+  playhead in `timescale` units and the playback speed
+  (`GetScheduledStreamTime`). Lead in time is the last scheduled
+  display time minus the playhead.
+
+Both raise `RuntimeError` while output is disabled.
+
 ### Frame Creation
 
 - `device.create_video_frame(width, height, row_bytes, pixel_format)
@@ -879,6 +891,8 @@ and `IDeckLinkVideoBuffer` for user-controlled DMA buffer allocation.
 - `VideoBufferAllocator.allocated_count → int`
 - `VideoBufferAllocator.recycled_count → int` — number of times
   a `ManagedBuffer` has been pushed back onto the free-list.
+- `VideoBufferAllocator.free_count → int` — buffers on the free-list
+  now. Buffers in use are `allocated_count - free_count`.
 - `VideoBufferAllocatorProvider(alloc=None, free=None)` — creates
   allocators on demand, caching by buffer size.
 - `VideoBufferAllocatorProvider.get_allocator(buffer_size, width,

@@ -368,6 +368,38 @@ void init_decklink_output(nb::module_& m, nb::class_<Device>& device) {
         },
         "True if scheduled playback is currently running.");
 
+    device.def_prop_ro("buffered_video_frame_count",
+        [](Device& self) -> uint32_t {
+            if (!self.output_)
+                throw std::runtime_error("Video output not enabled");
+            uint32_t count = 0;
+            HRESULT hr = self.output_->GetBufferedVideoFrameCount(&count);
+            if (hr != S_OK)
+                throw std::runtime_error(
+                    "GetBufferedVideoFrameCount failed (HRESULT " + std::to_string(hr) + ")");
+            return count;
+        },
+        "Frames scheduled but not yet displayed: the output's lead over "
+        "its playhead, in frames.");
+
+    device.def("scheduled_stream_time",
+        [](Device& self, int64_t timescale) -> std::tuple<int64_t, double> {
+            if (!self.output_)
+                throw std::runtime_error("Video output not enabled");
+            BMDTimeValue stream_time = 0;
+            double speed = 0.0;
+            HRESULT hr = self.output_->GetScheduledStreamTime(
+                timescale, &stream_time, &speed);
+            if (hr != S_OK)
+                throw std::runtime_error(
+                    "GetScheduledStreamTime failed (HRESULT " + std::to_string(hr) + ")");
+            return {static_cast<int64_t>(stream_time), speed};
+        },
+        nb::arg("timescale"),
+        "The playhead of scheduled playback as ``(stream_time, speed)``, "
+        "``stream_time`` in ``timescale`` units. Speed is 0.0 before "
+        "playback starts.");
+
     device.def_prop_ro("output_status",
         [](Device& self) -> OutputStatus {
             if (!self.output_callback_) return OutputStatus{};

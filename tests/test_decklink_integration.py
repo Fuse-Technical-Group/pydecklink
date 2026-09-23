@@ -526,3 +526,51 @@ class TestCustomAllocatorZeroCopy:
                 input_device.disable_video_input()
             with contextlib.suppress(RuntimeError):
                 output_device.disable_video_output()
+
+
+# -- Output Lead --------------------------------------------------------------
+
+
+class TestOutputLead:
+    """How far scheduled output runs ahead of the card's playhead.
+
+    Output only: no loopback cable is needed.
+    """
+
+    def test_lead_bindings_raise_before_output_enabled(self, output_device):
+        with pytest.raises(RuntimeError, match="Video output not enabled"):
+            _ = output_device.buffered_video_frame_count
+        with pytest.raises(RuntimeError, match="Video output not enabled"):
+            output_device.scheduled_stream_time(TIMESCALE)
+
+    def test_buffered_count_and_stream_time(self, output_device):
+        """Scheduled frames count as buffered before playback starts, and
+        the playhead advances at unit speed once it does."""
+        preroll = 4
+        output_device.enable_video_output(MODE)
+        try:
+            output_device.create_frame_pool(
+                preroll, WIDTH, HEIGHT, ROW_BYTES, PIXEL_FORMAT
+            )
+            for i in range(preroll):
+                mf = output_device.acquire_output_frame(timeout_ms=1000)
+                output_device.schedule_output_frame(
+                    mf,
+                    display_time=i * FRAME_DURATION,
+                    duration=FRAME_DURATION,
+                    timescale=TIMESCALE,
+                )
+            assert output_device.buffered_video_frame_count == preroll
+
+            output_device.start_scheduled_playback(start_time=0, timescale=TIMESCALE)
+            # Wait for one frame to complete and return to the pool.
+            mf = output_device.acquire_output_frame(timeout_ms=1000)
+            del mf
+            assert output_device.buffered_video_frame_count < preroll
+            stream_time, speed = output_device.scheduled_stream_time(TIMESCALE)
+            assert speed == pytest.approx(1.0)
+            assert 0 < stream_time < preroll * FRAME_DURATION
+        finally:
+            with contextlib.suppress(RuntimeError):
+                output_device.stop_scheduled_playback()
+            output_device.disable_video_output()

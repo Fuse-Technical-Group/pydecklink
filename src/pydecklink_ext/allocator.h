@@ -187,6 +187,13 @@ public:
         return recycled_count_;
     }
 
+    /// Pooled buffers on the free-list now: prefilled or returned, not
+    /// yet reissued.
+    size_t free_count() {
+        std::lock_guard<std::mutex> lock(free_list_mutex_);
+        return free_list_.size();
+    }
+
     ULONG refcount() const { return ref_count_.load(); }
 
     /// Pre-allocate ``count`` pooled buffers and seat them on the

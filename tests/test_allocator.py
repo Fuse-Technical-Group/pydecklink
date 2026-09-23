@@ -70,6 +70,18 @@ class TestVideoBufferAllocatorExists:
         # Hold references so the free-list stays empty.
         assert b1 is not None and b2 is not None
 
+    def test_free_count(self):
+        """`free_count` is the free-list length: prefill seats buffers on
+        it, an issued buffer leaves it, and a released one returns."""
+        alloc = pydecklink.VideoBufferAllocator(size=4096)
+        assert alloc.free_count == 0
+        alloc.prefill(3)
+        assert alloc.free_count == 3
+        buf = alloc.allocate()
+        assert alloc.free_count == 2
+        del buf
+        assert alloc.free_count == 3
+
 
 class TestVideoBufferAllocatorRepr:
     """VideoBufferAllocator.__repr__ returns a valid string."""
