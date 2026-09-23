@@ -43,13 +43,12 @@ Issues = "https://github.com/Fuse-Technical-Group/pydecklink/issues"
 test = ["pytest>=8", "psutil>=5.9"]
 cuda-examples = ["cuda-python>=12"]
 
-[tool.uv.sources]
-# Development only: builds from this checkout take pypixelpack from this
-# commit (v0.3.0, the release on PyPI), so CI tests what an install from
-# PyPI resolves. A tag can be moved by any collaborator and uv.lock is not
-# committed here, so only a hash makes the pin immutable. Rationale in
-# SPEC.md §spec:pixel-packing.
-pypixelpack = { git = "https://github.com/Fuse-Technical-Group/pypixelpack.git", rev = "b8fda1fd878cef8d3029885d8086536620537799" }
+[tool.uv]
+# Development only: builds from this checkout resolve exactly the pypixelpack
+# release the byte-exact tests were written against, from PyPI, where a
+# version's files can never be replaced. The published range above is
+# untouched. Rationale in SPEC.md §spec:pixel-packing.
+constraint-dependencies = ["pypixelpack==0.3.0"]
 
 [dependency-groups]
 dev = ["pytest>=8", "mypy>=1.13", "psutil>=5.9"]

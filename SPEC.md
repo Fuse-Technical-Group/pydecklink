@@ -1292,13 +1292,14 @@ section 3.4 remains the byte-layout authority.
 
 **Two constraints, for two audiences.** The published wheel declares
 `pypixelpack>=0.3,<1`, which an install resolves from PyPI
-(§spec:distribution). A build from this checkout instead takes
-pypixelpack from a commit hash in `[tool.uv.sources]`, the hash v0.3.0
-names — the release on PyPI, so CI tests what an install gets. A tag is
-not a pin: any collaborator can move one, and `uv.lock` is not committed
-in this repository, so nothing else would turn a moved tag into a
-visible diff. The hash is what keeps the byte-exact tests here from
-drifting under a substituted dependency.
+(§spec:distribution). A build from this checkout instead resolves
+exactly `pypixelpack==0.3.0` from PyPI, through `constraint-dependencies`
+in `[tool.uv]`, which never reaches the published metadata; CI therefore
+tests the wheel an install gets. A PyPI version is a pin where a git tag
+is not: PyPI never accepts a replacement file for a released version,
+while any collaborator can move a tag, and `uv.lock` is not committed
+here to expose a moved one. The exact version is what keeps the
+byte-exact tests here from drifting under a substituted dependency.
 
 ### Why the layouts moved out
 
