@@ -49,7 +49,7 @@ cuda-examples = ["cuda-python>=12"]
 # PyPI resolves. A tag can be moved by any collaborator and uv.lock is not
 # committed here, so only a hash makes the pin immutable. Rationale in
 # SPEC.md §spec:pixel-packing.
-pypixelpack = { git = "https://github.com/Fuse-Technical-Group/pypixelpack.git", rev = "c3aea3ec31a9b126e76844b905cbada9481d3386" }
+pypixelpack = { git = "https://github.com/Fuse-Technical-Group/pypixelpack.git", rev = "b8fda1fd878cef8d3029885d8086536620537799" }
 
 [dependency-groups]
 dev = ["pytest>=8", "mypy>=1.13", "psutil>=5.9"]
