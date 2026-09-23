@@ -66,7 +66,9 @@ def _flag(dev: pydecklink.Device, attr: pydecklink.AttributeID) -> str:
 
 def _duplex(dev: pydecklink.Device) -> str:
     try:
-        return pydecklink.DuplexMode(dev.get_attribute_int(pydecklink.AttributeID.Duplex)).name
+        return pydecklink.DuplexMode(
+            dev.get_attribute_int(pydecklink.AttributeID.Duplex)
+        ).name
     except (RuntimeError, ValueError):
         return "n/a"
 
@@ -91,8 +93,12 @@ def _sub_devices(model: str) -> list[pydecklink.DeviceInfo]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("--device", type=int, default=0, help="index of any sub-device of the card")
-    parser.add_argument("--mode", default="HD1080p5994", help="DisplayMode name to test for keying")
+    parser.add_argument(
+        "--device", type=int, default=0, help="index of any sub-device of the card"
+    )
+    parser.add_argument(
+        "--mode", default="HD1080p5994", help="DisplayMode name to test for keying"
+    )
     args = parser.parse_args()
     mode = pydecklink.DisplayMode[args.mode]
 
@@ -107,7 +113,15 @@ def main() -> None:
     print(f"{model}: profiles {[p.name for p in profiles]}, active {original.name}")
     print(f"keying test mode: {mode.name} in Format10BitYUVA\n")
 
-    columns = ("profile", "sub", "label", "duplex", "external", "internal", f"keys {mode.name}")
+    columns = (
+        "profile",
+        "sub",
+        "label",
+        "duplex",
+        "external",
+        "internal",
+        f"keys {mode.name}",
+    )
     print("\t".join(columns))
     try:
         for profile in profiles:
