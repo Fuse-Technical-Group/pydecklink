@@ -1,3 +1,16 @@
+# [1.2.0](https://github.com/Fuse-Technical-Group/pydecklink/compare/v1.1.2...v1.2.0) (2026-09-23)
+
+
+### Bug Fixes
+
+* **packing:** the Ay10 golden vector follows the manual's word shape ([8bed610](https://github.com/Fuse-Technical-Group/pydecklink/commit/8bed610650ec2b55e861ff0a81b2d0c1bbc01ed3))
+
+
+### Features
+
+* **connectors:** label the 8K Pro's sole sub-device in OneSubDeviceFullDuplex ([269057a](https://github.com/Fuse-Technical-Group/pydecklink/commit/269057a397ca727adb8d0b89891ac901a01e5934))
+* **output:** bind IDeckLinkKeyer and pack Format10BitYUVA ([9642d25](https://github.com/Fuse-Technical-Group/pydecklink/commit/9642d250f0711f17ca646aaa852053e568278499))
+
 ## [1.1.2](https://github.com/Fuse-Technical-Group/pydecklink/compare/v1.1.1...v1.1.2) (2026-09-23)
 
 
