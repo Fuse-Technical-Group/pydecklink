@@ -28,6 +28,11 @@ class TestLookup:
         assert lookup("DeckLink 8K Pro", "TwoSubDevicesFullDuplex", 0) == "SDI 1+2"
         assert lookup("DeckLink 8K Pro", "TwoSubDevicesFullDuplex", 1) == "SDI 3+4"
 
+    def test_8k_pro_one_sub_device_owns_every_port(self):
+        # The keying profile: one sub-device, all four BNCs.
+        assert lookup("DeckLink 8K Pro", "OneSubDeviceFullDuplex", 0) == "SDI 1+2+3+4"
+        assert lookup("DeckLink 8K Pro", "OneSubDeviceFullDuplex", 1) is None
+
     def test_quad_2_eight_sub_devices(self):
         # Odd ports first, then even.
         assert lookup("DeckLink Quad 2", "TwoSubDevicesHalfDuplex", 0) == "SDI 1"
@@ -44,7 +49,7 @@ class TestLookup:
 
     def test_unknown_profile_returns_none(self):
         # 8K Pro in a profile not in the table.
-        assert lookup("DeckLink 8K Pro", "OneSubDeviceFullDuplex", 0) is None
+        assert lookup("DeckLink 8K Pro", "OneSubDeviceHalfDuplex", 0) is None
 
     def test_out_of_range_sub_index_returns_none(self):
         assert lookup("DeckLink 8K Pro", "FourSubDevicesHalfDuplex", 99) is None

@@ -34,9 +34,15 @@ _SDI_LABEL: dict[tuple[str, str, int], str] = {
     ("DeckLink 8K Pro", "FourSubDevicesHalfDuplex", 1): "SDI 3",
     ("DeckLink 8K Pro", "FourSubDevicesHalfDuplex", 2): "SDI 2",
     ("DeckLink 8K Pro", "FourSubDevicesHalfDuplex", 3): "SDI 4",
-    # DeckLink 8K Pro — 2 sub-devices full-duplex (2x dual-link)
+    # DeckLink 8K Pro — 2 sub-devices full-duplex (2x dual-link). Under
+    # external keying each sub-device emits key on its input BNC and fill
+    # on its output: SDI 1 in/key + SDI 2 out/fill, SDI 3 in/key + SDI 4
+    # out/fill (SDK manual section 2.4.11).
     ("DeckLink 8K Pro", "TwoSubDevicesFullDuplex", 0): "SDI 1+2",
     ("DeckLink 8K Pro", "TwoSubDevicesFullDuplex", 1): "SDI 3+4",
+    # DeckLink 8K Pro — 1 sub-device full-duplex (quad-link): SDI 1 CH-B in,
+    # SDI 2 CH-A in, SDI 3 CH-B out/key, SDI 4 CH-A out/fill (same table).
+    ("DeckLink 8K Pro", "OneSubDeviceFullDuplex", 0): "SDI 1+2+3+4",
     # DeckLink Quad 2 — 8 sub-devices visible in two-sub-devices half-duplex
     ("DeckLink Quad 2", "TwoSubDevicesHalfDuplex", 0): "SDI 1",
     ("DeckLink Quad 2", "TwoSubDevicesHalfDuplex", 1): "SDI 3",
