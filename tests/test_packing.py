@@ -118,6 +118,37 @@ def test_v210_byte_exact() -> None:
     ]
 
 
+# --- 10-bit YUVA (Ay10) golden vector --------------------------------------
+
+
+def test_ay10_byte_exact() -> None:
+    """Ay10: a pixel pair in two big-endian words, Cb0/Cr0 [31:22], Y [21:12],
+    A [11:2]; lines pad to 256 bytes (SDK 3.4)."""
+    px = np.array(
+        [[[0x040, 0x200, 0x300, 0x3FF], [0x0C8, 0, 0, 0x000]]],  # Y, Cb, Cr, A
+        dtype=np.uint16,
+    )
+    out = pack(px, PixelFormat.Format10BitYUVA, row_bytes=256)
+    assert out.shape == (256,)
+    assert out[:8].tolist() == [0x80, 0x04, 0x0F, 0xFC, 0xC0, 0x0C, 0x80, 0x00]
+    assert not out[8:].any()
+
+
+def test_ay10_round_trip() -> None:
+    """unpack(pack(x)) == x for Ay10: chroma per pair, alpha per pixel."""
+    rng = np.random.default_rng(7)
+    height, width = 3, 130  # spans three 64-pixel groups with padding
+    px = rng.integers(0, 1024, size=(height, width, 4)).astype(np.uint16)
+    px[:, 1::2, 1:3] = px[:, 0::2, 1:3]
+    rb = _row_bytes(PixelFormat.Format10BitYUVA, width)
+    assert rb == 3 * 256
+    packed = pack(px, PixelFormat.Format10BitYUVA, row_bytes=rb)
+    out = unpack(
+        packed, PixelFormat.Format10BitYUVA, width=width, height=height, row_bytes=rb
+    )
+    np.testing.assert_array_equal(out, px)
+
+
 # --- 12-bit RGB golden vectors ---------------------------------------------
 
 
@@ -164,6 +195,8 @@ def _row_bytes(fmt: PixelFormat, width: int) -> int:
         return ((width + 7) // 8) * 36
     if fmt is PixelFormat.Format10BitYUV:
         return ((width + 5) // 6) * 16
+    if fmt is PixelFormat.Format10BitYUVA:
+        return ((width + 63) // 64) * 256
     return width * 4
 
 

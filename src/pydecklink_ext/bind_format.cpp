@@ -26,7 +26,7 @@ static int bytes_per_pixel_numerator(_BMDPixelFormat pf) {
         case bmdFormat10BitRGBX:   return 4;
         case bmdFormat12BitRGB:    return 36;  // 36 bytes per 8 pixels (handled specially)
         case bmdFormat12BitRGBLE:  return 36;
-        case bmdFormat10BitYUVA:   return 0;   // Variable
+        case bmdFormat10BitYUVA:   return 4;   // Ay10: 4 bytes/pixel, lines padded to 256 (handled specially)
         default:                   return 0;
     }
 }
@@ -47,7 +47,11 @@ static long compute_row_bytes(long width, _BMDPixelFormat pf) {
         case bmdFormat10BitRGBX:   return width * 4;
         case bmdFormat12BitRGB:    return (width * 36 + 7) / 8;  // 36 bits/pixel
         case bmdFormat12BitRGBLE:  return (width * 36 + 7) / 8;
-        case bmdFormat10BitYUVA:   return width * 4;  // Approximate
+        case bmdFormat10BitYUVA: {
+            // Ay10: 64 pixels per 256 bytes; the SDK aligns each line to 256.
+            long blocks = (width + 63) / 64;
+            return blocks * 256;
+        }
         default:
             throw std::invalid_argument("unsupported pixel format for row bytes calculation");
     }

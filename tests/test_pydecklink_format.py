@@ -136,3 +136,31 @@ class TestGetFrameBytes:
             pydecklink.PixelFormat.Format8BitBGRA,
         )
         assert size == 1920 * 1080 * 4
+
+    def test_hd1080_10bit_yuva(self):
+        # Ay10: 64 pixels per 256 bytes; 1920 is 30 whole groups.
+        size = pydecklink.get_frame_bytes(
+            pydecklink.DisplayMode.HD1080p25,
+            pydecklink.PixelFormat.Format10BitYUVA,
+        )
+        assert size == 30 * 256 * 1080
+
+
+class TestGetRowBytesYUVA:
+    """Ay10 lines align to 256 bytes (SDK: ((width + 63) / 64) * 256)."""
+
+    def test_whole_groups(self):
+        assert (
+            pydecklink.get_row_bytes(pydecklink.PixelFormat.Format10BitYUVA, 1920)
+            == 7680
+        )
+        assert (
+            pydecklink.get_row_bytes(pydecklink.PixelFormat.Format10BitYUVA, 3840)
+            == 15360
+        )
+
+    def test_partial_group_rounds_up(self):
+        assert (
+            pydecklink.get_row_bytes(pydecklink.PixelFormat.Format10BitYUVA, 1000)
+            == 16 * 256
+        )

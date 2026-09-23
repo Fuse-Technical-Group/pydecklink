@@ -78,6 +78,45 @@ class TestDeviceOutputMethods:
         assert hasattr(pydecklink.Device, "output_status")
 
 
+class TestDeviceKeyerMethods:
+    """Device exposes IDeckLinkKeyer (§spec:playout, Keying)."""
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "enable_keyer",
+            "set_keyer_level",
+            "keyer_ramp_up",
+            "keyer_ramp_down",
+            "disable_keyer",
+        ],
+    )
+    def test_method_exists(self, name):
+        assert hasattr(pydecklink.Device, name)
+
+
+@pytest.mark.hardware
+class TestKeyerOnHardware:
+    """Enable the external keyer on a device that reports it.
+
+    Keying is a per-profile attribute: a multi-sub-device card reports it
+    only under the profile that owns the keyer, so this skips rather than
+    fails on a card configured for four independent connectors.
+    """
+
+    def test_external_keyer_enables_and_disables(self):
+        dev = pydecklink.Device(0)
+        if not dev.get_attribute_flag(pydecklink.AttributeID.SupportsExternalKeying):
+            pytest.skip("device does not support external keying in this profile")
+        dev.enable_video_output(pydecklink.DisplayMode.HD1080p2997)
+        try:
+            dev.enable_keyer(external=True)
+            dev.set_keyer_level(255)
+            dev.disable_keyer()
+        finally:
+            dev.disable_video_output()
+
+
 class TestDeviceConfigMethods:
     """Device has configuration methods."""
 

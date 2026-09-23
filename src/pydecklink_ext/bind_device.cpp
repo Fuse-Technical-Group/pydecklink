@@ -49,6 +49,14 @@ IDeckLinkConfiguration* Device::config() {
     return config_.get();
 }
 
+IDeckLinkKeyer* Device::keyer() {
+    if (!keyer_) {
+        if (dl->QueryInterface(IID_IDeckLinkKeyer, (void**)keyer_.put()) != S_OK)
+            throw std::runtime_error("Device does not support keying in its current profile");
+    }
+    return keyer_.get();
+}
+
 Device::Device(int index) {
     auto iter = require_iterator();
     int i = 0;

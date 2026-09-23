@@ -573,6 +573,34 @@ internally and exposed via:
 - `device.output_status → OutputStatus` — dropped count, late count,
   underrun flag.
 
+#### Keying
+
+`IDeckLinkKeyer`, on a device whose active profile reports
+`AttributeID.SupportsExternalKeying` or `SupportsInternalKeying`:
+
+- `device.enable_keyer(external)` — external emits fill and key on
+  separate connectors from one scheduled frame; internal composites
+  the frame over the input signal.
+- `device.set_keyer_level(level)` — 0 (transparent) to 255 (opaque).
+- `device.keyer_ramp_up(frames)`, `device.keyer_ramp_down(frames)`.
+- `device.disable_keyer()`.
+
+The frame's pixel format shall carry alpha (`Format10BitYUVA`,
+`Format8BitARGB`, `Format8BitBGRA`); on a YCbCr connector the card
+drops the alpha unless the keyer is enabled. Keying is a property of
+the profile, not the card: a multi-sub-device card reports it only
+under the profile that owns the keyer, and `does_support_video_mode`
+with `SupportedVideoModeFlag.Keying` answers for a given mode and
+format. The interface is acquired on first use and held for the
+device's lifetime, like configuration; a device or profile without a
+keyer raises on that first call.
+
+**Why one frame and not two streams.** Fill and key scheduled on two
+sub-devices are two DMAs and two schedule clocks, and a frame late on
+one leaves the pair one frame apart until the next drop. A keyed
+frame is one DMA, split on the card, so the pairing is a hardware
+property rather than a scheduling one.
+
 ### Frame Creation
 
 - `device.create_video_frame(width, height, row_bytes, pixel_format)
@@ -1252,7 +1280,7 @@ explicitly; importing `pydecklink` alone pulls in no pixel-packing code.
 The layouts and their codecs live in
 [pypixelpack](https://github.com/Fuse-Technical-Group/pypixelpack), a
 sibling package keyed on layout names (`argb`, `bgra`, `r210`, `r10b`,
-`r10l`, `v210`, `r12b`, `r12l`) and generic over the array namespace, so
+`r10l`, `v210`, `ay10`, `r12b`, `r12l`) and generic over the array namespace, so
 one codec packs on numpy here and on torch in a GPU consumer. This
 repository holds what is Blackmagic-specific: `_FORMATS`, the map from
 `PixelFormat` to a layout name, and the `pack`/`unpack` surface that
@@ -1261,9 +1289,9 @@ there). The DeckLink SDK 15.3 manual
 section 3.4 remains the byte-layout authority.
 
 **Two constraints, for two audiences.** The published wheel declares
-`pypixelpack>=0.2,<1`, which an install resolves from PyPI
+`pypixelpack>=0.3,<1`, which an install resolves from PyPI
 (§spec:distribution). A build from this checkout instead takes
-pypixelpack from a commit hash in `[tool.uv.sources]`, the hash v0.2.0
+pypixelpack from a commit hash in `[tool.uv.sources]`, the hash v0.3.0
 names — the release on PyPI, so CI tests what an install gets. A tag is
 not a pin: any collaborator can move one, and `uv.lock` is not committed
 in this repository, so nothing else would turn a moved tag into a
@@ -1317,6 +1345,8 @@ pydecklink offers, not on what its dependency can do.
   from the SDK 15.3 section 3.4 layout tables, `pack` → `unpack`
   round-trips to identity for every format `_FORMATS` names, and 12-bit
   `R12B` / `R12L` is correct across the 8-pixel / 36-byte group boundary.
+- `Format10BitYUVA` packs four channels, `[Y, Cb, Cr, A]`, and
+  `get_row_bytes` reports the SDK's 256-byte line alignment for it.
 - Importing `pydecklink` leaves the transport surface unchanged and
   pulls in no packing code.
 - `display_frame_sync` accepts a non-contiguous `uint8` view.

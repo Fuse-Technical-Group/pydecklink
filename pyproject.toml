@@ -32,7 +32,7 @@ requires-python = ">=3.12"
 # lacks cannot install, and the unclaimed name is one anyone could register
 # (§spec:distribution). pypixelpack is bounded below its 1.0, where its
 # layouts may break.
-dependencies = ["numpy>=1.26", "pypixelpack>=0.2,<1"]
+dependencies = ["numpy>=1.26", "pypixelpack>=0.3,<1"]
 
 [project.urls]
 Homepage = "https://github.com/Fuse-Technical-Group/pydecklink"
@@ -45,11 +45,11 @@ cuda-examples = ["cuda-python>=12"]
 
 [tool.uv.sources]
 # Development only: builds from this checkout take pypixelpack from this
-# commit (v0.2.0, the release on PyPI), so CI tests what an install from
+# commit (v0.3.0, the release on PyPI), so CI tests what an install from
 # PyPI resolves. A tag can be moved by any collaborator and uv.lock is not
 # committed here, so only a hash makes the pin immutable. Rationale in
 # SPEC.md §spec:pixel-packing.
-pypixelpack = { git = "https://github.com/Fuse-Technical-Group/pypixelpack.git", rev = "6b85f3c9c2900c6d3e5a8eac436e34e02e130713" }
+pypixelpack = { git = "https://github.com/Fuse-Technical-Group/pypixelpack.git", rev = "5e4b288" }
 
 [dependency-groups]
 dev = ["pytest>=8", "mypy>=1.13", "psutil>=5.9"]
