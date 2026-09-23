@@ -775,6 +775,17 @@ class Device:
         """True if scheduled playback is currently running."""
 
     @property
+    def buffered_video_frame_count(self) -> int:
+        """
+        Frames scheduled but not yet displayed: the output's lead over its playhead, in frames.
+        """
+
+    def scheduled_stream_time(self, timescale: int) -> tuple[int, float]:
+        """
+        The playhead of scheduled playback as ``(stream_time, speed)``, ``stream_time`` in ``timescale`` units. Speed is 0.0 before playback starts.
+        """
+
+    @property
     def output_status(self) -> OutputStatus:
         """Current output frame completion statistics."""
 
@@ -1210,6 +1221,12 @@ class VideoBufferAllocator:
     def recycled_count(self) -> int:
         """
         Number of times a buffer has been returned to the free-list. Each release of a ManagedBuffer increments this counter; the next AllocateVideoBuffer reuses the recycled memory.
+        """
+
+    @property
+    def free_count(self) -> int:
+        """
+        Number of buffers on the free-list now. Buffers in use are ``allocated_count - free_count``.
         """
 
     def allocate(self) -> ManagedBuffer:

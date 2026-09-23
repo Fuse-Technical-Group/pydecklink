@@ -77,6 +77,12 @@ class TestDeviceOutputMethods:
     def test_output_status_exists(self):
         assert hasattr(pydecklink.Device, "output_status")
 
+    def test_buffered_video_frame_count_exists(self):
+        assert hasattr(pydecklink.Device, "buffered_video_frame_count")
+
+    def test_scheduled_stream_time_exists(self):
+        assert hasattr(pydecklink.Device, "scheduled_stream_time")
+
 
 class TestDeviceKeyerMethods:
     """Device exposes IDeckLinkKeyer (§spec:playout, Keying)."""
