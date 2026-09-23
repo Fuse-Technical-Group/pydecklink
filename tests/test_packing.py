@@ -122,15 +122,16 @@ def test_v210_byte_exact() -> None:
 
 
 def test_ay10_byte_exact() -> None:
-    """Ay10: a pixel pair in two big-endian words, Cb0/Cr0 [31:22], Y [21:12],
-    A [11:2]; lines pad to 256 bytes (SDK 3.4)."""
+    """Ay10: a pixel pair in two big-endian words of the r210 shape, A [29:20],
+    Cb0/Cr0 [19:10], Y [9:0], bits 31:30 padding; lines pad to 256 bytes
+    (SDK manual §3.4, 15.3 p.254 / 16.0 p.262)."""
     px = np.array(
         [[[0x040, 0x200, 0x300, 0x3FF], [0x0C8, 0, 0, 0x000]]],  # Y, Cb, Cr, A
         dtype=np.uint16,
     )
     out = pack(px, PixelFormat.Format10BitYUVA, row_bytes=256)
     assert out.shape == (256,)
-    assert out[:8].tolist() == [0x80, 0x04, 0x0F, 0xFC, 0xC0, 0x0C, 0x80, 0x00]
+    assert out[:8].tolist() == [0x3F, 0xF8, 0x00, 0x40, 0x00, 0x0C, 0x00, 0xC8]
     assert not out[8:].any()
 
 
