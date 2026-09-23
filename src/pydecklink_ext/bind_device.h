@@ -66,6 +66,13 @@ struct Device {
     ComPtr<IDeckLinkConfiguration> config_;
     IDeckLinkConfiguration* config();  // Lazily acquire; throw if unsupported.
 
+    // Keyer interface (used by bind_output.cpp), acquired lazily and held
+    // for the device's lifetime like config_: the keyer state belongs to
+    // the output session, and one held instance is what the SDK examples
+    // do. Throws on a device or profile without a keyer.
+    ComPtr<IDeckLinkKeyer> keyer_;
+    IDeckLinkKeyer* keyer();
+
     // Profile state (managed by bind_profile.cpp). Cached on first
     // access to ``profile_manager`` so a single ``ProfileManager``
     // owns the live ``ProfileCallbackAdapter`` for this device's

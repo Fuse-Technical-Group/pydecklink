@@ -10,7 +10,9 @@ input by an SDI cable. Two topologies are supported:
   resolve to device index 0.
 - Multi-sub-device card or two cards: play out on one sub-device, capture
   on another. Set ``PYDECKLINK_LOOPBACK_OUTPUT`` / ``PYDECKLINK_LOOPBACK_INPUT``
-  to the indices matching the physical cabling.
+  to the indices matching the physical cabling. A half-duplex sub-device
+  (e.g. an 8K Pro in FourSubDevicesHalfDuplex) is an input or an output,
+  never both, so self-loopback on one skips; loop two sub-devices instead.
 
 The output is forced to 4:2:2 YCbCr so the SDI wire carries the 8-bit YUV
 we generate; a fixed-mode YUV input then matches the wire and captures a
@@ -31,6 +33,7 @@ import numpy as np
 import pytest
 
 import pydecklink
+from _loopback import skip_if_half_duplex_self_loopback
 
 _HAS_SDK = getattr(pydecklink, "HAS_SDK", False)
 
@@ -115,9 +118,11 @@ def input_device(output_device):
     On single-device self-loopback (input index == output index) the input
     shares the output's `Device` handle: two separate handles to the same
     full-duplex device do not route output → input, so the capture never
-    locks. Distinct indices get their own handle.
+    locks. Distinct indices get their own handle. A half-duplex sub-device
+    cannot loop to itself, so self-loopback on one skips.
     """
     if _INPUT_INDEX == _OUTPUT_INDEX:
+        skip_if_half_duplex_self_loopback(output_device, _OUTPUT_INDEX, _INPUT_INDEX)
         yield output_device
         return
     if pydecklink.device_count() <= _INPUT_INDEX:
@@ -145,25 +150,33 @@ def loopback_pair(output_device, input_device):
     8-bit YCbCr, so a fixed-mode YUV input matches it and locks — no
     format detection needed. Both endpoints default to the same
     full-duplex device (self-loopback); override the indices for
-    multi-device rigs. Tears down on exit.
+    multi-device rigs. Tears down on exit, and on a setup failure too: an
+    output left enabled would deny every later test the sub-device.
     """
-    output_device.enable_video_output(MODE)
-    input_device.enable_video_input(MODE, PIXEL_FORMAT)
-    input_device.start_streams()
-    yield output_device, input_device
-    _teardown_loopback(output_device, input_device)
+    try:
+        output_device.enable_video_output(MODE)
+        input_device.enable_video_input(MODE, PIXEL_FORMAT)
+        input_device.start_streams()
+        yield output_device, input_device
+    finally:
+        _teardown_loopback(output_device, input_device)
 
 
 @pytest.fixture()
 def loopback_detect(output_device, input_device):
-    """Loopback with input format detection enabled (for the detection test)."""
-    output_device.enable_video_output(MODE)
-    input_device.enable_video_input(
-        MODE, PIXEL_FORMAT, flags=pydecklink.VideoInputFlag.EnableFormatDetection.value
-    )
-    input_device.start_streams()
-    yield output_device, input_device
-    _teardown_loopback(output_device, input_device)
+    """Loopback with input format detection enabled (for the detection test).
+    Tears down on a setup failure too, as ``loopback_pair`` does."""
+    try:
+        output_device.enable_video_output(MODE)
+        input_device.enable_video_input(
+            MODE,
+            PIXEL_FORMAT,
+            flags=pydecklink.VideoInputFlag.EnableFormatDetection.value,
+        )
+        input_device.start_streams()
+        yield output_device, input_device
+    finally:
+        _teardown_loopback(output_device, input_device)
 
 
 # -- Signal Detection ---------------------------------------------------------
@@ -428,46 +441,48 @@ class TestCustomAllocatorZeroCopy:
             free=py_free,
         )
 
-        # Set up output side (provides the SDI signal we'll capture back).
-        output_device.enable_video_output(MODE)
-        preroll = 15
-        output_device.create_frame_pool(
-            preroll + 5, WIDTH, HEIGHT, ROW_BYTES, PIXEL_FORMAT
-        )
-
-        def schedule_pattern(display_time: int) -> None:
-            mf = output_device.acquire_output_frame(timeout_ms=1000)
-            mf.data[:] = 0x80
-            output_device.schedule_output_frame(
-                mf,
-                display_time=display_time,
-                duration=FRAME_DURATION,
-                timescale=TIMESCALE,
+        # Torn down in the finally below, including when setup fails:
+        # an output left enabled would deny every later test the sub-device.
+        try:
+            # Set up output side (provides the SDI signal we'll capture back).
+            output_device.enable_video_output(MODE)
+            preroll = 15
+            output_device.create_frame_pool(
+                preroll + 5, WIDTH, HEIGHT, ROW_BYTES, PIXEL_FORMAT
             )
 
-        # Set up input side with the custom allocator.
-        input_device.enable_video_input_with_allocator(
-            mode=MODE,
-            pixel_format=PIXEL_FORMAT,
-            flags=pydecklink.VideoInputFlag.Default.value,
-            allocator_provider=provider,
-            zero_copy=True,
-            input_queue_depth=1,
-        )
+            def schedule_pattern(display_time: int) -> None:
+                mf = output_device.acquire_output_frame(timeout_ms=1000)
+                mf.data[:] = 0x80
+                output_device.schedule_output_frame(
+                    mf,
+                    display_time=display_time,
+                    duration=FRAME_DURATION,
+                    timescale=TIMESCALE,
+                )
 
-        # Prefill before start_streams so the SDK input thread never
-        # hits the SLOW path under signal-locked load.
-        in_alloc = provider.get_allocator(
-            buffer_size=FRAME_BYTES,
-            width=WIDTH,
-            height=HEIGHT,
-            row_bytes=ROW_BYTES,
-            pixel_format=PIXEL_FORMAT,
-        )
-        in_alloc.prefill(4)
-        allocated_after_prefill = in_alloc.allocated_count
+            # Set up input side with the custom allocator.
+            input_device.enable_video_input_with_allocator(
+                mode=MODE,
+                pixel_format=PIXEL_FORMAT,
+                flags=pydecklink.VideoInputFlag.Default.value,
+                allocator_provider=provider,
+                zero_copy=True,
+                input_queue_depth=1,
+            )
 
-        try:
+            # Prefill before start_streams so the SDK input thread never
+            # hits the SLOW path under signal-locked load.
+            in_alloc = provider.get_allocator(
+                buffer_size=FRAME_BYTES,
+                width=WIDTH,
+                height=HEIGHT,
+                row_bytes=ROW_BYTES,
+                pixel_format=PIXEL_FORMAT,
+            )
+            in_alloc.prefill(4)
+            allocated_after_prefill = in_alloc.allocated_count
+
             input_device.start_streams()
 
             # Pre-roll output and start playback.
@@ -518,14 +533,7 @@ class TestCustomAllocatorZeroCopy:
                 f"broken"
             )
         finally:
-            with contextlib.suppress(RuntimeError):
-                output_device.stop_scheduled_playback()
-            with contextlib.suppress(RuntimeError):
-                input_device.stop_streams()
-            with contextlib.suppress(RuntimeError):
-                input_device.disable_video_input()
-            with contextlib.suppress(RuntimeError):
-                output_device.disable_video_output()
+            _teardown_loopback(output_device, input_device)
 
 
 # -- Output Lead --------------------------------------------------------------

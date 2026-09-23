@@ -789,6 +789,23 @@ class Device:
     def output_status(self) -> OutputStatus:
         """Current output frame completion statistics."""
 
+    def enable_keyer(self, external: bool) -> None:
+        """
+        Enable the keyer: external emits fill and key on separate connectors, internal composites over the input. The frame's pixel format must carry alpha.
+        """
+
+    def set_keyer_level(self, level: int) -> None:
+        """Set the keyer's overall level, 0 (transparent) to 255 (opaque)."""
+
+    def keyer_ramp_up(self, frames: int) -> None:
+        """Ramp the keyer level from 0 to 255 over the given number of frames."""
+
+    def keyer_ramp_down(self, frames: int) -> None:
+        """Ramp the keyer level from 255 to 0 over the given number of frames."""
+
+    def disable_keyer(self) -> None:
+        """Disable the keyer."""
+
     def set_config_flag(self, flag: ConfigurationID, value: bool) -> None:
         """Set a boolean configuration flag."""
 

@@ -4,7 +4,7 @@
 # commit here — nanobind 3.0 broke a sibling extension that way. Dependabot's
 # pip ecosystem reads this table, and only proposes a bump when the pin
 # excludes the new release.
-requires = ["scikit-build-core==1.0.3", "nanobind==3.0.1", "setuptools-scm==10.2.3"]
+requires = ["scikit-build-core==1.0.3", "nanobind==3.1.0", "setuptools-scm==10.2.3"]
 build-backend = "scikit_build_core.build"
 
 [project]
@@ -32,7 +32,7 @@ requires-python = ">=3.12"
 # lacks cannot install, and the unclaimed name is one anyone could register
 # (§spec:distribution). pypixelpack is bounded below its 1.0, where its
 # layouts may break.
-dependencies = ["numpy>=1.26", "pypixelpack>=0.2,<1"]
+dependencies = ["numpy>=1.26", "pypixelpack>=0.3,<1"]
 
 [project.urls]
 Homepage = "https://github.com/Fuse-Technical-Group/pydecklink"
@@ -43,13 +43,12 @@ Issues = "https://github.com/Fuse-Technical-Group/pydecklink/issues"
 test = ["pytest>=8", "psutil>=5.9"]
 cuda-examples = ["cuda-python>=12"]
 
-[tool.uv.sources]
-# Development only: builds from this checkout take pypixelpack from this
-# commit (v0.2.0, the release on PyPI), so CI tests what an install from
-# PyPI resolves. A tag can be moved by any collaborator and uv.lock is not
-# committed here, so only a hash makes the pin immutable. Rationale in
-# SPEC.md §spec:pixel-packing.
-pypixelpack = { git = "https://github.com/Fuse-Technical-Group/pypixelpack.git", rev = "6b85f3c9c2900c6d3e5a8eac436e34e02e130713" }
+[tool.uv]
+# Development only: builds from this checkout resolve exactly the pypixelpack
+# release the byte-exact tests were written against, from PyPI, where a
+# version's files can never be replaced. The published range above is
+# untouched. Rationale in SPEC.md §spec:pixel-packing.
+constraint-dependencies = ["pypixelpack==0.3.0"]
 
 [dependency-groups]
 dev = ["pytest>=8", "mypy>=1.13", "psutil>=5.9"]

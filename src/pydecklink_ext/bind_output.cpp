@@ -407,6 +407,57 @@ void init_decklink_output(nb::module_& m, nb::class_<Device>& device) {
         },
         "Current output frame completion statistics.");
 
+    // -- Keyer methods on Device (IDeckLinkKeyer, §spec:playout) --
+    // The keyer reads the alpha of a frame in a format that carries one
+    // (Format10BitYUVA, Format8BitARGB, Format8BitBGRA); without it the
+    // card drops the alpha on SDI. External keying emits fill and key on
+    // separate connectors from that one frame; internal keying composites
+    // the frame over the input signal.
+    device.def("enable_keyer",
+        [](Device& self, bool external) {
+            HRESULT hr = self.keyer()->Enable(external);
+            if (hr != S_OK)
+                throw std::runtime_error("IDeckLinkKeyer::Enable failed (HRESULT " + std::to_string(hr) + ")");
+        },
+        nb::arg("external"),
+        "Enable the keyer: external emits fill and key on separate connectors, "
+        "internal composites over the input. The frame's pixel format must carry alpha.");
+
+    device.def("set_keyer_level",
+        [](Device& self, uint8_t level) {
+            HRESULT hr = self.keyer()->SetLevel(level);
+            if (hr != S_OK)
+                throw std::runtime_error("IDeckLinkKeyer::SetLevel failed (HRESULT " + std::to_string(hr) + ")");
+        },
+        nb::arg("level"),
+        "Set the keyer's overall level, 0 (transparent) to 255 (opaque).");
+
+    device.def("keyer_ramp_up",
+        [](Device& self, uint32_t frames) {
+            HRESULT hr = self.keyer()->RampUp(frames);
+            if (hr != S_OK)
+                throw std::runtime_error("IDeckLinkKeyer::RampUp failed (HRESULT " + std::to_string(hr) + ")");
+        },
+        nb::arg("frames"),
+        "Ramp the keyer level from 0 to 255 over the given number of frames.");
+
+    device.def("keyer_ramp_down",
+        [](Device& self, uint32_t frames) {
+            HRESULT hr = self.keyer()->RampDown(frames);
+            if (hr != S_OK)
+                throw std::runtime_error("IDeckLinkKeyer::RampDown failed (HRESULT " + std::to_string(hr) + ")");
+        },
+        nb::arg("frames"),
+        "Ramp the keyer level from 255 to 0 over the given number of frames.");
+
+    device.def("disable_keyer",
+        [](Device& self) {
+            HRESULT hr = self.keyer()->Disable();
+            if (hr != S_OK)
+                throw std::runtime_error("IDeckLinkKeyer::Disable failed (HRESULT " + std::to_string(hr) + ")");
+        },
+        "Disable the keyer.");
+
     // -- Configuration methods on Device --
     device.def("set_config_flag",
         [](Device& self, _BMDDeckLinkConfigurationID cfgID, bool value) {

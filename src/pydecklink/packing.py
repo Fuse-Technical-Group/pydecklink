@@ -13,7 +13,8 @@ enum they already hold.
 ready for ``MutableFrame.data``; ``unpack(data, pixel_format, width,
 height, row_bytes)`` recovers pixel values from a raw ``CaptureFrame.data``.
 ``unpack(pack(x)) == x`` for every supported format. Array conventions
-are pypixelpack's.
+are pypixelpack's: three channels, or four ``[Y, Cb, Cr, A]`` for
+``Format10BitYUVA``, the format a keyed output takes.
 """
 
 from __future__ import annotations
@@ -35,6 +36,7 @@ _FORMATS = {
     PixelFormat.Format10BitRGBX: "r10b",
     PixelFormat.Format10BitRGBXLE: "r10l",
     PixelFormat.Format10BitYUV: "v210",
+    PixelFormat.Format10BitYUVA: "ay10",
     PixelFormat.Format12BitRGB: "r12b",
     PixelFormat.Format12BitRGBLE: "r12l",
 }
