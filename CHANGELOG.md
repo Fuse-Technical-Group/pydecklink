@@ -1,3 +1,10 @@
+## [1.1.2](https://github.com/Fuse-Technical-Group/pydecklink/compare/v1.1.1...v1.1.2) (2026-09-23)
+
+
+### Bug Fixes
+
+* **test:** skip half-duplex self-loopback and tear down failed loopback setup ([#239](https://github.com/Fuse-Technical-Group/pydecklink/issues/239)) ([93780ff](https://github.com/Fuse-Technical-Group/pydecklink/commit/93780ff833770f02aead6e51b50afc5aa1b0f1f6))
+
 ## [1.1.1](https://github.com/Fuse-Technical-Group/pydecklink/compare/v1.1.0...v1.1.1) (2026-09-16)
 
 
