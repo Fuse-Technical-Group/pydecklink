@@ -1,3 +1,10 @@
+# [1.4.0](https://github.com/Fuse-Technical-Group/pydecklink/compare/v1.3.0...v1.4.0) (2026-09-25)
+
+
+### Features
+
+* **input:** read colorimetry and HDR metadata off captured frames ([be0074e](https://github.com/Fuse-Technical-Group/pydecklink/commit/be0074e89e5b140ba5e0e8b55cedf408c2aa54a8))
+
 # [1.3.0](https://github.com/Fuse-Technical-Group/pydecklink/compare/v1.2.0...v1.3.0) (2026-09-23)
 
 
