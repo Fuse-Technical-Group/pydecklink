@@ -8,13 +8,36 @@
 #include <stdexcept>
 #include <string>
 
+// Metadata properties shared by CaptureFrame and CaptureFrameRef
+// (§spec:hdr-metadata-capture). ``get`` maps a frame to its FrameMetadata.
+template <typename Frame, typename Get>
+void def_frame_metadata(nb::class_<Frame>& cls, Get get) {
+    cls.def_prop_ro("flags",
+            [get](const Frame& self) -> uint32_t { return get(self).flags; },
+            "Frame flags bitmask (see FrameFlag).")
+        .def_prop_ro("colorspace",
+            [get](const Frame& self) { return get(self).colorspace; },
+            "Colorspace the frame arrived with, or None when it carries none "
+            "the Colorspace enum names.")
+        .def_prop_ro("eotf",
+            [get](const Frame& self) { return get(self).eotf; },
+            "EOTF the frame arrived with, or None when it carries none the "
+            "EOTF enum names.")
+        .def_prop_ro("hdr_metadata",
+            [get](const Frame& self) { return get(self).hdr; },
+            "HDR10 static metadata the frame arrived with, or None unless "
+            "FrameFlag.ContainsHDRMetadata is set. A value the SDK does not "
+            "report reads as NaN.");
+}
+
 void init_decklink_input(nb::module_& m, nb::class_<Device>& device) {
 
     m.def("clock_us", []() -> int64_t { return steady_clock_us(); },
           "Return monotonic time in microseconds.");
 
     // -- CaptureFrame --
-    nb::class_<CaptureFrame>(m, "CaptureFrame")
+    nb::class_<CaptureFrame> capture_frame(m, "CaptureFrame");
+    capture_frame
         .def_prop_ro("data", [](nb::handle self) {
             auto& cf = nb::cast<CaptureFrame&>(self);
             size_t n = cf.pixels.size();
@@ -35,9 +58,12 @@ void init_decklink_input(nb::module_& m, nb::class_<Device>& device) {
                    std::to_string(self.width) + "x" + std::to_string(self.height) +
                    ", signal=" + (self.has_signal ? "True" : "False") + ")";
         }, nb::sig("def __repr__(self) -> str")); // avoid platform-specific C++ type in stub
+    def_frame_metadata(capture_frame,
+        [](const CaptureFrame& f) -> const FrameMetadata& { return f.metadata; });
 
     // -- CaptureFrameRef (zero-copy) --
-    nb::class_<CaptureFrameRef>(m, "CaptureFrameRef")
+    nb::class_<CaptureFrameRef> capture_frame_ref(m, "CaptureFrameRef");
+    capture_frame_ref
         .def_prop_ro("data", [](nb::handle self) {
             // The read access window is opened in
             // ``InputCallback::VideoInputFrameArrived`` and closed by
@@ -78,6 +104,8 @@ void init_decklink_input(nb::module_& m, nb::class_<Device>& device) {
                    std::to_string(self.width()) + "x" + std::to_string(self.height()) +
                    ", signal=" + (self.has_signal ? "True" : "False") + ")";
         }, nb::sig("def __repr__(self) -> str")); // avoid platform-specific C++ type in stub
+    def_frame_metadata(capture_frame_ref,
+        [](const CaptureFrameRef& f) { return f.metadata(); });
 
     // -- InputFormatInfo --
     nb::class_<InputFormatInfo>(m, "InputFormatInfo")
