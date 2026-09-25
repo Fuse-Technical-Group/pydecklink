@@ -37,3 +37,12 @@ class TestDeviceInputMethods:
 
     def test_current_input_format_exists(self):
         assert hasattr(pydecklink.Device, "current_input_format")
+
+
+class TestCaptureFrameMetadata:
+    """Captured frames expose the colorimetry and HDR metadata that arrived."""
+
+    @pytest.mark.parametrize("frame_cls", ["CaptureFrame", "CaptureFrameRef"])
+    @pytest.mark.parametrize("prop", ["flags", "colorspace", "eotf", "hdr_metadata"])
+    def test_metadata_property_exists(self, frame_cls, prop):
+        assert hasattr(getattr(pydecklink, frame_cls), prop)

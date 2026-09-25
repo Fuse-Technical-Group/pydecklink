@@ -1130,6 +1130,28 @@ class CaptureFrame:
 
     def __repr__(self) -> str: ...
 
+    @property
+    def flags(self) -> int:
+        """Frame flags bitmask (see FrameFlag)."""
+
+    @property
+    def colorspace(self) -> Colorspace | None:
+        """
+        Colorspace the frame arrived with, or None when it carries none the Colorspace enum names.
+        """
+
+    @property
+    def eotf(self) -> EOTF | None:
+        """
+        EOTF the frame arrived with, or None when it carries none the EOTF enum names.
+        """
+
+    @property
+    def hdr_metadata(self) -> HDRMetadata | None:
+        """
+        HDR10 static metadata the frame arrived with, or None unless FrameFlag.ContainsHDRMetadata is set. A value the SDK does not report reads as NaN.
+        """
+
 class CaptureFrameRef:
     @property
     def data(self) -> Annotated[NDArray[numpy.uint8], dict(shape=(None,))]:
@@ -1164,6 +1186,28 @@ class CaptureFrameRef:
         """Stream time as (time, duration) tuple."""
 
     def __repr__(self) -> str: ...
+
+    @property
+    def flags(self) -> int:
+        """Frame flags bitmask (see FrameFlag)."""
+
+    @property
+    def colorspace(self) -> Colorspace | None:
+        """
+        Colorspace the frame arrived with, or None when it carries none the Colorspace enum names.
+        """
+
+    @property
+    def eotf(self) -> EOTF | None:
+        """
+        EOTF the frame arrived with, or None when it carries none the EOTF enum names.
+        """
+
+    @property
+    def hdr_metadata(self) -> HDRMetadata | None:
+        """
+        HDR10 static metadata the frame arrived with, or None unless FrameFlag.ContainsHDRMetadata is set. A value the SDK does not report reads as NaN.
+        """
 
 class InputFormatInfo:
     @property

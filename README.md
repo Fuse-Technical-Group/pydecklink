@@ -127,7 +127,9 @@ video_in.enable()
 
 **Frames** — `CaptureFrame`, `CaptureFrameRef` (zero-copy), and `MutableFrame`
 expose pixel data as a numpy array via `.data`, alongside `.width`,
-`.height`, `.row_bytes`.
+`.height`, `.row_bytes`. Captured frames also report the colorimetry and
+HDR10 metadata that arrived: `.colorspace`, `.eotf` and `.hdr_metadata`
+(an `HDRMetadata`), each `None` when absent.
 
 **Enums** — `DisplayMode`, `PixelFormat`, `VideoConnection`, `VideoInputFlag`,
 `VideoOutputFlag`, `FieldDominance`, `IPFlowDirection`, `IPFlowType`, and

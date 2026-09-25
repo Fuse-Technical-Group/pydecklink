@@ -55,27 +55,6 @@ stable configuration. Cells below the floor show nonzero counters;
 cells at or above show zero. The benchmark exits with a nonzero
 status if no stable configuration exists in the input range.
 
-## HDR metadata capture §road:hdr-metadata-capture
-
-Expose received HDR10 static metadata on captured frames, mirroring the
-output write surface. Add `hdr_metadata → HDRMetadata | None` to
-`CaptureFrame` and `CaptureFrameRef` in `bind_input.{h,cpp}`: query
-`IID_IDeckLinkVideoFrameMetadataExtensions` (the read interface) off the
-captured `IDeckLinkVideoInputFrame`, read the mastering-display,
-white-point, and content-light-level IDs plus the EOTF/colorspace, and
-return `None` when `FrameFlag.ContainsHDRMetadata` is absent. Reuse the
-`HDRMetadata` / `EOTF` / `Colorspace` types from the output surface.
-§spec:hdr-metadata-capture. Builds on the output HDR surface
-(§spec:hdr-metadata / PR #198).
-
-**Verify:** With an HDMI OUT → IN loopback on an `supports_hdr` device,
-build a frame, `set_hdr_metadata(EOTF.PQ, Colorspace.Rec2020,
-max_cll=10000)`, display it, capture it back, and assert
-`frame.hdr_metadata` reports the same EOTF, colorspace, and MaxCLL.
-Without hardware: assert `hdr_metadata` returns `None` for a plain SDR
-capture and that the accessor exists on both `CaptureFrame` and
-`CaptureFrameRef`.
-
 ## Future §road:future
 
 - **audio-streams**: Audio capture/playout via

@@ -2,6 +2,7 @@
 
 #include <nanobind/nanobind.h>
 #include "bind_device.h"
+#include "frame_metadata.h"
 #include <atomic>
 #include <condition_variable>
 #include <cstring>
@@ -25,6 +26,7 @@ struct CaptureFrame {
     int64_t stream_duration = 0;
     int64_t hw_ref_timestamp = 0;
     bool has_signal = true;
+    FrameMetadata metadata;  // Read on the callback thread; see §spec:hdr-metadata-capture.
 };
 
 /// Zero-copy captured frame holding a ref to the SDK's IDeckLinkVideoInputFrame.
@@ -102,6 +104,8 @@ struct CaptureFrameRef {
         return frame ? static_cast<_BMDPixelFormat>(frame->GetPixelFormat())
                      : bmdFormatUnspecified;
     }
+    /// Read from the held SDK frame on each call (§spec:hdr-metadata-capture).
+    FrameMetadata metadata() const { return read_frame_metadata(frame.get()); }
 };
 
 /// Information about the currently detected input format.
@@ -228,6 +232,7 @@ public:
             cf.stream_time = st;
             cf.stream_duration = sd;
             cf.hw_ref_timestamp = hw_time;
+            cf.metadata = read_frame_metadata(videoFrame);
 
             ComPtr<IDeckLinkVideoBuffer> buf;
             videoFrame->QueryInterface(IID_IDeckLinkVideoBuffer, (void**)buf.put());

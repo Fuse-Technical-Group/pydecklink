@@ -536,6 +536,95 @@ class TestCustomAllocatorZeroCopy:
             _teardown_loopback(output_device, input_device)
 
 
+# -- Captured Frame Metadata --------------------------------------------------
+
+
+def _capture_after_sync_frame(output_device, input_device, metadata, zero_copy):
+    """Hold one 10-bit YUV frame on the output, return a signal-locked capture.
+
+    ``metadata`` (an ``HDRMetadata`` or ``None``) attaches to the held
+    frame; the capture reads back what arrived over SDI. Returns ``None``
+    when the input never locks. The caller tears down.
+    """
+    pixel_format = pydecklink.PixelFormat.Format10BitYUV
+    output_device.enable_video_output(MODE)
+    row_bytes = output_device.row_bytes_for_pixel_format(pixel_format, WIDTH)
+    frame = output_device.create_video_frame(WIDTH, HEIGHT, row_bytes, pixel_format)
+    mid_grey = 512 | (512 << 10) | (512 << 20)  # three 10-bit v210 samples
+    frame.data.view(np.uint32)[:] = mid_grey
+    if metadata is not None:
+        frame.set_hdr_metadata(metadata)
+    output_device.display_frame_sync_frame(frame)
+
+    input_device.enable_video_input(MODE, pixel_format, zero_copy=zero_copy)
+    input_device.start_streams()
+    pop = (
+        input_device.pop_capture_frame_ref
+        if zero_copy
+        else input_device.pop_capture_frame
+    )
+    for _ in range(60):
+        captured = pop(timeout_ms=1000)
+        if captured is not None and captured.has_signal:
+            return captured
+    return None
+
+
+class TestCaptureFrameMetadata:
+    """HDR metadata set on an output frame reads back on the captured frame."""
+
+    @pytest.mark.parametrize("zero_copy", [False, True])
+    def test_pq_metadata_round_trips(self, output_device, input_device, zero_copy):
+        if not output_device.supports_hdr:
+            pytest.skip("output device does not support HDR metadata")
+        sent = pydecklink.HDRMetadata(
+            eotf=pydecklink.EOTF.PQ,
+            colorspace=pydecklink.Colorspace.Rec2020,
+            max_cll=4000.0,
+            max_fall=400.0,
+        )
+        try:
+            frame = _capture_after_sync_frame(
+                output_device, input_device, sent, zero_copy
+            )
+            if frame is None:
+                pytest.skip("No SDI signal on loopback input — check OUT→IN cabling")
+            assert frame.flags & pydecklink.FrameFlag.ContainsHDRMetadata.value
+            assert frame.eotf == pydecklink.EOTF.PQ
+            assert frame.colorspace == pydecklink.Colorspace.Rec2020
+            got = frame.hdr_metadata
+            assert got is not None
+            for field in (
+                "red_x",
+                "red_y",
+                "green_x",
+                "green_y",
+                "blue_x",
+                "blue_y",
+                "white_x",
+                "white_y",
+                "max_display_mastering_luminance",
+                "min_display_mastering_luminance",
+                "max_cll",
+                "max_fall",
+            ):
+                assert getattr(got, field) == pytest.approx(getattr(sent, field)), field
+        finally:
+            _teardown_loopback(output_device, input_device)
+
+    def test_no_metadata_reads_none(self, output_device, input_device):
+        try:
+            frame = _capture_after_sync_frame(
+                output_device, input_device, None, zero_copy=False
+            )
+            if frame is None:
+                pytest.skip("No SDI signal on loopback input — check OUT→IN cabling")
+            assert not frame.flags & pydecklink.FrameFlag.ContainsHDRMetadata.value
+            assert frame.hdr_metadata is None
+        finally:
+            _teardown_loopback(output_device, input_device)
+
+
 # -- Output Lead --------------------------------------------------------------
 
 

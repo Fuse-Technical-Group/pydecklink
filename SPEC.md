@@ -493,6 +493,8 @@ Frame retrieval (copy mode):
   timescale.
 - `hardware_reference_timestamp → int`
 - `has_signal → bool` — `False` when `bmdFrameHasNoInputSource`.
+- `flags`, `colorspace`, `eotf`, `hdr_metadata` — what the frame
+  arrived with (§spec:hdr-metadata-capture).
 
 Frame retrieval (zero-copy mode, `zero_copy=True` on
 `enable_video_input`):
@@ -1797,65 +1799,82 @@ not to second-guess the hardware wiring — which only the operator knows.
 
 ## HDR Metadata Capture §spec:hdr-metadata-capture
 
-*Status: not started*
-
-### Problem
-
-§spec:hdr-metadata attaches HDR10 static metadata to *output* frames, but
-the binding cannot read the HDR metadata carried by a *captured* frame.
-Two gaps follow. A monitoring or QC consumer cannot report what HDR
-signalling an input carries (EOTF, mastering-display volume, content
-light levels) — only whether a signal is present. And the output surface
-cannot be verified over a loopback: a frame emitted with
-`set_hdr_metadata` crosses the wire, but nothing on the capture side reads
-it back to confirm it round-tripped.
+*Status: complete*
 
 ### Behavior
 
-`CaptureFrame` and `CaptureFrameRef` expose the received HDR10 static
-metadata, mirroring the output write surface:
+`CaptureFrame` and `CaptureFrameRef` report the colorimetry and HDR10
+static metadata a frame arrived with, mirroring the output write surface
+(§spec:hdr-metadata). Each reads the captured frame's
+`IDeckLinkVideoFrameMetadataExtensions`, the read interface, whose IID
+differs from the mutable one used on output:
 
-- `frame.hdr_metadata → HDRMetadata | None` — reads the captured frame's
-  `IDeckLinkVideoFrameMetadataExtensions` (the read interface, IID distinct
-  from the mutable one used on output). Returns `None` when the frame does
-  not carry HDR metadata (`FrameFlag.ContainsHDRMetadata` absent), so the
-  common SDR path costs nothing and callers gate on presence.
+- `frame.flags → int` — the `BMDFrameFlags` bitmask (see `FrameFlag`),
+  as on `MutableFrame`.
+- `frame.colorspace → Colorspace | None` —
+  `bmdDeckLinkFrameMetadataColorspace`.
+- `frame.eotf → EOTF | None` —
+  `bmdDeckLinkFrameMetadataHDRElectroOpticalTransferFunc`.
+- `frame.hdr_metadata → HDRMetadata | None` — `None` unless
+  `FrameFlag.ContainsHDRMetadata` is set. Reuses the `HDRMetadata` type:
+  primaries, white point, mastering luminance range, `max_cll`,
+  `max_fall`.
 
-The returned `HDRMetadata` reuses the type from §spec:hdr-metadata: same
-`eotf`, `colorspace`, primaries/white-point chromaticities, mastering
-luminance range, `max_cll`, `max_fall`.
+A value the frame does not carry, or one the Python enum names no member
+for, reads `None`: nanobind refuses to cast a raw value. A float the SDK
+does not report reads `NaN` rather than an `HDRMetadata` default that
+would look received. `CaptureFrame` reads the metadata on the SDK's
+callback thread, beside its pixel copy; `CaptureFrameRef` reads it from
+the held frame on each access.
 
-### Transport
+### Measured over SDI
 
-The DeckLink SDK populates the captured frame's metadata extension from
-the received HDR signalling. HDMI carries HDR10 in the CTA-861.3 Dynamic
-Range and Mastering InfoFrame; SDI carries it in VANC (SMPTE ST 2108-1).
-The reader surfaces whatever the SDK decoded, independent of transport —
-HDMI loopback is the more reliable path for an end-to-end round-trip test
-because the InfoFrame is natively detected, while SDI VANC handling is
-device- and driver-dependent.
+A DeckLink 8K Pro under Desktop Video 16.4, one sub-device's SDI output
+cabled to another's input, 1080p60 10-bit YCbCr 4:2:2, the output frame
+held with `display_frame_sync_frame`:
+
+| Sent | `flags` | `colorspace` | `eotf` | `hdr_metadata` |
+|---|---|---|---|---|
+| No metadata | `0x0` | `Rec709` | `Reserved` (0) | `None` |
+| `set_hdr_metadata(EOTF.SDR, Rec709)` | `0x0` | `Rec709` | `Reserved` (0) | `None` |
+| `set_hdr_metadata(EOTF.PQ, Rec2020, max_cll=4000)` | `0x2` | `Rec2020` | `PQ` | every field as sent |
+| `set_hdr_metadata(EOTF.HLG, Rec2020)` | `0x2` | `Rec2020` | `HLG` | eotf and colorspace; every float `NaN` |
+
+- **SDI carries the whole HDR10 record.** Primaries, white point,
+  mastering luminance and both light levels round-trip at the precision
+  sent. The zero-copy and copy paths read the same values.
+- **An SDR frame arrives as no metadata.** The card does not signal
+  `ContainsHDRMetadata` for SDR, so the SDR case reads exactly as the
+  plain frame does.
+- **An SDR input reads EOTF code 0, which `EOTF` names `Reserved`.**
+  CTA-861.3 defines 0 as traditional gamma, SDR luminance range, and 1
+  as traditional gamma, HDR luminance range. `EOTF.SDR` is 1, so the
+  output sends the HDR-range code and the input reports 0. The enum's
+  names for 0 and 1 are a separate defect; this section reports what
+  the SDK returns.
+- **Every SDI input reports a colorspace.** A 1080p signal without
+  metadata reads `Rec709`.
+- **HLG carries no mastering volume.** The SDK answers `GetFloat` with
+  failure for each HDR10 float, hence `NaN`.
 
 ### Why symmetric with output
 
-§spec:binding-philosophy mirrors the SDK surface. The SDK exposes HDR
-metadata on both mutable (output) and read-only (input) frame extensions;
-§spec:hdr-metadata bound only the write half. A read accessor completes
-the pair, gives capture/monitoring consumers the incoming HDR state, and
-makes §spec:hdr-metadata verifiable over a loopback
-(§spec:integration-testing). Depends on the output HDR surface
-(§spec:hdr-metadata / PR #198), which
-defines the shared `HDRMetadata`, `EOTF`, and `Colorspace` types.
+§spec:binding-philosophy mirrors the SDK surface. The SDK exposes frame
+metadata on both the mutable (output) and read-only (input) extension;
+§spec:hdr-metadata bound only the write half. The read half gives a
+monitoring consumer the incoming HDR state and makes §spec:hdr-metadata
+verifiable over a loopback (§spec:integration-testing).
 
 ### Citations
 
 - §spec:hdr-metadata — the output write counterpart and shared
   `HDRMetadata` type.
 - §spec:capture — the `CaptureFrame` / `CaptureFrameRef` surface this
-  accessor extends.
-- §spec:binding-philosophy — mirror-the-SDK principle; the read half
-  completes the metadata pair.
-- DeckLink SDK 15.3 `DeckLinkAPI.h` — `IDeckLinkVideoFrameMetadataExtensions`;
-  CTA-861.3 (HDMI InfoFrame) and SMPTE ST 2108-1 (SDI VANC) HDR carriage.
+  extends.
+- §spec:binding-philosophy — mirror-the-SDK principle.
+- DeckLink SDK 16.0 `DeckLinkAPI.h` — `IDeckLinkVideoFrameMetadataExtensions`,
+  `BMDDeckLinkFrameMetadataID`, `bmdFrameContainsHDRMetadata`.
+- CTA-861.3 — EOTF code points.
 
 ## Latency Characterization §spec:latency-characterization
 
