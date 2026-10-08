@@ -117,7 +117,8 @@ previous one, so read the setting back:
 ```python
 D, T, S = pydecklink.IPFlowDirection, pydecklink.IPFlowType, pydecklink.IPFlowSettingID
 video_in = next(
-    f for f in dev.ip_extensions.get_ip_flows()
+    f
+    for f in dev.ip_extensions.get_ip_flows()
     if f.direction == D.Input and f.type == T.Video
 )
 video_in.set_setting_string(S.PeerSDP, peer_sdp)

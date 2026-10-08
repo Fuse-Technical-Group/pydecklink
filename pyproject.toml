@@ -4,7 +4,7 @@
 # commit here — nanobind 3.0 broke a sibling extension that way. Dependabot's
 # pip ecosystem reads this table, and only proposes a bump when the pin
 # excludes the new release.
-requires = ["scikit-build-core==1.0.3", "nanobind==3.1.0", "setuptools-scm==10.2.3"]
+requires = ["scikit-build-core==1.1.1", "nanobind==3.1.0", "setuptools-scm==10.2.3"]
 build-backend = "scikit_build_core.build"
 
 [project]
@@ -49,6 +49,8 @@ cuda-examples = ["cuda-python>=12"]
 # version's files can never be replaced. The published range above is
 # untouched. Rationale in SPEC.md §spec:pixel-packing.
 constraint-dependencies = ["pypixelpack==0.3.0"]
+# setup-uv reads this floor too, so CI and a local checkout run the same uv.
+required-version = ">=0.12"
 
 [dependency-groups]
 dev = ["pytest>=8", "mypy>=1.13", "psutil>=5.9"]
