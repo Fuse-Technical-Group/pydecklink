@@ -53,7 +53,7 @@ jobs:
         with:
           arch: x64
 
-      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
 
       # setuptools_scm reads the version from git, but the manylinux container
       # has no git history. Derive it on the host (full history via
@@ -70,7 +70,7 @@ jobs:
       # linux_x86_64 platform tag to manylinux so PyPI accepts the wheel.
       - name: Build manylinux wheel (Linux)
         if: matrix.platform == 'linux'
-        uses: pypa/cibuildwheel@e090b81e30c4d855ea63bf4b6e59204c09a101ae # v4.2.1
+        uses: pypa/cibuildwheel@b9e566a2b284570af229f6c2a33673410d0389a3 # v4.3.4
         with:
           output-dir: dist
         env:
@@ -90,7 +90,7 @@ jobs:
           # Ignored by the Windows leg, which shares this step.
           MACOSX_DEPLOYMENT_TARGET: "14.0"
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: wheel-${{ matrix.platform }}
           path: dist/*.whl
