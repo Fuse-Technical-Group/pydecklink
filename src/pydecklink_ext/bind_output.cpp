@@ -209,8 +209,14 @@ void init_decklink_output(nb::module_& m, nb::class_<Device>& device) {
             // SDK; ownership of the access state transfers with the
             // schedule call.
             mf.close_access();
-            HRESULT hr = self.output_->ScheduleVideoFrame(
-                mf.frame.get(), display_time, duration, timescale);
+            HRESULT hr;
+            {
+                // The driver may wait on the output; release the GIL so other Python
+                // threads run meanwhile, and take it back before throwing.
+                nb::gil_scoped_release release;
+                hr = self.output_->ScheduleVideoFrame(
+                    mf.frame.get(), display_time, duration, timescale);
+            }
             if (hr != S_OK)
                 throw std::runtime_error(
                     "ScheduleVideoFrame failed (HRESULT " + std::to_string(hr) + ")");
@@ -292,7 +298,12 @@ void init_decklink_output(nb::module_& m, nb::class_<Device>& device) {
             std::memcpy(dest, buffer.data(), expected);
             buf->EndAccess(bmdBufferAccessWrite);
             // Display synchronously.
-            hr = self.output_->DisplayVideoFrameSync(frame.get());
+            {
+                // The driver may wait on the output; release the GIL so other Python
+                // threads run meanwhile, and take it back before throwing.
+                nb::gil_scoped_release release;
+                hr = self.output_->DisplayVideoFrameSync(frame.get());
+            }
             if (hr != S_OK)
                 throw std::runtime_error("DisplayVideoFrameSync failed (HRESULT " + std::to_string(hr) + ")");
         },
@@ -310,7 +321,13 @@ void init_decklink_output(nb::module_& m, nb::class_<Device>& device) {
             // Close the write window before handing the frame to the SDK;
             // the caller has finished populating pixels and metadata.
             mf.close_access();
-            HRESULT hr = self.output_->DisplayVideoFrameSync(mf.frame.get());
+            HRESULT hr;
+            {
+                // The driver may wait on the output; release the GIL so other Python
+                // threads run meanwhile, and take it back before throwing.
+                nb::gil_scoped_release release;
+                hr = self.output_->DisplayVideoFrameSync(mf.frame.get());
+            }
             if (hr != S_OK)
                 throw std::runtime_error(
                     "DisplayVideoFrameSync failed (HRESULT " + std::to_string(hr) + ")");
@@ -329,7 +346,13 @@ void init_decklink_output(nb::module_& m, nb::class_<Device>& device) {
             // IDeckLinkVideoInputFrame inherits IDeckLinkVideoFrame.
             // Upcast directly — no QI needed.
             IDeckLinkVideoFrame* vf = static_cast<IDeckLinkVideoFrame*>(capture_frame.frame.get());
-            HRESULT hr = self.output_->ScheduleVideoFrame(vf, display_time, duration, timescale);
+            HRESULT hr;
+            {
+                // The driver may wait on the output; release the GIL so other Python
+                // threads run meanwhile, and take it back before throwing.
+                nb::gil_scoped_release release;
+                hr = self.output_->ScheduleVideoFrame(vf, display_time, duration, timescale);
+            }
             if (hr != S_OK)
                 throw std::runtime_error("ScheduleVideoFrame failed (HRESULT " + std::to_string(hr) + ")");
         },
