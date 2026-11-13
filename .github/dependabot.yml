@@ -8,20 +8,48 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # A release has a week to draw a follow-up fix before it is proposed.
+    cooldown:
+      default-days: 7
     groups:
       github-actions:
         patterns:
           - "*"
         update-types: [minor, patch]
-  # For the exact pins in pyproject.toml's [build-system] table. The range
-  # requirements elsewhere in the file are already satisfied by the latest
-  # release, so Dependabot opens nothing for them. A setuptools-scm bump
-  # also belongs in build-wheels.yml, which Dependabot does not read.
+    # `build(deps):` keeps the PR out of flywheel's auto_merge types
+    # (.flywheel.yml), so a bump waits for a human review.
+    commit-message:
+      prefix: "build"
+      include: "scope"
+  # pip, not uv: uv.lock is not tracked, so pyproject.toml is the only file to
+  # move. pip reads the exact pins in the [build-system] table; the range
+  # requirements elsewhere are already satisfied by the latest release, so
+  # Dependabot opens nothing for them. A setuptools-scm bump also belongs in
+  # build-wheels.yml, which Dependabot does not read.
   - package-ecosystem: pip
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     groups:
       pip-minor-patch:
         patterns: ["*"]
         update-types: [minor, patch]
+    commit-message:
+      prefix: "build"
+      include: "scope"
+  # The hook revs in .pre-commit-config.yaml. ruff runs only from here, so its
+  # bump is the one that brings new lint findings.
+  - package-ecosystem: pre-commit
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      pre-commit-hooks:
+        patterns: ["*"]
+    commit-message:
+      prefix: "build"
+      include: "scope"
