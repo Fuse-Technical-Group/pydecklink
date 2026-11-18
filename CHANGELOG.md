@@ -1,3 +1,10 @@
+## [1.4.1](https://github.com/Fuse-Technical-Group/pydecklink/compare/v1.4.0...v1.4.1) (2026-11-18)
+
+
+### Bug Fixes
+
+* **output:** release the GIL while the SDK schedules or displays a frame ([#246](https://github.com/Fuse-Technical-Group/pydecklink/issues/246)) ([c3fa5bc](https://github.com/Fuse-Technical-Group/pydecklink/commit/c3fa5bc1b6177dbde0970dacf7cf019b51f6aae9))
+
 # [1.4.0](https://github.com/Fuse-Technical-Group/pydecklink/compare/v1.3.0...v1.4.0) (2026-09-25)
 
 
